@@ -40,6 +40,10 @@
       "description": "Two authentication modes are supported. UI sessions use a cookie set by the login endpoint. Programmatic clients (bots, scripts, remote panels) authenticate with a Bearer token taken from Settings → Security → API Token. Both work for every endpoint under /panel/api/*."
     },
     {
+      "name": "Account",
+      "description": "Identity and self-service profile management for the currently logged-in user. Both endpoints live under /panel/api and work for any authenticated session (never admin-gated)."
+    },
+    {
       "name": "Inbounds",
       "description": "Manage inbound configurations and their clients. All endpoints live under /panel/api/inbounds and require a logged-in session or Bearer token. Link-generating endpoints honour forwarded headers only when the request comes from a configured trusted proxy."
     },
@@ -269,6 +273,288 @@
                 "example": {
                   "success": true,
                   "obj": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/getRegistrationEnable": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Returns whether public self-registration is enabled — used by the login and registration pages to show or hide the sign-up controls.",
+        "operationId": "post_getRegistrationEnable",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": false
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/register": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Create a new panel user from the public self-registration form. Only works while registration is enabled in settings; rate limited per client IP. password and confirmPassword must match.",
+        "operationId": "post_register",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "fullName": {
+                    "type": "string",
+                    "description": "New user full name."
+                  },
+                  "phone": {
+                    "type": "string",
+                    "description": "New user phone number."
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "New user email (must be unique)."
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "Desired username (must be unique)."
+                  },
+                  "password": {
+                    "type": "string",
+                    "description": "Account password."
+                  },
+                  "confirmPassword": {
+                    "type": "string",
+                    "description": "Must match password."
+                  }
+                },
+                "required": [
+                  "fullName",
+                  "phone",
+                  "email",
+                  "username",
+                  "password",
+                  "confirmPassword"
+                ]
+              },
+              "example": {
+                "fullName": "Alice Smith",
+                "phone": "+15551234567",
+                "email": "alice@example.com",
+                "username": "alice",
+                "password": "s3cret",
+                "confirmPassword": "s3cret"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "msg": "Registration successful"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "msg": "Username already taken"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/me": {
+      "get": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Return the current user's identity, role, wallet balance, and per-client pricing so the SPA can gate navigation, show the wallet, and preview purchases.",
+        "operationId": "get_panel_api_me",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "id": 1,
+                    "username": "alice",
+                    "email": "alice@example.com",
+                    "role": "user",
+                    "isAdmin": false,
+                    "balance": 50000,
+                    "clientCost": 20000,
+                    "clientCostPerGB": 0,
+                    "zarinpalEnable": true,
+                    "currency": "IRT"
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/profile": {
+      "post": {
+        "tags": [
+          "Account"
+        ],
+        "summary": "Let the current user change their own username, email, and password after confirming their current password. Changing the password invalidates this session, so the response flags passwordChanged and the client redirects to login.",
+        "operationId": "post_panel_api_profile",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "currentPassword": {
+                    "type": "string",
+                    "description": "Current password — required to authorize the change."
+                  },
+                  "username": {
+                    "type": "string",
+                    "description": "New username (optional)."
+                  },
+                  "email": {
+                    "type": "string",
+                    "description": "New email (optional)."
+                  },
+                  "newPassword": {
+                    "type": "string",
+                    "description": "New password (optional). When set, the session is invalidated."
+                  }
+                },
+                "required": [
+                  "currentPassword"
+                ]
+              },
+              "example": {
+                "currentPassword": "s3cret",
+                "username": "alice",
+                "email": "alice@new.com",
+                "newPassword": "newp4ss"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "passwordChanged": true
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Error response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    }
+                  }
+                },
+                "example": {
+                  "success": false,
+                  "msg": "Current password is incorrect"
                 }
               }
             }

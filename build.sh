@@ -32,7 +32,11 @@
 #                        build is offline (also dodges flaky module-proxy zips).
 #                        Default: auto (on when a host `go` toolchain exists).
 #   SKIP_FRONTEND=1      Don't (re)build web/dist for native / pure-Go targets.
-#   LDFLAGS="..."        Extra Go linker flags. Default: "-w -s".
+#   LDFLAGS="..."        Override Go linker flags. Default when unset: "-w -s"
+#                        for native/cross builds; a fully static link
+#                        (-linkmode external -extldflags '-static') for the
+#                        Linux Docker build so it runs on any Linux, not just
+#                        Alpine. Set this to override either default.
 #   CC="..."             Override the C compiler for CGO cross-compiles.
 # ----------------------------------------------------------------------------
 set -euo pipefail
@@ -41,7 +45,12 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 cd "$ROOT"
 
 OUT="build"
-LDFLAGS="${LDFLAGS:--w -s}"
+# Don't force a global LDFLAGS default here. Each target picks its own default
+# when the user hasn't set one: native/cross builds use "-w -s", while the Linux
+# Docker build defaults to a fully static link. A global "-w -s" would satisfy
+# build_linux's `${LDFLAGS:-...static...}` and silently produce a musl-dynamic
+# binary that only runs on Alpine (the original "cannot execute" bug).
+LDFLAGS="${LDFLAGS-}"
 CGO="${CGO:-1}"
 IMAGE_PREFIX="3x-ui-builder"
 VENDORED_BY_US=0
@@ -70,6 +79,7 @@ go_build() {
   local goos="$1" goarch="$2" ext="$3" cc="${4:-}"
   mkdir -p "$OUT"
   local out="$OUT/x-ui-$goos-$goarch$ext"
+  local ldflags="${LDFLAGS:--w -s}"
   if [ "$CGO" = 1 ]; then
     [ -n "$cc" ] || cc="${CC:-gcc}"
     command -v "$cc" >/dev/null 2>&1 || die \
@@ -77,11 +87,11 @@ go_build() {
     log "Building $goos/$goarch (CGO=1, CC=$cc) -> $out"
     CGO_ENABLED=1 CC="$cc" GOOS="$goos" GOARCH="$goarch" \
       CGO_CFLAGS="-D_LARGEFILE64_SOURCE" \
-      go build -ldflags "$LDFLAGS" -o "$out" main.go
+      go build -ldflags "$ldflags" -o "$out" main.go
   else
     log "Building $goos/$goarch (CGO=0, pure-Go) -> $out"
     CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-      go build -ldflags "$LDFLAGS" -o "$out" main.go
+      go build -ldflags "$ldflags" -o "$out" main.go
     warn "CGO=0: SQLite is unavailable — run with XUI_DB_TYPE=postgres. Xray binary is NOT bundled."
   fi
   log "done: $out"

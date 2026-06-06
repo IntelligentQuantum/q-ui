@@ -9,9 +9,14 @@ vi.mock('persian-calendar-suite', () => ({
   PersianDateTimePicker: () => null,
 }));
 
-if (typeof globalThis.localStorage === 'undefined') {
+// Node 22+ exposes its own experimental global `localStorage` that is unusable
+// without a valid `--localstorage-file` (its methods throw / aren't functions).
+// That broken global shadows jsdom's working one, so a plain
+// `typeof localStorage === 'undefined'` guard isn't enough — replace whenever
+// the current binding lacks a usable getItem.
+function makeMemoryStorage(): Storage {
   const store = new Map<string, string>();
-  const storage = {
+  return {
     getItem: (k: string) => (store.has(k) ? store.get(k)! : null),
     setItem: (k: string, v: string) => { store.set(k, String(v)); },
     removeItem: (k: string) => { store.delete(k); },
@@ -19,9 +24,20 @@ if (typeof globalThis.localStorage === 'undefined') {
     key: (i: number) => Array.from(store.keys())[i] ?? null,
     get length() { return store.size; },
   } as Storage;
-  Object.defineProperty(globalThis, 'localStorage', { value: storage, configurable: true });
-  Object.defineProperty(globalThis, 'sessionStorage', { value: storage, configurable: true });
 }
+
+function ensureStorage(name: 'localStorage' | 'sessionStorage') {
+  const current = (globalThis as { [k: string]: unknown })[name] as Storage | undefined;
+  if (current && typeof current.getItem === 'function') return;
+  Object.defineProperty(globalThis, name, {
+    value: makeMemoryStorage(),
+    configurable: true,
+    writable: true,
+  });
+}
+
+ensureStorage('localStorage');
+ensureStorage('sessionStorage');
 
 if (!window.matchMedia) {
   window.matchMedia = ((query: string) => ({

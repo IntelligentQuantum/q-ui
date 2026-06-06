@@ -94,6 +94,57 @@ export const sections: readonly Section[] = [
         summary: 'Returns whether 2FA is enabled on the panel — used by the login page to decide whether to show the OTP field.',
         response: '{\n  "success": true,\n  "obj": false\n}',
       },
+      {
+        method: 'POST',
+        path: '/getRegistrationEnable',
+        summary: 'Returns whether public self-registration is enabled — used by the login and registration pages to show or hide the sign-up controls.',
+        response: '{\n  "success": true,\n  "obj": false\n}',
+      },
+      {
+        method: 'POST',
+        path: '/register',
+        summary: 'Create a new panel user from the public self-registration form. Only works while registration is enabled in settings; rate limited per client IP. password and confirmPassword must match.',
+        params: [
+          { name: 'fullName', in: 'body', type: 'string', desc: 'New user full name.' },
+          { name: 'phone', in: 'body', type: 'string', desc: 'New user phone number.' },
+          { name: 'email', in: 'body', type: 'string', desc: 'New user email (must be unique).' },
+          { name: 'username', in: 'body', type: 'string', desc: 'Desired username (must be unique).' },
+          { name: 'password', in: 'body', type: 'string', desc: 'Account password.' },
+          { name: 'confirmPassword', in: 'body', type: 'string', desc: 'Must match password.' },
+        ],
+        body: '{\n  "fullName": "Alice Smith",\n  "phone": "+15551234567",\n  "email": "alice@example.com",\n  "username": "alice",\n  "password": "s3cret",\n  "confirmPassword": "s3cret"\n}',
+        response: '{\n  "success": true,\n  "msg": "Registration successful"\n}',
+        errorResponse: '{\n  "success": false,\n  "msg": "Username already taken"\n}',
+      },
+    ],
+  },
+
+  {
+    id: 'account',
+    title: 'Account',
+    description:
+      'Identity and self-service profile management for the currently logged-in user. Both endpoints live under /panel/api and work for any authenticated session (never admin-gated).',
+    endpoints: [
+      {
+        method: 'GET',
+        path: '/panel/api/me',
+        summary: 'Return the current user\'s identity, role, wallet balance, and per-client pricing so the SPA can gate navigation, show the wallet, and preview purchases.',
+        response: '{\n  "success": true,\n  "obj": {\n    "id": 1,\n    "username": "alice",\n    "email": "alice@example.com",\n    "role": "user",\n    "isAdmin": false,\n    "balance": 50000,\n    "clientCost": 20000,\n    "clientCostPerGB": 0,\n    "zarinpalEnable": true,\n    "currency": "IRT"\n  }\n}',
+      },
+      {
+        method: 'POST',
+        path: '/panel/api/profile',
+        summary: 'Let the current user change their own username, email, and password after confirming their current password. Changing the password invalidates this session, so the response flags passwordChanged and the client redirects to login.',
+        params: [
+          { name: 'currentPassword', in: 'body', type: 'string', desc: 'Current password — required to authorize the change.' },
+          { name: 'username', in: 'body', type: 'string', desc: 'New username (optional).', optional: true },
+          { name: 'email', in: 'body', type: 'string', desc: 'New email (optional).', optional: true },
+          { name: 'newPassword', in: 'body', type: 'string', desc: 'New password (optional). When set, the session is invalidated.', optional: true },
+        ],
+        body: '{\n  "currentPassword": "s3cret",\n  "username": "alice",\n  "email": "alice@new.com",\n  "newPassword": "newp4ss"\n}',
+        response: '{\n  "success": true,\n  "obj": {\n    "passwordChanged": true\n  }\n}',
+        errorResponse: '{\n  "success": false,\n  "msg": "Current password is incorrect"\n}',
+      },
     ],
   },
 

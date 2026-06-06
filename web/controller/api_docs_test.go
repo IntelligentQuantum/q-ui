@@ -128,14 +128,19 @@ func TestAPIRoutesDocumented(t *testing.T) {
 
 	for _, r := range allRoutes {
 		key := r.Method + " " + r.Path
-		// Skip SPA page routes (these are UI pages, not API endpoints)
+		// Skip SPA page routes (these GET routes return the React shell, not an
+		// API payload). Keyed by method+path so the POST /register API endpoint
+		// is still required to be documented even though GET /register is a page.
 		spaPages := map[string]bool{
-			"/": true, "/panel/": true, "/panel/inbounds": true,
-			"/panel/clients": true, "/panel/groups": true,
-			"/panel/nodes": true, "/panel/settings": true,
-			"/panel/xray": true, "/panel/api-docs": true,
+			"GET /": true, "GET /register": true, "GET /panel/": true,
+			"GET /panel/inbounds": true, "GET /panel/clients": true,
+			"GET /panel/groups": true, "GET /panel/users": true,
+			"GET /panel/reports": true, "GET /panel/profile": true,
+			"GET /panel/billing": true, "GET /panel/nodes": true,
+			"GET /panel/settings": true, "GET /panel/xray": true,
+			"GET /panel/api-docs": true,
 		}
-		if spaPages[r.Path] {
+		if spaPages[key] {
 			continue
 		}
 		// Skip /panel/csrf-token (documented under auth as /csrf-token)
