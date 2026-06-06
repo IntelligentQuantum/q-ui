@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MHSanaei/3x-ui/releases"><img src="https://img.shields.io/github/v/release/mhsanaei/3x-ui" alt="Release"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -19,7 +19,7 @@
 
 **3X-UI** is an advanced, open-source web control panel for managing [Xray-core](https://github.com/XTLS/Xray-core) servers. It provides a clean, multi-language interface for deploying, configuring, and monitoring a wide range of proxy and VPN protocols — from a single VPS to multi-node deployments.
 
-Built as an enhanced fork of the original X-UI project, 3X-UI adds broader protocol support, improved stability, per-client traffic accounting, and many quality-of-life features.
+Built as an enhanced fork of the original Q-UI project, 3X-UI adds broader protocol support, improved stability, per-client traffic accounting, and many quality-of-life features.
 
 > [!IMPORTANT]
 > This project is intended for personal use only. Please do not use it for illegal purposes or in a production environment.
@@ -73,9 +73,9 @@ Built as an enhanced fork of the original X-UI project, 3X-UI adds broader proto
 bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
 ```
 
-During installation a random username, password, and access path are generated. After installation, run `x-ui` to open the management menu, where you can start/stop the service, view or reset your login credentials, manage SSL certificates, and more.
+During installation a random username, password, and access path are generated. After installation, run `q-ui` to open the management menu, where you can start/stop the service, view or reset your login credentials, manage SSL certificates, and more.
 
-For full documentation, please visit the [project Wiki](https://github.com/MHSanaei/3x-ui/wiki).
+For full documentation, please visit the [project Wiki](https://github.com/IntelligentQuantum/3x-ui/wiki).
 
 ## Supported Platforms
 
@@ -87,29 +87,29 @@ For full documentation, please visit the [project Wiki](https://github.com/MHSan
 
 3X-UI supports two backends, chosen during the install:
 
-- **SQLite** (default) — a single file at `/etc/x-ui/x-ui.db`. Zero setup, ideal for small and medium deployments.
+- **SQLite** (default) — a single file at `/etc/q-ui/q-ui.db`. Zero setup, ideal for small and medium deployments.
 - **PostgreSQL** — recommended for high client counts or multi-node setups. The installer can install PostgreSQL locally for you, or accept a DSN to an existing server.
 
-At runtime the backend is selected via environment variables (the installer writes these to `/etc/default/x-ui` for you):
+At runtime the backend is selected via environment variables (the installer writes these to `/etc/default/q-ui` for you):
 
 ```
-XUI_DB_TYPE=postgres
-XUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
+QUI_DB_TYPE=postgres
+QUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
 ```
 
 ### Migrating an existing SQLite install to PostgreSQL
 
 ```bash
-x-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
-# then set XUI_DB_TYPE and XUI_DB_DSN in /etc/default/x-ui and restart:
-systemctl restart x-ui
+q-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
+# then set QUI_DB_TYPE and QUI_DB_DSN in /etc/default/q-ui and restart:
+systemctl restart q-ui
 ```
 
 The source SQLite file is left untouched; remove it manually once you have verified the new backend.
 
 ### Docker
 
-The default `docker compose up -d` keeps using SQLite. To run with the bundled PostgreSQL service, uncomment the two `XUI_DB_*` env lines in `docker-compose.yml` and start with the profile:
+The default `docker compose up -d` keeps using SQLite. To run with the bundled PostgreSQL service, uncomment the two `QUI_DB_*` env lines in `docker-compose.yml` and start with the profile:
 
 ```bash
 docker compose --profile postgres up -d
@@ -118,21 +118,21 @@ docker compose --profile postgres up -d
 The image bundles Fail2ban (enabled by default) to enforce per-client **IP limits**. Fail2ban bans offenders with `iptables`, which requires the `NET_ADMIN` capability. `docker-compose.yml` already grants it via `cap_add`; if you start the container with `docker run` instead, add the capabilities yourself, otherwise bans are logged but never applied:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/mhsanaei/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
 ```
 
 ## Environment Variables
 
 | Variable | Description | Default |
 | --- | --- | --- |
-| `XUI_DB_TYPE` | Database backend: `sqlite` or `postgres` | `sqlite` |
-| `XUI_DB_DSN` | PostgreSQL connection string (when `XUI_DB_TYPE=postgres`) | — |
-| `XUI_DB_FOLDER` | Directory for the SQLite database file | `/etc/x-ui` |
-| `XUI_DB_MAX_OPEN_CONNS` | Maximum open connections (PostgreSQL pool) | — |
-| `XUI_DB_MAX_IDLE_CONNS` | Maximum idle connections (PostgreSQL pool) | — |
-| `XUI_ENABLE_FAIL2BAN` | Enable Fail2ban-based IP-limit enforcement | `true` |
-| `XUI_LOG_LEVEL` | Log verbosity (`debug`, `info`, `warning`, `error`) | `info` |
-| `XUI_DEBUG` | Enable debug mode | `false` |
+| `QUI_DB_TYPE` | Database backend: `sqlite` or `postgres` | `sqlite` |
+| `QUI_DB_DSN` | PostgreSQL connection string (when `QUI_DB_TYPE=postgres`) | — |
+| `QUI_DB_FOLDER` | Directory for the SQLite database file | `/etc/q-ui` |
+| `QUI_DB_MAX_OPEN_CONNS` | Maximum open connections (PostgreSQL pool) | — |
+| `QUI_DB_MAX_IDLE_CONNS` | Maximum idle connections (PostgreSQL pool) | — |
+| `QUI_ENABLE_FAIL2BAN` | Enable Fail2ban-based IP-limit enforcement | `true` |
+| `QUI_LOG_LEVEL` | Log verbosity (`debug`, `info`, `warning`, `error`) | `info` |
+| `QUI_DEBUG` | Enable debug mode | `false` |
 
 ## Supported Languages
 
@@ -174,4 +174,4 @@ Tools and integrations built by the community around 3x-ui.
 
 ## Stargazers over Time
 
-[![Stargazers over time](https://starchart.cc/MHSanaei/3x-ui.svg?variant=adaptive)](https://starchart.cc/MHSanaei/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)

@@ -13,13 +13,13 @@ import (
 )
 
 func TestMigrateData_CompositeKeyTableLargerThanBatch(t *testing.T) {
-	dsn := os.Getenv("XUI_TEST_PG_DSN")
+	dsn := os.Getenv("QUI_TEST_PG_DSN")
 	if dsn == "" {
-		t.Skip("set XUI_TEST_PG_DSN to a reachable Postgres to run this test")
+		t.Skip("set QUI_TEST_PG_DSN to a reachable Postgres to run this test")
 	}
 
 	// Seed a SQLite source with the full schema and >500 client_inbounds rows.
-	srcPath := t.TempDir() + "/x-ui.db"
+	srcPath := t.TempDir() + "/q-ui.db"
 	src, err := gorm.Open(sqlite.Open(srcPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)
@@ -64,12 +64,12 @@ func TestMigrateData_CompositeKeyTableLargerThanBatch(t *testing.T) {
 }
 
 func TestMigrateData_PreservesFalseDefaultedColumns(t *testing.T) {
-	dsn := os.Getenv("XUI_TEST_PG_DSN")
+	dsn := os.Getenv("QUI_TEST_PG_DSN")
 	if dsn == "" {
-		t.Skip("set XUI_TEST_PG_DSN to a reachable Postgres to run this test")
+		t.Skip("set QUI_TEST_PG_DSN to a reachable Postgres to run this test")
 	}
 
-	srcPath := t.TempDir() + "/x-ui.db"
+	srcPath := t.TempDir() + "/q-ui.db"
 	src, err := gorm.Open(sqlite.Open(srcPath), &gorm.Config{Logger: logger.Discard})
 	if err != nil {
 		t.Fatalf("open sqlite: %v", err)

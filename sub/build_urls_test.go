@@ -10,7 +10,7 @@ import (
 
 func initSubDB(t *testing.T) {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
+	if err := database.InitDB(filepath.Join(t.TempDir(), "q-ui.db")); err != nil {
 		t.Fatalf("InitDB: %v", err)
 	}
 	// Close the handle before t.TempDir cleanup so Windows doesn't refuse to

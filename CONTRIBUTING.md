@@ -50,12 +50,12 @@ Cross-building the Linux SQLite target from Windows (or vice versa) requires a s
 ## First-time setup
 
 ```bash
-git clone https://github.com/MHSanaei/3x-ui.git
+git clone https://github.com/IntelligentQuantum/3x-ui.git
 cd 3x-ui
 
 cp .env.example .env
 
-mkdir x-ui
+mkdir q-ui
 
 go mod download
 
@@ -65,16 +65,16 @@ npm run build
 cd ..
 ```
 
-`.env.example` ships with defaults that keep the database, logs, and xray binary inside the local `x-ui/` folder so nothing escapes the project directory:
+`.env.example` ships with defaults that keep the database, logs, and xray binary inside the local `q-ui/` folder so nothing escapes the project directory:
 
 ```
-XUI_DEBUG=true
-XUI_DB_FOLDER=x-ui
-XUI_LOG_FOLDER=x-ui
-XUI_BIN_FOLDER=x-ui
+QUI_DEBUG=true
+QUI_DB_FOLDER=q-ui
+QUI_LOG_FOLDER=q-ui
+QUI_BIN_FOLDER=q-ui
 ```
 
-Drop the xray binary (`xray-windows-amd64.exe` on Windows, `xray-linux-amd64` on Linux, etc.) plus the matching `geoip.dat` and `geosite.dat` files into `x-ui/`. The easiest source is a [released Xray-core build](https://github.com/XTLS/Xray-core/releases). On Windows, `wintun.dll` is also required for testing TUN inbounds.
+Drop the xray binary (`xray-windows-amd64.exe` on Windows, `xray-linux-amd64` on Linux, etc.) plus the matching `geoip.dat` and `geosite.dat` files into `q-ui/`. The easiest source is a [released Xray-core build](https://github.com/XTLS/Xray-core/releases). On Windows, `wintun.dll` is also required for testing TUN inbounds.
 
 ## Running
 
@@ -86,7 +86,7 @@ Open [http://localhost:2053](http://localhost:2053) and log in with `admin` / `a
 
 ### Inside VS Code
 
-The repo checks in two VS Code launch profiles in `.vscode/launch.json`: **Run 3x-ui (Debug)** for the default SQLite setup, and **Run 3x-ui (Postgres)** which points `XUI_DB_TYPE`/`XUI_DB_DSN` at a local PostgreSQL. The Postgres profile also prepends the PostgreSQL `bin` to `PATH` so the panel can find `pg_dump`/`pg_restore` (the `postgresql-client` tools used for DB backup/restore) — adjust the DSN and that path to your machine:
+The repo checks in two VS Code launch profiles in `.vscode/launch.json`: **Run 3x-ui (Debug)** for the default SQLite setup, and **Run 3x-ui (Postgres)** which points `QUI_DB_TYPE`/`QUI_DB_DSN` at a local PostgreSQL. The Postgres profile also prepends the PostgreSQL `bin` to `PATH` so the panel can find `pg_dump`/`pg_restore` (the `postgresql-client` tools used for DB backup/restore) — adjust the DSN and that path to your machine:
 
 ```jsonc
 {
@@ -101,10 +101,10 @@ The repo checks in two VS Code launch profiles in `.vscode/launch.json`: **Run 3
       "program": "${workspaceFolder}",
       "cwd": "${workspaceFolder}",
       "env": {
-        "XUI_DEBUG": "true",
-        "XUI_DB_FOLDER": "x-ui",
-        "XUI_LOG_FOLDER": "x-ui",
-        "XUI_BIN_FOLDER": "x-ui"
+        "QUI_DEBUG": "true",
+        "QUI_DB_FOLDER": "q-ui",
+        "QUI_LOG_FOLDER": "q-ui",
+        "QUI_BIN_FOLDER": "q-ui"
       },
       "console": "integratedTerminal"
     },
@@ -116,11 +116,11 @@ The repo checks in two VS Code launch profiles in `.vscode/launch.json`: **Run 3
       "program": "${workspaceFolder}",
       "cwd": "${workspaceFolder}",
       "env": {
-        "XUI_DEBUG": "true",
-        "XUI_LOG_FOLDER": "x-ui",
-        "XUI_BIN_FOLDER": "x-ui",
-        "XUI_DB_TYPE": "postgres",
-        "XUI_DB_DSN": "postgres://xui:xuipass@127.0.0.1:5432/xui?sslmode=disable",
+        "QUI_DEBUG": "true",
+        "QUI_LOG_FOLDER": "q-ui",
+        "QUI_BIN_FOLDER": "q-ui",
+        "QUI_DB_TYPE": "postgres",
+        "QUI_DB_DSN": "postgres://xui:xuipass@127.0.0.1:5432/xui?sslmode=disable",
         "PATH": "C:\\Program Files\\PostgreSQL\\18\\bin;${env:PATH}"
       },
       "console": "integratedTerminal"
@@ -164,7 +164,7 @@ Locale strings live in `web/translation/<locale>.json`, **not** under `frontend/
 
 The Vite dev proxy serves the admin SPA for any `/panel/*` URL — `bypassMigratedRoute` in `vite.config.js` rewrites those requests to `index.html` and lets React Router take over — while forwarding `/panel/api/*`, `/panel/setting/*`, `/panel/xray/*`, and the WebSocket to the Go panel. Because routing is now client-side, new panel routes need no proxy or allowlist changes.
 
-> **`XUI_DEBUG=true` gotcha** — in debug mode the panel serves HTML from the embedded FS (frozen at the last `go build` / `go run`) but JS/CSS off disk. Re-running `npm run build` without restarting Go leaves the embedded HTML pointing at the *old* hashed asset names, producing a blank page with 404s in the console. Always restart `go run .` after a frontend rebuild.
+> **`QUI_DEBUG=true` gotcha** — in debug mode the panel serves HTML from the embedded FS (frozen at the last `go build` / `go run`) but JS/CSS off disk. Re-running `npm run build` without restarting Go leaves the embedded HTML pointing at the *old* hashed asset names, producing a blank page with 404s in the console. Always restart `go run .` after a frontend rebuild.
 
 ### Adding a new page
 
@@ -232,7 +232,7 @@ For deeper notes on the frontend toolchain see [`frontend/README.md`](frontend/R
 | `xray/` | Xray-core process lifecycle and gRPC API client |
 | `sub/` | Subscription endpoints (raw, JSON, Clash) |
 | `config/` | Environment-variable helpers, paths, defaults |
-| `x-ui/` | **Runtime data** — db, logs, xray binary, geo files (gitignored) |
+| `q-ui/` | **Runtime data** — db, logs, xray binary, geo files (gitignored) |
 
 ## Sending a pull request
 
@@ -249,16 +249,16 @@ For deeper notes on the frontend toolchain see [`frontend/README.md`](frontend/R
 
 | Variable | Default | Purpose |
 |----------|---------|---------|
-| `XUI_DEBUG` | `false` | Verbose logs + Gin debug mode + serve `/assets` from disk |
-| `XUI_LOG_LEVEL` | `info` | `debug` / `info` / `notice` / `warning` / `error` |
-| `XUI_DB_FOLDER` | platform default | Where `x-ui.db` lives |
-| `XUI_LOG_FOLDER` | platform default | Where `3xui.log` lives |
-| `XUI_BIN_FOLDER` | `bin` | Where the xray binary, geo files, and xray `config.json` live |
-| `XUI_DB_TYPE` | `sqlite` | Set to `postgres` to use PostgreSQL via `XUI_DB_DSN` |
-| `XUI_DB_DSN` | — | PostgreSQL DSN when `XUI_DB_TYPE=postgres` |
+| `QUI_DEBUG` | `false` | Verbose logs + Gin debug mode + serve `/assets` from disk |
+| `QUI_LOG_LEVEL` | `info` | `debug` / `info` / `notice` / `warning` / `error` |
+| `QUI_DB_FOLDER` | platform default | Where `q-ui.db` lives |
+| `QUI_LOG_FOLDER` | platform default | Where `3xui.log` lives |
+| `QUI_BIN_FOLDER` | `bin` | Where the xray binary, geo files, and xray `config.json` live |
+| `QUI_DB_TYPE` | `sqlite` | Set to `postgres` to use PostgreSQL via `QUI_DB_DSN` |
+| `QUI_DB_DSN` | — | PostgreSQL DSN when `QUI_DB_TYPE=postgres` |
 
 ## Issues
 
-- Bug reports and feature requests: [GitHub Issues](https://github.com/MHSanaei/3x-ui/issues)
+- Bug reports and feature requests: [GitHub Issues](https://github.com/IntelligentQuantum/3x-ui/issues)
 
-Before filing a bug, include the OS, Go version, panel version (`/panel/api/server/status` or the dashboard footer), and the relevant excerpt from `x-ui/3xui.log`.
+Before filing a bug, include the OS, Go version, panel version (`/panel/api/server/status` or the dashboard footer), and the relevant excerpt from `q-ui/3xui.log`.

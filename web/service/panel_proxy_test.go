@@ -62,7 +62,7 @@ func TestPanelProxy_CustomGeoDownloadUsesProxy(t *testing.T) {
 	defer origin.Close()
 
 	dir := t.TempDir()
-	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("QUI_BIN_FOLDER", dir)
 	dest := filepath.Join(dir, "geosite_repro.dat")
 
 	s := CustomGeoService{getPanelProxy: func() (string, error) { return proxy.URL, nil }}
@@ -89,7 +89,7 @@ func TestPanelProxy_CustomGeoDownloadDirectWhenUnset(t *testing.T) {
 	defer origin.Close()
 
 	dir := t.TempDir()
-	t.Setenv("XUI_BIN_FOLDER", dir)
+	t.Setenv("QUI_BIN_FOLDER", dir)
 	dest := filepath.Join(dir, "geosite_direct.dat")
 
 	s := CustomGeoService{}

@@ -12,7 +12,7 @@ import (
 )
 
 func TestMain(m *testing.M) {
-	_ = os.Setenv("XUI_LOG_FOLDER", os.TempDir())
+	_ = os.Setenv("QUI_LOG_FOLDER", os.TempDir())
 	xuilogger.InitLogger(logging.ERROR)
 	os.Exit(m.Run())
 }

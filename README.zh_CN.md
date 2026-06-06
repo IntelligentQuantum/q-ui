@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MHSanaei/3x-ui/releases"><img src="https://img.shields.io/github/v/release/mhsanaei/3x-ui" alt="Release"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -19,7 +19,7 @@
 
 **3X-UI** 是一个先进的开源 Web 控制面板，用于管理 [Xray-core](https://github.com/XTLS/Xray-core) 服务器。它提供简洁、多语言的界面，用于部署、配置和监控各种代理与 VPN 协议——从单台 VPS 到多节点部署。
 
-3X-UI 作为原始 X-UI 项目的增强分支（fork），增加了更广泛的协议支持、更好的稳定性、按客户端的流量统计以及许多提升使用体验的功能。
+3X-UI 作为原始 Q-UI 项目的增强分支（fork），增加了更广泛的协议支持、更好的稳定性、按客户端的流量统计以及许多提升使用体验的功能。
 
 > [!IMPORTANT]
 > 本项目仅供个人使用。请勿将其用于非法目的，也请勿在生产环境中使用。
@@ -70,12 +70,12 @@
 ## 快速开始
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
 ```
 
-安装过程中会生成随机的用户名、密码和访问路径。安装完成后，运行 `x-ui` 打开管理菜单，您可以在其中启动/停止服务、查看或重置登录凭据、管理 SSL 证书等。
+安装过程中会生成随机的用户名、密码和访问路径。安装完成后，运行 `q-ui` 打开管理菜单，您可以在其中启动/停止服务、查看或重置登录凭据、管理 SSL 证书等。
 
-完整文档请参阅 [项目Wiki](https://github.com/MHSanaei/3x-ui/wiki)。
+完整文档请参阅 [项目Wiki](https://github.com/IntelligentQuantum/3x-ui/wiki)。
 
 ## 支持的平台
 
@@ -87,29 +87,29 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 3X-UI 支持两种后端，可在安装时选择：
 
-- **SQLite**（默认）— 位于 `/etc/x-ui/x-ui.db` 的单个文件。无需配置，适合中小型部署。
+- **SQLite**（默认）— 位于 `/etc/q-ui/q-ui.db` 的单个文件。无需配置，适合中小型部署。
 - **PostgreSQL** — 推荐用于大量客户端或多节点设置。安装程序可以为您在本地安装 PostgreSQL，或接受指向现有服务器的 DSN。
 
-运行时通过环境变量选择后端（安装程序会为您写入 `/etc/default/x-ui`）：
+运行时通过环境变量选择后端（安装程序会为您写入 `/etc/default/q-ui`）：
 
 ```
-XUI_DB_TYPE=postgres
-XUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
+QUI_DB_TYPE=postgres
+QUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
 ```
 
 ### 将现有的 SQLite 安装迁移到 PostgreSQL
 
 ```bash
-x-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
-# 然后在 /etc/default/x-ui 中设置 XUI_DB_TYPE 和 XUI_DB_DSN 并重启：
-systemctl restart x-ui
+q-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
+# 然后在 /etc/default/q-ui 中设置 QUI_DB_TYPE 和 QUI_DB_DSN 并重启：
+systemctl restart q-ui
 ```
 
 源 SQLite 文件保持不变；在确认新后端正常工作后，请手动删除它。
 
 ### Docker
 
-默认的 `docker compose up -d` 仍使用 SQLite。若要使用捆绑的 PostgreSQL 服务运行，请取消注释 `docker-compose.yml` 中的两行 `XUI_DB_*` 环境变量，并使用该 profile 启动：
+默认的 `docker compose up -d` 仍使用 SQLite。若要使用捆绑的 PostgreSQL 服务运行，请取消注释 `docker-compose.yml` 中的两行 `QUI_DB_*` 环境变量，并使用该 profile 启动：
 
 ```bash
 docker compose --profile postgres up -d
@@ -118,21 +118,21 @@ docker compose --profile postgres up -d
 该镜像捆绑了 Fail2ban（默认启用），用于强制执行按客户端的 **IP 限制**。Fail2ban 使用 `iptables` 封禁违规者，这需要 `NET_ADMIN` 权限。`docker-compose.yml` 已通过 `cap_add` 授予该权限；如果您改用 `docker run` 启动容器，请自行添加这些权限，否则封禁只会被记录而永远不会生效：
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/mhsanaei/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
 ```
 
 ## 环境变量
 
 | 变量 | 说明 | 默认值 |
 | --- | --- | --- |
-| `XUI_DB_TYPE` | 数据库后端：`sqlite` 或 `postgres` | `sqlite` |
-| `XUI_DB_DSN` | PostgreSQL 连接字符串（当 `XUI_DB_TYPE=postgres` 时） | — |
-| `XUI_DB_FOLDER` | SQLite 数据库文件所在目录 | `/etc/x-ui` |
-| `XUI_DB_MAX_OPEN_CONNS` | 最大打开连接数（PostgreSQL 连接池） | — |
-| `XUI_DB_MAX_IDLE_CONNS` | 最大空闲连接数（PostgreSQL 连接池） | — |
-| `XUI_ENABLE_FAIL2BAN` | 启用基于 Fail2ban 的 IP 限制 | `true` |
-| `XUI_LOG_LEVEL` | 日志级别（`debug`、`info`、`warning`、`error`） | `info` |
-| `XUI_DEBUG` | 启用调试模式 | `false` |
+| `QUI_DB_TYPE` | 数据库后端：`sqlite` 或 `postgres` | `sqlite` |
+| `QUI_DB_DSN` | PostgreSQL 连接字符串（当 `QUI_DB_TYPE=postgres` 时） | — |
+| `QUI_DB_FOLDER` | SQLite 数据库文件所在目录 | `/etc/q-ui` |
+| `QUI_DB_MAX_OPEN_CONNS` | 最大打开连接数（PostgreSQL 连接池） | — |
+| `QUI_DB_MAX_IDLE_CONNS` | 最大空闲连接数（PostgreSQL 连接池） | — |
+| `QUI_ENABLE_FAIL2BAN` | 启用基于 Fail2ban 的 IP 限制 | `true` |
+| `QUI_LOG_LEVEL` | 日志级别（`debug`、`info`、`warning`、`error`） | `info` |
+| `QUI_DEBUG` | 启用调试模式 | `false` |
 
 ## 支持的语言
 
@@ -174,4 +174,4 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 
 ## 随时间变化的星标数
 
-[![Stargazers over time](https://starchart.cc/MHSanaei/3x-ui.svg?variant=adaptive)](https://starchart.cc/MHSanaei/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)

@@ -62,7 +62,7 @@ func (j *CheckClientIpJob) Run() {
 	if fail2BanEnabled && isAccessLogAvailable {
 		enforce := hasLimit
 		if hasLimit && runtime.GOOS != "windows" && !f2bInstalled {
-			logger.Warning("[LimitIP] Fail2Ban is not installed, Please install Fail2Ban from the x-ui bash menu.")
+			logger.Warning("[LimitIP] Fail2Ban is not installed, Please install Fail2Ban from the q-ui bash menu.")
 			enforce = false
 		}
 		shouldClearAccessLog = j.processLogFile(enforce)
@@ -267,7 +267,7 @@ func (j *CheckClientIpJob) checkFail2BanInstalled() bool {
 }
 
 func isFail2BanEnabled() bool {
-	value, ok := os.LookupEnv("XUI_ENABLE_FAIL2BAN")
+	value, ok := os.LookupEnv("QUI_ENABLE_FAIL2BAN")
 	return !ok || value == "true"
 }
 
@@ -407,7 +407,7 @@ func (j *CheckClientIpJob) updateInboundClientIps(inboundClientIps *model.Inboun
 		defer logIpFile.Close()
 		ipLogger := log.New(logIpFile, "", log.LstdFlags)
 
-		// log format is load-bearing: x-ui.sh create_iplimit_jails builds
+		// log format is load-bearing: q-ui.sh create_iplimit_jails builds
 		// filter.d/3x-ipl.conf with
 		//   failregex = \[LIMIT_IP\]\s*Email\s*=\s*<F-USER>.+</F-USER>\s*\|\|\s*Disconnecting OLD IP\s*=\s*<ADDR>\s*\|\|\s*Timestamp\s*=\s*\d+
 		// don't change the wording.

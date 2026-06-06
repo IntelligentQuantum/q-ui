@@ -31,6 +31,8 @@ main
 
 # Ignore script and executable files
 /release.sh
+/q-ui
+# Legacy pre-rename binary / local dev data folder (x-ui -> q-ui)
 /x-ui
 
 # Ignore OS specific files
@@ -39,6 +41,10 @@ Thumbs.db
 
 # Ignore Go build files
 *.exe
+q-ui.db
+q-ui.db-shm
+q-ui.db-wal
+# Legacy pre-rename SQLite files (x-ui -> q-ui)
 x-ui.db
 x-ui.db-shm
 x-ui.db-wal

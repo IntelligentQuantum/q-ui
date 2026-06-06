@@ -33,8 +33,8 @@ func setupIntegrationDB(t *testing.T) {
 	dbDir := t.TempDir()
 	logDir := t.TempDir()
 
-	t.Setenv("XUI_DB_FOLDER", dbDir)
-	t.Setenv("XUI_LOG_FOLDER", logDir)
+	t.Setenv("QUI_DB_FOLDER", dbDir)
+	t.Setenv("QUI_LOG_FOLDER", logDir)
 
 	// updateInboundClientIps calls log.SetOutput on the package global,
 	// which would leak to other tests in the same binary.
@@ -45,7 +45,7 @@ func setupIntegrationDB(t *testing.T) {
 		log.SetFlags(origLogFlags)
 	})
 
-	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+	if err := database.InitDB(filepath.Join(dbDir, "q-ui.db")); err != nil {
 		t.Fatalf("database.InitDB failed: %v", err)
 	}
 	// LIFO cleanup order: this runs before t.TempDir's own cleanup.
@@ -130,7 +130,7 @@ func ipSet(entries []IPWithTimestamp) map[string]int64 {
 
 func TestRun_DisabledFail2BanSkipsProbeAndBanLog(t *testing.T) {
 	setupIntegrationDB(t)
-	t.Setenv("XUI_ENABLE_FAIL2BAN", "false")
+	t.Setenv("QUI_ENABLE_FAIL2BAN", "false")
 	marker := fakeFail2BanClient(t)
 
 	const email = "disabled-fail2ban"
@@ -138,7 +138,7 @@ func TestRun_DisabledFail2BanSkipsProbeAndBanLog(t *testing.T) {
 
 	binDir := t.TempDir()
 	accessLog := filepath.Join(t.TempDir(), "access.log")
-	t.Setenv("XUI_BIN_FOLDER", binDir)
+	t.Setenv("QUI_BIN_FOLDER", binDir)
 	configData, err := json.Marshal(map[string]any{
 		"log": map[string]any{"access": accessLog},
 	})
@@ -287,7 +287,7 @@ func writeXrayAccessLog(t *testing.T, email, ip string) {
 	t.Helper()
 	binDir := t.TempDir()
 	accessLog := filepath.Join(t.TempDir(), "access.log")
-	t.Setenv("XUI_BIN_FOLDER", binDir)
+	t.Setenv("QUI_BIN_FOLDER", binDir)
 	configData, err := json.Marshal(map[string]any{
 		"log": map[string]any{"access": accessLog},
 	})
@@ -309,7 +309,7 @@ func writeXrayAccessLog(t *testing.T, email, ip string) {
 // valid access-log lines. No ban may be written since there's no limit.
 func TestRun_CollectsIpsWithoutLimit(t *testing.T) {
 	setupIntegrationDB(t)
-	t.Setenv("XUI_ENABLE_FAIL2BAN", "true")
+	t.Setenv("QUI_ENABLE_FAIL2BAN", "true")
 	fakeFail2BanClient(t)
 
 	const email = "no-limit-user"
@@ -335,7 +335,7 @@ func TestRun_CollectsIpsWithoutLimit(t *testing.T) {
 // spamming "failed to fetch inbound settings" every run.
 func TestRun_StaleAccessLogEmailIsSkippedAndOrphanDropped(t *testing.T) {
 	setupIntegrationDB(t)
-	t.Setenv("XUI_ENABLE_FAIL2BAN", "true")
+	t.Setenv("QUI_ENABLE_FAIL2BAN", "true")
 	fakeFail2BanClient(t)
 
 	const staleEmail = "renamed-away"
@@ -360,7 +360,7 @@ func TestRun_StaleAccessLogEmailIsSkippedAndOrphanDropped(t *testing.T) {
 // just for the path helper (which would pull a lot more deps into the
 // test binary). The env-derived log folder is deterministic.
 func readIpLimitLogPath() string {
-	folder := os.Getenv("XUI_LOG_FOLDER")
+	folder := os.Getenv("QUI_LOG_FOLDER")
 	if folder == "" {
 		folder = filepath.Join(".", "log")
 	}

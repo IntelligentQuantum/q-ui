@@ -288,9 +288,9 @@ func (a *ServerController) getDb(c *gin.Context) {
 		return
 	}
 
-	filename := "x-ui.db"
+	filename := "q-ui.db"
 	if database.IsPostgres() {
-		filename = "x-ui.dump"
+		filename = "q-ui.dump"
 	}
 	if !filenameRegex.MatchString(filename) {
 		c.AbortWithError(http.StatusBadRequest, fmt.Errorf("invalid filename"))

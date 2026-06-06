@@ -72,7 +72,7 @@ func TestStopKillsProcessThatIgnoresSIGTERM(t *testing.T) {
 
 func initProcessTestLogger(t *testing.T) {
 	t.Helper()
-	t.Setenv("XUI_LOG_FOLDER", t.TempDir())
+	t.Setenv("QUI_LOG_FOLDER", t.TempDir())
 	xuilogger.InitLogger(logging.ERROR)
 }
 

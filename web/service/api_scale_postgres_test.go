@@ -37,8 +37,8 @@ func seedClientTraffics(t *testing.T, inboundId int, clients []model.Client) {
 // reachable from the REST API at 100k/200k clients, asserting none crash on the
 // PostgreSQL bind-parameter ceiling and logging the wall-clock cost of each.
 func TestAllAPIsPostgresScale(t *testing.T) {
-	if strings.TrimSpace(os.Getenv("XUI_DB_DSN")) == "" || os.Getenv("XUI_DB_TYPE") != "postgres" {
-		t.Skip("set XUI_DB_TYPE=postgres and XUI_DB_DSN to run the postgres scale benchmark")
+	if strings.TrimSpace(os.Getenv("QUI_DB_DSN")) == "" || os.Getenv("QUI_DB_TYPE") != "postgres" {
+		t.Skip("set QUI_DB_TYPE=postgres and QUI_DB_DSN to run the postgres scale benchmark")
 	}
 	xuilogger.InitLogger(logging.ERROR)
 	if err := database.InitDB(""); err != nil {
@@ -150,8 +150,8 @@ func TestAllAPIsPostgresScale(t *testing.T) {
 // old path (GetClientByEmail, which parses the inbound's entire settings JSON to
 // find one client) vs new path (UUID/subId read from the indexed clients table).
 func TestGetClientTrafficByEmailABScale(t *testing.T) {
-	if strings.TrimSpace(os.Getenv("XUI_DB_DSN")) == "" || os.Getenv("XUI_DB_TYPE") != "postgres" {
-		t.Skip("set XUI_DB_TYPE=postgres and XUI_DB_DSN to run the postgres scale benchmark")
+	if strings.TrimSpace(os.Getenv("QUI_DB_DSN")) == "" || os.Getenv("QUI_DB_TYPE") != "postgres" {
+		t.Skip("set QUI_DB_TYPE=postgres and QUI_DB_DSN to run the postgres scale benchmark")
 	}
 	xuilogger.InitLogger(logging.ERROR)
 	if err := database.InitDB(""); err != nil {

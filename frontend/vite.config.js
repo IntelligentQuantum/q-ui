@@ -8,18 +8,18 @@ const outDir = path.resolve(__dirname, '../web/dist');
 const BACKEND_TARGET = 'http://localhost:2053';
 
 function resolveDBPath() {
-  const envFolder = process.env.XUI_DB_FOLDER;
+  const envFolder = process.env.QUI_DB_FOLDER;
   if (envFolder) {
     const abs = path.isAbsolute(envFolder)
       ? envFolder
       : path.resolve(__dirname, '..', envFolder);
-    return path.join(abs, 'x-ui.db');
+    return path.join(abs, 'q-ui.db');
   }
-  const repoSubDB = path.resolve(__dirname, '..', 'x-ui', 'x-ui.db');
+  const repoSubDB = path.resolve(__dirname, '..', 'q-ui', 'q-ui.db');
   if (fs.existsSync(repoSubDB)) return repoSubDB;
-  const repoDB = path.resolve(__dirname, '..', 'x-ui.db');
+  const repoDB = path.resolve(__dirname, '..', 'q-ui.db');
   if (fs.existsSync(repoDB)) return repoDB;
-  return '/etc/x-ui/x-ui.db';
+  return '/etc/q-ui/q-ui.db';
 }
 
 const PANEL_API_PREFIXES = ['panel/api/', 'panel/setting/', 'panel/xray/', 'panel/csrf-token'];

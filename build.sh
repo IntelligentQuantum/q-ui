@@ -78,7 +78,7 @@ ensure_frontend() { [ "${SKIP_FRONTEND:-0}" = 1 ] || build_frontend; }
 go_build() {
   local goos="$1" goarch="$2" ext="$3" cc="${4:-}"
   mkdir -p "$OUT"
-  local out="$OUT/x-ui-$goos-$goarch$ext"
+  local out="$OUT/q-ui-$goos-$goarch$ext"
   local ldflags="${LDFLAGS:--w -s}"
   if [ "$CGO" = 1 ]; then
     [ -n "$cc" ] || cc="${CC:-gcc}"
@@ -92,7 +92,7 @@ go_build() {
     log "Building $goos/$goarch (CGO=0, pure-Go) -> $out"
     CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
       go build -ldflags "$ldflags" -o "$out" main.go
-    warn "CGO=0: SQLite is unavailable — run with XUI_DB_TYPE=postgres. Xray binary is NOT bundled."
+    warn "CGO=0: SQLite is unavailable — run with QUI_DB_TYPE=postgres. Xray binary is NOT bundled."
   fi
   log "done: $out"
 }
@@ -144,11 +144,11 @@ build_linux() {
   log "Extracting binary + xray/geo assets"
   mkdir -p "$OUT"
   local cid; cid="$(docker create --platform "linux/$arch" "$img")"
-  docker cp "$cid:/app/build/x-ui" "$OUT/x-ui-linux-$arch"
+  docker cp "$cid:/app/build/q-ui" "$OUT/q-ui-linux-$arch"
   rm -rf "$OUT/bin-linux-$arch"
   docker cp "$cid:/app/build/bin" "$OUT/bin-linux-$arch"
   docker rm "$cid" >/dev/null
-  log "done: $OUT/x-ui-linux-$arch  (+ $OUT/bin-linux-$arch/ : xray + geo data)"
+  log "done: $OUT/q-ui-linux-$arch  (+ $OUT/bin-linux-$arch/ : xray + geo data)"
 }
 
 usage() { sed -n '2,/^set -euo/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//; /^set -euo/d'; }

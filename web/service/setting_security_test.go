@@ -10,7 +10,7 @@ import (
 
 func setupSettingTestDB(t *testing.T) {
 	t.Helper()
-	if err := database.InitDB(filepath.Join(t.TempDir(), "x-ui.db")); err != nil {
+	if err := database.InitDB(filepath.Join(t.TempDir(), "q-ui.db")); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() {

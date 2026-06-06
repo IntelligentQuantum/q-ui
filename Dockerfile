@@ -31,7 +31,7 @@ ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 # (-extldflags '-static') that runs on any Linux (glibc or musl), not just
 # inside this Alpine image. Default keeps the lean dynamic build for the image.
 ARG LDFLAGS="-w -s"
-RUN go build -ldflags "$LDFLAGS" -o build/x-ui main.go
+RUN go build -ldflags "$LDFLAGS" -o build/q-ui main.go
 RUN ./DockerInit.sh "$TARGETARCH"
 
 # ========================================================
@@ -51,7 +51,7 @@ RUN apk add --no-cache --update \
 
 COPY --from=builder /app/build/ /app/
 COPY --from=builder /app/DockerEntrypoint.sh /app/
-COPY --from=builder /app/x-ui.sh /usr/bin/x-ui
+COPY --from=builder /app/q-ui.sh /usr/bin/q-ui
 COPY --from=builder /app/web/translation /app/web/translation
 
 
@@ -64,15 +64,15 @@ RUN rm -f /etc/fail2ban/jail.d/alpine-ssh.conf \
 
 RUN chmod +x \
   /app/DockerEntrypoint.sh \
-  /app/x-ui \
-  /usr/bin/x-ui
+  /app/q-ui \
+  /usr/bin/q-ui
 
-ENV XUI_IN_DOCKER="true"
-ENV XUI_MAIN_FOLDER="/app"
-ENV XUI_ENABLE_FAIL2BAN="true"
-ENV XUI_DB_TYPE=""
-ENV XUI_DB_DSN=""
+ENV QUI_IN_DOCKER="true"
+ENV QUI_MAIN_FOLDER="/app"
+ENV QUI_ENABLE_FAIL2BAN="true"
+ENV QUI_DB_TYPE=""
+ENV QUI_DB_DSN=""
 EXPOSE 2053
-VOLUME [ "/etc/x-ui" ]
-CMD [ "./x-ui" ]
+VOLUME [ "/etc/q-ui" ]
+CMD [ "./q-ui" ]
 ENTRYPOINT [ "/app/DockerEntrypoint.sh" ]

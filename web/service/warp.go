@@ -59,7 +59,7 @@ func (s *WarpService) RegWarp(secretKey string, publicKey string) (string, error
 		"key":   publicKey,
 		"tos":   time.Now().UTC().Format("2006-01-02T15:04:05.000Z"),
 		"type":  "PC",
-		"model": "x-ui",
+		"model": "q-ui",
 		"name":  hostName,
 	})
 	if err != nil {

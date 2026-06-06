@@ -708,7 +708,7 @@ func isTableEmpty(tableName string) (bool, error) {
 }
 
 // InitDB sets up the database connection, migrates models, and runs seeders.
-// When XUI_DB_TYPE=postgres, dbPath is ignored and XUI_DB_DSN is used instead.
+// When QUI_DB_TYPE=postgres, dbPath is ignored and QUI_DB_DSN is used instead.
 func InitDB(dbPath string) error {
 	var gormLogger logger.Interface
 	if config.IsDebug() {
@@ -731,7 +731,7 @@ func InitDB(dbPath string) error {
 	case "postgres":
 		dsn := config.GetDBDSN()
 		if dsn == "" {
-			return errors.New("XUI_DB_TYPE=postgres but XUI_DB_DSN is empty")
+			return errors.New("QUI_DB_TYPE=postgres but QUI_DB_DSN is empty")
 		}
 		db, err = gorm.Open(postgres.Open(dsn), c)
 		if err != nil {
@@ -769,11 +769,11 @@ func InitDB(dbPath string) error {
 	var maxOpen, maxIdle int
 	switch config.GetDBKind() {
 	case "postgres":
-		maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 25)
-		maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 25)
+		maxOpen = envInt("QUI_DB_MAX_OPEN_CONNS", 25)
+		maxIdle = envInt("QUI_DB_MAX_IDLE_CONNS", 25)
 	default:
-		maxOpen = envInt("XUI_DB_MAX_OPEN_CONNS", 8)
-		maxIdle = envInt("XUI_DB_MAX_IDLE_CONNS", 4)
+		maxOpen = envInt("QUI_DB_MAX_OPEN_CONNS", 8)
+		maxIdle = envInt("QUI_DB_MAX_IDLE_CONNS", 4)
 	}
 	sqlDB.SetMaxOpenConns(maxOpen)
 	sqlDB.SetMaxIdleConns(maxIdle)

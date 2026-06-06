@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/MHSanaei/3x-ui/releases"><img src="https://img.shields.io/github/v/release/mhsanaei/3x-ui" alt="Release"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/mhsanaei/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/mhsanaei/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/MHSanaei/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/mhsanaei/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -19,7 +19,7 @@
 
 **3X-UI** هي لوحة تحكم ويب متقدمة ومفتوحة المصدر لإدارة خوادم [Xray-core](https://github.com/XTLS/Xray-core). توفّر واجهة نظيفة ومتعددة اللغات لنشر وتكوين ومراقبة مجموعة واسعة من بروتوكولات الوكيل وVPN — من خادم VPS واحد إلى عمليات النشر متعددة العقد.
 
-تم بناء 3X-UI كنسخة محسّنة (fork) من مشروع X-UI الأصلي، وتضيف دعمًا أوسع للبروتوكولات، واستقرارًا محسّنًا، ومحاسبة للترافيك لكل عميل، والعديد من ميزات تحسين تجربة الاستخدام.
+تم بناء 3X-UI كنسخة محسّنة (fork) من مشروع Q-UI الأصلي، وتضيف دعمًا أوسع للبروتوكولات، واستقرارًا محسّنًا، ومحاسبة للترافيك لكل عميل، والعديد من ميزات تحسين تجربة الاستخدام.
 
 > [!IMPORTANT]
 > هذا المشروع مخصص للاستخدام الشخصي فقط. يرجى عدم استخدامه لأغراض غير قانونية أو في بيئة إنتاجية.
@@ -70,12 +70,12 @@
 ## البدء السريع
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
 ```
 
-أثناء التثبيت، يتم إنشاء اسم مستخدم وكلمة مرور ومسار وصول عشوائية. بعد التثبيت، شغّل `x-ui` لفتح قائمة الإدارة، حيث يمكنك بدء/إيقاف الخدمة، وعرض أو إعادة تعيين بيانات تسجيل الدخول، وإدارة شهادات SSL، والمزيد.
+أثناء التثبيت، يتم إنشاء اسم مستخدم وكلمة مرور ومسار وصول عشوائية. بعد التثبيت، شغّل `q-ui` لفتح قائمة الإدارة، حيث يمكنك بدء/إيقاف الخدمة، وعرض أو إعادة تعيين بيانات تسجيل الدخول، وإدارة شهادات SSL، والمزيد.
 
-للحصول على الوثائق الكاملة، يرجى زيارة [ويكي المشروع](https://github.com/MHSanaei/3x-ui/wiki).
+للحصول على الوثائق الكاملة، يرجى زيارة [ويكي المشروع](https://github.com/IntelligentQuantum/3x-ui/wiki).
 
 ## المنصات المدعومة
 
@@ -87,29 +87,29 @@ bash <(curl -Ls https://raw.githubusercontent.com/mhsanaei/3x-ui/master/install.
 
 يدعم 3X-UI خلفيتين (backends) يتم اختيارهما أثناء التثبيت:
 
-- **SQLite** (افتراضي) — ملف واحد في `/etc/x-ui/x-ui.db`. بدون إعداد، مثالي لعمليات النشر الصغيرة والمتوسطة.
+- **SQLite** (افتراضي) — ملف واحد في `/etc/q-ui/q-ui.db`. بدون إعداد، مثالي لعمليات النشر الصغيرة والمتوسطة.
 - **PostgreSQL** — موصى به لأعداد العملاء الكبيرة أو الإعدادات متعددة العقد. يمكن للمثبِّت تثبيت PostgreSQL محليًا لك، أو قبول DSN لخادم موجود.
 
-في وقت التشغيل، يتم اختيار الخلفية عبر متغيرات البيئة (يكتبها المثبِّت لك في `/etc/default/x-ui`):
+في وقت التشغيل، يتم اختيار الخلفية عبر متغيرات البيئة (يكتبها المثبِّت لك في `/etc/default/q-ui`):
 
 ```
-XUI_DB_TYPE=postgres
-XUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
+QUI_DB_TYPE=postgres
+QUI_DB_DSN=postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable
 ```
 
 ### ترحيل تثبيت SQLite موجود إلى PostgreSQL
 
 ```bash
-x-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
-# ثم عيّن XUI_DB_TYPE و XUI_DB_DSN في /etc/default/x-ui وأعد التشغيل:
-systemctl restart x-ui
+q-ui migrate-db --dsn "postgres://xui:password@127.0.0.1:5432/xui?sslmode=disable"
+# ثم عيّن QUI_DB_TYPE و QUI_DB_DSN في /etc/default/q-ui وأعد التشغيل:
+systemctl restart q-ui
 ```
 
 يبقى ملف SQLite الأصلي دون تغيير؛ احذفه يدويًا بعد التحقق من الخلفية الجديدة.
 
 ### Docker
 
-يستمر الأمر الافتراضي `docker compose up -d` في استخدام SQLite. للتشغيل مع خدمة PostgreSQL المرفقة، أزِل التعليق عن سطري متغيرات البيئة `XUI_DB_*` في `docker-compose.yml` وشغّل باستخدام البروفايل:
+يستمر الأمر الافتراضي `docker compose up -d` في استخدام SQLite. للتشغيل مع خدمة PostgreSQL المرفقة، أزِل التعليق عن سطري متغيرات البيئة `QUI_DB_*` في `docker-compose.yml` وشغّل باستخدام البروفايل:
 
 ```bash
 docker compose --profile postgres up -d
@@ -118,21 +118,21 @@ docker compose --profile postgres up -d
 تتضمن الصورة Fail2ban (مُفعَّل افتراضيًا) لفرض **حدود IP** لكل عميل. يحظر Fail2ban المخالفين باستخدام `iptables`، الذي يتطلب صلاحية `NET_ADMIN`. يمنح `docker-compose.yml` هذه الصلاحية مسبقًا عبر `cap_add`؛ إذا شغّلت الحاوية باستخدام `docker run` بدلاً من ذلك، فأضِف الصلاحيات بنفسك، وإلا فسيتم تسجيل عمليات الحظر دون تطبيقها أبدًا:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/mhsanaei/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
 ```
 
 ## متغيرات البيئة
 
 | المتغير | الوصف | الافتراضي |
 | --- | --- | --- |
-| `XUI_DB_TYPE` | خلفية قاعدة البيانات: `sqlite` أو `postgres` | `sqlite` |
-| `XUI_DB_DSN` | سلسلة اتصال PostgreSQL (عندما `XUI_DB_TYPE=postgres`) | — |
-| `XUI_DB_FOLDER` | مجلد ملف قاعدة بيانات SQLite | `/etc/x-ui` |
-| `XUI_DB_MAX_OPEN_CONNS` | الحد الأقصى للاتصالات المفتوحة (تجمّع PostgreSQL) | — |
-| `XUI_DB_MAX_IDLE_CONNS` | الحد الأقصى للاتصالات الخاملة (تجمّع PostgreSQL) | — |
-| `XUI_ENABLE_FAIL2BAN` | تفعيل فرض حدود IP المعتمد على Fail2ban | `true` |
-| `XUI_LOG_LEVEL` | مستوى السجل (`debug`، `info`، `warning`، `error`) | `info` |
-| `XUI_DEBUG` | تفعيل وضع التصحيح | `false` |
+| `QUI_DB_TYPE` | خلفية قاعدة البيانات: `sqlite` أو `postgres` | `sqlite` |
+| `QUI_DB_DSN` | سلسلة اتصال PostgreSQL (عندما `QUI_DB_TYPE=postgres`) | — |
+| `QUI_DB_FOLDER` | مجلد ملف قاعدة بيانات SQLite | `/etc/q-ui` |
+| `QUI_DB_MAX_OPEN_CONNS` | الحد الأقصى للاتصالات المفتوحة (تجمّع PostgreSQL) | — |
+| `QUI_DB_MAX_IDLE_CONNS` | الحد الأقصى للاتصالات الخاملة (تجمّع PostgreSQL) | — |
+| `QUI_ENABLE_FAIL2BAN` | تفعيل فرض حدود IP المعتمد على Fail2ban | `true` |
+| `QUI_LOG_LEVEL` | مستوى السجل (`debug`، `info`، `warning`، `error`) | `info` |
+| `QUI_DEBUG` | تفعيل وضع التصحيح | `false` |
 
 ## اللغات المدعومة
 
@@ -173,4 +173,4 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 
 ## النجوم عبر الزمن
 
-[![Stargazers over time](https://starchart.cc/MHSanaei/3x-ui.svg?variant=adaptive)](https://starchart.cc/MHSanaei/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)

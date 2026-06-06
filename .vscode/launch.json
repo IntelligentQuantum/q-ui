@@ -10,10 +10,10 @@
       "program": "${workspaceFolder}",
       "cwd": "${workspaceFolder}",
       "env": {
-        "XUI_DEBUG": "true",
-        "XUI_DB_FOLDER": "x-ui",
-        "XUI_LOG_FOLDER": "x-ui",
-        "XUI_BIN_FOLDER": "x-ui"
+        "QUI_DEBUG": "true",
+        "QUI_DB_FOLDER": "q-ui",
+        "QUI_LOG_FOLDER": "q-ui",
+        "QUI_BIN_FOLDER": "q-ui"
       },
       "console": "integratedTerminal"
     },
@@ -25,11 +25,11 @@
       "program": "${workspaceFolder}",
       "cwd": "${workspaceFolder}",
       "env": {
-        "XUI_DEBUG": "true",
-        "XUI_LOG_FOLDER": "x-ui",
-        "XUI_BIN_FOLDER": "x-ui",
-        "XUI_DB_TYPE": "postgres",
-        "XUI_DB_DSN": "postgres://xui:xuipass@127.0.0.1:5432/xui?sslmode=disable",
+        "QUI_DEBUG": "true",
+        "QUI_LOG_FOLDER": "q-ui",
+        "QUI_BIN_FOLDER": "q-ui",
+        "QUI_DB_TYPE": "postgres",
+        "QUI_DB_DSN": "postgres://xui:xuipass@127.0.0.1:5432/xui?sslmode=disable",
         "PATH": "C:\\Program Files\\PostgreSQL\\18\\bin;${env:PATH}"
       },
       "console": "integratedTerminal"

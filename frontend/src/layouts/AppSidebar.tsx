@@ -43,7 +43,7 @@ import './AppSidebar.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
 const DONATE_URL = 'https://donate.sanaei.dev/';
-const REPO_URL = 'https://github.com/MHSanaei/3x-ui';
+const REPO_URL = 'https://github.com/IntelligentQuantum/3x-ui';
 const LOGOUT_KEY = '__logout__';
 
 type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs';
@@ -276,7 +276,7 @@ export default function AppSidebar() {
       >
         <div className={`sider-brand${collapsed ? ' sider-brand-collapsed' : ''}`}>
           <div className="brand-block">
-            <span className="brand-text">{collapsed ? '3X' : '3X-UI'}</span>
+            <span className="brand-text">{collapsed ? 'Q' : 'Q-UI'}</span>
           </div>
           {!collapsed && (
             <div className="brand-actions">
@@ -335,7 +335,7 @@ export default function AppSidebar() {
       >
         <div className="drawer-header">
           <div className="brand-block">
-            <span className="drawer-brand">3X-UI</span>
+            <span className="drawer-brand">Q-UI</span>
           </div>
           <div className="drawer-header-actions">
             <DonateButton ariaLabel={t('menu.donate') || 'Donate'} />

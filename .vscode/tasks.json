@@ -33,7 +33,7 @@
       "options": {
         "cwd": "${workspaceFolder}",
         "env": {
-          "XUI_DEBUG": "true"
+          "QUI_DEBUG": "true"
         }
       },
       "problemMatcher": [

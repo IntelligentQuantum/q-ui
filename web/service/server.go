@@ -963,12 +963,12 @@ func (s *ServerService) GetLogs(count string, level string, syslog string) []str
 		}
 
 		// Use hardcoded command with validated parameters
-		cmd := exec.Command("journalctl", "-u", "x-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
+		cmd := exec.Command("journalctl", "-u", "q-ui", "--no-pager", "-n", strconv.Itoa(countInt), "-p", level)
 		var out bytes.Buffer
 		cmd.Stdout = &out
 		err = cmd.Run()
 		if err != nil {
-			return []string{"Failed to run journalctl command! Make sure systemd is available and x-ui service is registered."}
+			return []string{"Failed to run journalctl command! Make sure systemd is available and q-ui service is registered."}
 		}
 		lines = strings.Split(out.String(), "\n")
 	} else {
@@ -1166,7 +1166,7 @@ func (s *ServerService) GetDb() ([]byte, error) {
 // then seed a panel running on the other backend.
 func (s *ServerService) GetMigration() ([]byte, string, error) {
 	if database.IsPostgres() {
-		tmp, err := os.CreateTemp("", "x-ui-migration-*.db")
+		tmp, err := os.CreateTemp("", "q-ui-migration-*.db")
 		if err != nil {
 			return nil, "", err
 		}
@@ -1181,7 +1181,7 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return data, "x-ui.db", nil
+		return data, "q-ui.db", nil
 	}
 
 	// SQLite panel: checkpoint so the .db reflects the latest writes, then dump.
@@ -1192,7 +1192,7 @@ func (s *ServerService) GetMigration() ([]byte, string, error) {
 	if err != nil {
 		return nil, "", err
 	}
-	return data, "x-ui.dump", nil
+	return data, "q-ui.dump", nil
 }
 
 func (s *ServerService) ImportDB(file multipart.File) error {
@@ -1403,7 +1403,7 @@ func (s *ServerService) importPostgresDB(file multipart.File) error {
 		return common.NewErrorf("invalid PostgreSQL DSN: %v", err)
 	}
 
-	tempFile, err := os.CreateTemp("", "x-ui-pg-restore-*.dump")
+	tempFile, err := os.CreateTemp("", "q-ui-pg-restore-*.dump")
 	if err != nil {
 		return common.NewErrorf("Error creating temporary dump file: %v", err)
 	}

@@ -122,7 +122,7 @@ export default function IndexPage() {
     if (panelUpdateInfo.updateAvailable) {
       setPanelUpdateOpen(true);
     } else {
-      window.open('https://github.com/MHSanaei/3x-ui/releases', '_blank', 'noopener,noreferrer');
+      window.open('https://github.com/IntelligentQuantum/3x-ui/releases', '_blank', 'noopener,noreferrer');
     }
   }
 
@@ -220,7 +220,7 @@ export default function IndexPage() {
                     <Card
                       title={
                         <Space>
-                          <span>3X-UI</span>
+                          <span>Q-UI</span>
                           {isMobile && displayVersion && (
                             <Tag color={panelUpdateInfo.updateAvailable ? 'orange' : 'green'}>
                               {panelUpdateInfo.updateAvailable
