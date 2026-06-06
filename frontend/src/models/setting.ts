@@ -27,6 +27,13 @@ export class AllSetting {
   tgLang = 'en-US';
   twoFactorEnable = false;
   twoFactorToken = '';
+  registrationEnable = false;
+  clientCost = 0;
+  clientCostPerGB = 0;
+  zarinpalEnable = false;
+  zarinpalMerchantId = '';
+  zarinpalSandbox = false;
+  zarinpalCurrency = 'IRT';
   xrayTemplateConfig = '';
   subEnable = true;
   subJsonEnable = false;
