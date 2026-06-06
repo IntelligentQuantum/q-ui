@@ -175,10 +175,12 @@ var legacyEnvSuffixes = []string{
 	"DB_MAX_IDLE_CONNS", "DB_MAX_OPEN_CONNS", "TEST_PG_DSN",
 }
 
-func init() {
-	// Backward compatibility: honor legacy XUI_* environment variables when the
-	// new QUI_* equivalent is unset, so existing installs and containers keep
-	// working after the x-ui -> q-ui rename. Runs before any QUI_* read.
+// BridgeLegacyEnv honors legacy XUI_* environment variables when the new QUI_*
+// equivalent is unset, so existing installs and containers keep working after
+// the x-ui -> q-ui rename. It is idempotent and MUST be called again after any
+// godotenv.Load(): .env files are loaded in main(), after package init(), and
+// may themselves define XUI_* variables that init() could not have seen yet.
+func BridgeLegacyEnv() {
 	for _, suffix := range legacyEnvSuffixes {
 		if os.Getenv("QUI_"+suffix) != "" {
 			continue
@@ -187,6 +189,13 @@ func init() {
 			_ = os.Setenv("QUI_"+suffix, v)
 		}
 	}
+}
+
+func init() {
+	// Bridge variables already present at process start (systemd EnvironmentFile,
+	// Docker -e, shell exports). .env-provided vars are bridged again from main
+	// after godotenv.Load().
+	BridgeLegacyEnv()
 }
 
 func init() {

@@ -45,6 +45,7 @@ func runWebServer() {
 	}
 
 	godotenv.Load()
+	config.BridgeLegacyEnv() // re-apply XUI_*->QUI_* now that .env is loaded
 
 	err := database.InitDB(config.GetDBPath())
 	if err != nil {
@@ -444,6 +445,7 @@ func loadServiceEnvFile() {
 		if err := godotenv.Load(path); err != nil {
 			log.Printf("warning: failed to load env file %s: %v", path, err)
 		}
+		config.BridgeLegacyEnv() // re-apply XUI_*->QUI_* now that the env file is loaded
 		return
 	}
 }
