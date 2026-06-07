@@ -3,13 +3,37 @@ import type { ReactNode } from 'react';
 import { theme as antdTheme } from 'antd';
 import type { ThemeConfig } from 'antd';
 
-const STORAGE_DARK = 'dark-mode';
-const STORAGE_ULTRA = 'isUltraDarkThemeEnabled';
+// Theme is a single mode with four values. light/dark/ultra are explicit;
+// `system` follows the OS `prefers-color-scheme`. The legacy boolean keys are
+// migrated once into this single key.
+export type ThemeMode = 'light' | 'dark' | 'ultra' | 'system';
 
-function readBool(key: string, fallback: boolean): boolean {
-  const raw = localStorage.getItem(key);
-  if (raw === null) return fallback;
-  return raw === 'true';
+const STORAGE_MODE = 'theme-mode';
+const STORAGE_DARK = 'dark-mode'; // legacy
+const STORAGE_ULTRA = 'isUltraDarkThemeEnabled'; // legacy
+
+export const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'ultra', 'system'];
+
+function prefersDark(): boolean {
+  return (
+    typeof window !== 'undefined' &&
+    typeof window.matchMedia === 'function' &&
+    window.matchMedia('(prefers-color-scheme: dark)').matches
+  );
+}
+
+function resolveDark(mode: ThemeMode, systemDark: boolean): boolean {
+  if (mode === 'system') return systemDark;
+  return mode === 'dark' || mode === 'ultra';
+}
+
+function readInitialMode(): ThemeMode {
+  const stored = localStorage.getItem(STORAGE_MODE);
+  if (stored && (THEME_MODES as readonly string[]).includes(stored)) return stored as ThemeMode;
+  // Migrate from the old two-boolean scheme (default was dark).
+  if (localStorage.getItem(STORAGE_ULTRA) === 'true') return 'ultra';
+  const darkRaw = localStorage.getItem(STORAGE_DARK);
+  return darkRaw === 'false' ? 'light' : 'dark';
 }
 
 function applyDom(isDark: boolean, isUltra: boolean) {
@@ -24,9 +48,9 @@ function applyDom(isDark: boolean, isUltra: boolean) {
 }
 
 // module load so the document is in the right theme before React mounts.
-const initialDark = readBool(STORAGE_DARK, true);
-const initialUltra = readBool(STORAGE_ULTRA, false);
-applyDom(initialDark, initialUltra);
+const initialMode = readInitialMode();
+const initialSystemDark = prefersDark();
+applyDom(resolveDark(initialMode, initialSystemDark), initialMode === 'ultra');
 
 const DARK_TOKENS = {
   colorBgBase: '#1a1b1f',
@@ -114,8 +138,17 @@ export function pauseAnimationsUntilLeave(elementId: string): void {
 }
 
 interface ThemeContextValue {
+  /** The selected mode: light | dark | ultra | system. */
+  mode: ThemeMode;
+  /** Set the mode explicitly (persisted). */
+  setMode: (mode: ThemeMode) => void;
+  /** Advance to the next mode: light → dark → ultra → system → light. */
+  cycleMode: () => void;
+  /** Effective dark state (resolves `system` against the OS preference). */
   isDark: boolean;
+  /** Effective ultra-dark state. */
   isUltra: boolean;
+  // Back-compat helpers (used by older callers): toggle light↔dark / dark↔ultra.
   toggleTheme: () => void;
   toggleUltra: () => void;
   antdThemeConfig: ThemeConfig;
@@ -124,23 +157,39 @@ interface ThemeContextValue {
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [isDark, setIsDark] = useState<boolean>(initialDark);
-  const [isUltra, setIsUltra] = useState<boolean>(initialUltra);
+  const [mode, setModeState] = useState<ThemeMode>(initialMode);
+  const [systemDark, setSystemDark] = useState<boolean>(initialSystemDark);
+
+  // Track the OS preference so `system` mode reacts live to light/dark changes.
+  useEffect(() => {
+    if (typeof window.matchMedia !== 'function') return;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
+    mql.addEventListener?.('change', onChange);
+    return () => mql.removeEventListener?.('change', onChange);
+  }, []);
+
+  const isDark = resolveDark(mode, systemDark);
+  const isUltra = mode === 'ultra';
 
   useEffect(() => {
     applyDom(isDark, isUltra);
-    localStorage.setItem(STORAGE_DARK, String(isDark));
-    localStorage.setItem(STORAGE_ULTRA, String(isUltra));
-  }, [isDark, isUltra]);
+    localStorage.setItem(STORAGE_MODE, mode);
+  }, [mode, isDark, isUltra]);
 
-  const toggleTheme = useCallback(() => setIsDark((v) => !v), []);
-  const toggleUltra = useCallback(() => setIsUltra((v) => !v), []);
+  const setMode = useCallback((m: ThemeMode) => setModeState(m), []);
+  const cycleMode = useCallback(
+    () => setModeState((m) => THEME_MODES[(THEME_MODES.indexOf(m) + 1) % THEME_MODES.length]),
+    [],
+  );
+  const toggleTheme = useCallback(() => setModeState((m) => (m === 'light' ? 'dark' : 'light')), []);
+  const toggleUltra = useCallback(() => setModeState((m) => (m === 'ultra' ? 'dark' : 'ultra')), []);
 
   const antdThemeConfig = useMemo(() => buildAntdThemeConfig(isDark, isUltra), [isDark, isUltra]);
 
   const value = useMemo<ThemeContextValue>(
-    () => ({ isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig }),
-    [isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig],
+    () => ({ mode, setMode, cycleMode, isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig }),
+    [mode, setMode, cycleMode, isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig],
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;

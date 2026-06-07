@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Empty, Input, Row, Select, Space, Spin, Statistic, Table, Tag } from 'antd';
+import { Card, Col, Empty, Input, Row, Select, Space, Statistic, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CheckCircleOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { useMe } from '@/hooks/useMe';
 import PageShell from '@/layouts/PageShell';
+import { TableSkeleton, ErrorState } from '@/components/ui';
 
 interface CustomerRow {
   email: string;
@@ -39,10 +40,11 @@ export default function CustomersPage() {
   const { me } = useMe();
   const seesAll = !!(me?.isAdmin || me?.isModerator);
 
-  const { data: customers, isLoading } = useQuery({
+  const { data: customers, isLoading, isError, refetch } = useQuery({
     queryKey: ['customers', 'list'],
     queryFn: async () => {
       const msg = await HttpUtil.get('/panel/api/customers/list/paged?pageSize=200', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || '');
       const obj = msg.obj as { items?: CustomerRow[] } | null;
       return obj?.items ?? [];
     },
@@ -96,7 +98,7 @@ export default function CustomersPage() {
 
   return (
     <PageShell name="customers-page">
-      <Spin spinning={isLoading} delay={200} size="large">
+      <>
         <Row gutter={[16, 12]}>
           <Col span={24}>
             <Card size="small" hoverable className="summary-card">
@@ -140,6 +142,7 @@ export default function CustomersPage() {
                       size="small"
                       style={{ width: 200 }}
                       prefix={<SearchOutlined />}
+                      aria-label={t('search')}
                       placeholder={t('search')}
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
@@ -148,7 +151,11 @@ export default function CustomersPage() {
                 ) : undefined
               }
             >
-              {!list.length ? (
+              {isLoading ? (
+                <TableSkeleton rows={6} />
+              ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
+              ) : !list.length ? (
                 <Empty description={t('pages.customers.empty')} />
               ) : (
                 <Table
@@ -156,13 +163,14 @@ export default function CustomersPage() {
                   size="small"
                   columns={columns}
                   dataSource={filtered}
+                  scroll={{ x: 'max-content' }}
                   pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
                 />
               )}
             </Card>
           </Col>
         </Row>
-      </Spin>
+      </>
     </PageShell>
   );
 }

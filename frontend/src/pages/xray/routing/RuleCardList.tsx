@@ -66,7 +66,7 @@ export default function RuleCardList({
                   ],
                 }}
               >
-                <Button shape="circle" size="small" icon={<MoreOutlined />} />
+                <Button aria-label={t('more')} shape="circle" size="small" icon={<MoreOutlined />} />
               </Dropdown>
             </div>
 

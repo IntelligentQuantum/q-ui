@@ -151,7 +151,7 @@ export default function LogModal({ open, onClose }: LogModalProps) {
           </Checkbox>
         </Form.Item>
         <Form.Item className="download-item">
-          <Button type="primary" onClick={download} icon={<DownloadOutlined />} />
+          <Button aria-label={t('download')} type="primary" onClick={download} icon={<DownloadOutlined />} />
         </Form.Item>
       </Form>
 

@@ -196,18 +196,18 @@ export default function NodeList({
       ) : (
         <Space>
           <Tooltip title={t('pages.nodes.probe')}>
-            <Button type="text" size="small" icon={<ThunderboltOutlined />} onClick={() => onProbe(record)} />
+            <Button aria-label={t('pages.nodes.probe')} type="text" size="small" icon={<ThunderboltOutlined />} onClick={() => onProbe(record)} />
           </Tooltip>
           {isUpdateEligible(record) && (
             <Tooltip title={t('pages.nodes.updatePanel')}>
-              <Button type="text" size="small" icon={<CloudDownloadOutlined />} onClick={() => onUpdateNode(record)} />
+              <Button aria-label={t('pages.nodes.updatePanel')} type="text" size="small" icon={<CloudDownloadOutlined />} onClick={() => onUpdateNode(record)} />
             </Tooltip>
           )}
           <Tooltip title={t('edit')}>
-            <Button type="text" size="small" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+            <Button aria-label={t('edit')} type="text" size="small" icon={<EditOutlined />} onClick={() => onEdit(record)} />
           </Tooltip>
           <Tooltip title={t('delete')}>
-            <Button type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
+            <Button aria-label={t('delete')} type="text" size="small" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
           </Tooltip>
         </Space>
       ),

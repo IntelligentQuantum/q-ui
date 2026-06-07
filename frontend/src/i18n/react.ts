@@ -20,6 +20,15 @@ if (active !== FALLBACK && !Object.prototype.hasOwnProperty.call(lazyModules, mo
   active = FALLBACK;
 }
 
+// Reflect the active language on <html> so the document flows in the correct
+// direction (Persian is RTL) and assistive tech announces the right language.
+// AntD components are flipped via the ConfigProvider `direction` prop, which
+// reads this same value.
+if (typeof document !== 'undefined') {
+  document.documentElement.lang = active;
+  document.documentElement.dir = LanguageManager.isRTL(active) ? 'rtl' : 'ltr';
+}
+
 export async function readyI18n() {
   await i18next.use(initReactI18next).init({
     lng: active,

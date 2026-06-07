@@ -78,7 +78,7 @@
   white-space: normal;
   word-break: break-all;
   display: inline-block;
-  margin-right: 0;
+  margin-inline-end: 0;
 }
 
 .value-block {
@@ -126,7 +126,7 @@
 .ip-log {
   max-height: 150px;
   overflow-y: auto;
-  text-align: left;
+  text-align: start;
 }
 
 .ip-log-row {

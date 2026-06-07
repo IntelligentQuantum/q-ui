@@ -133,7 +133,7 @@ export default function RegisterPage() {
   const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       <Layout className={pageClass}>
         <Layout.Content className="login-content">

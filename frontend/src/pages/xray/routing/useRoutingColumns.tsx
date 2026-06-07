@@ -57,7 +57,7 @@ export function useRoutingColumns({
             <span className="row-index">{index + 1}</span>
             <div className={!isMobile ? 'action-buttons' : ''}>
               {!isMobile && (
-                <Button shape="circle" size="small" icon={<EditOutlined />} onClick={() => openEdit(index)} />
+                <Button aria-label={t('edit')} shape="circle" size="small" icon={<EditOutlined />} onClick={() => openEdit(index)} />
               )}
               <Dropdown
                 trigger={['click']}
@@ -77,7 +77,7 @@ export function useRoutingColumns({
                   ],
                 }}
               >
-                <Button shape="circle" size="small" icon={<MoreOutlined />} />
+                <Button aria-label={t('more')} shape="circle" size="small" icon={<MoreOutlined />} />
               </Dropdown>
             </div>
           </div>

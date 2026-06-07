@@ -1,7 +1,7 @@
 .reload-icon {
   cursor: pointer;
   vertical-align: middle;
-  margin-left: 10px;
+  margin-inline-start: 10px;
 }
 
 .log-toolbar {
@@ -10,7 +10,7 @@
 }
 
 .log-toolbar .download-item {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .log-container {
@@ -43,7 +43,7 @@
 }
 
 .log-level {
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 
 .level-debug {
@@ -137,7 +137,7 @@
 }
 
 .log-body-text {
-  margin-left: 4px;
+  margin-inline-start: 4px;
 }
 
 body.dark .log-container {

@@ -21,7 +21,7 @@ export default function ApiDocsPage() {
   }, [isDark, isUltra]);
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       <Layout className={pageClass}>
         <AppSidebar />
 

@@ -240,16 +240,16 @@ export default function UsersPage() {
       render: (_v, row) => (
         <Space size={2}>
           <Tooltip title={t('pages.users.editUser')}>
-            <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+            <Button aria-label={t('pages.users.editUser')} size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(row)} />
           </Tooltip>
           <Tooltip title={t('pages.users.manageBalance')}>
-            <Button size="small" type="text" icon={<WalletOutlined />} onClick={() => openBalance(row)} />
+            <Button aria-label={t('pages.users.manageBalance')} size="small" type="text" icon={<WalletOutlined />} onClick={() => openBalance(row)} />
           </Tooltip>
           <Tooltip title={t('pages.users.history')}>
-            <Button size="small" type="text" icon={<HistoryOutlined />} onClick={() => setHistoryTarget(row)} />
+            <Button aria-label={t('pages.users.history')} size="small" type="text" icon={<HistoryOutlined />} onClick={() => setHistoryTarget(row)} />
           </Tooltip>
           <Tooltip title={t('delete')}>
-            <Button
+            <Button aria-label={t('delete')}
               size="small"
               type="text"
               danger
@@ -315,7 +315,7 @@ export default function UsersPage() {
   }, [isDark, isUltra]);
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       {modalContextHolder}
       <Layout className={pageClass}>
@@ -378,7 +378,7 @@ export default function UsersPage() {
                         </div>
                       }
                     >
-                      <Table<PanelUser>
+                      <Table<PanelUser> scroll={{ x: 'max-content' }}
                         dataSource={filteredUsers}
                         columns={columns}
                         rowKey="id"
@@ -518,7 +518,7 @@ export default function UsersPage() {
           onCancel={() => setHistoryTarget(null)}
           destroyOnHidden
         >
-          <Table<Transaction>
+          <Table<Transaction> scroll={{ x: 'max-content' }}
             dataSource={txQuery.data ?? []}
             columns={txColumns}
             rowKey="id"

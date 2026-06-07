@@ -130,7 +130,7 @@ export default function HeaderMapEditor({ mode, value, onChange }: HeaderMapEdit
             placeholder="Value"
             onChange={(e) => setRow(idx, { value: e.target.value })}
           />
-          <Button icon={<MinusOutlined />} onClick={() => removeRow(idx)} />
+          <Button aria-label="Remove" icon={<MinusOutlined />} onClick={() => removeRow(idx)} />
         </Space.Compact>
       ))}
       <Button size="small" type="primary" icon={<PlusOutlined />} onClick={addRow}>

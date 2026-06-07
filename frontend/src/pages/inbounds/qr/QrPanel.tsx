@@ -96,16 +96,16 @@ export default function QrPanel({
       <div className="qr-panel-header">
         <Tag color="green" className="qr-remark">{remark}</Tag>
         <Tooltip title={t('copy')}>
-          <Button size="small" icon={<CopyOutlined />} onClick={copy} />
+          <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={copy} />
         </Tooltip>
         {showQr && (
           <Tooltip title={t('downloadImage') !== 'downloadImage' ? t('downloadImage') : 'Download Image'}>
-            <Button size="small" icon={<PictureOutlined />} onClick={downloadImage} />
+            <Button aria-label={t('downloadImage') !== 'downloadImage' ? t('downloadImage') : 'Download Image'} size="small" icon={<PictureOutlined />} onClick={downloadImage} />
           </Tooltip>
         )}
         {downloadName && (
           <Tooltip title={t('download')}>
-            <Button size="small" icon={<DownloadOutlined />} onClick={download} />
+            <Button aria-label={t('download')} size="small" icon={<DownloadOutlined />} onClick={download} />
           </Tooltip>
         )}
       </div>

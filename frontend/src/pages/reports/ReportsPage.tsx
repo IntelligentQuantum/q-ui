@@ -189,7 +189,7 @@ export default function ReportsPage() {
   const monthRevenue = report?.revenue.thisMonth?.amount ?? 0;
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       <Layout className={pageClass}>
         <AppSidebar />
@@ -295,7 +295,7 @@ export default function ReportsPage() {
 
                   <Col xs={24} lg={14}>
                     <Card size="small" hoverable title={t('pages.reports.breakdownTitle')}>
-                      <Table<PeriodRow>
+                      <Table<PeriodRow> scroll={{ x: 'max-content' }}
                         dataSource={periodRows}
                         columns={periodColumns}
                         rowKey="key"
@@ -307,7 +307,7 @@ export default function ReportsPage() {
 
                   <Col xs={24} lg={10}>
                     <Card size="small" hoverable title={t('pages.reports.topResellersTitle')}>
-                      <Table<ResellerStat>
+                      <Table<ResellerStat> scroll={{ x: 'max-content' }}
                         dataSource={report?.topResellers ?? []}
                         columns={resellerColumns}
                         rowKey="userId"

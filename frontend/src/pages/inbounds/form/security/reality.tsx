@@ -64,7 +64,7 @@ export default function RealityForm({
           >
             <Input style={{ width: 'calc(100% - 32px)' }} placeholder="example.com:443" />
           </Form.Item>
-          <Button icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
+          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
         </Space.Compact>
       </Form.Item>
       <Form.Item label="SNI">
@@ -75,7 +75,7 @@ export default function RealityForm({
           >
             <Select mode="tags" tokenSeparators={[',']} style={{ flex: 1 }} />
           </Form.Item>
-          <Button icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
+          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
         </Space.Compact>
       </Form.Item>
       <Form.Item
@@ -104,7 +104,7 @@ export default function RealityForm({
           >
             <Select mode="tags" tokenSeparators={[',']} style={{ flex: 1 }} />
           </Form.Item>
-          <Button icon={<ReloadOutlined />} onClick={randomizeShortIds} />
+          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeShortIds} />
         </Space.Compact>
       </Form.Item>
       <Form.Item

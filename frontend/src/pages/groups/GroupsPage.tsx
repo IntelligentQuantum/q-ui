@@ -396,10 +396,10 @@ export default function GroupsPage() {
       render: (_v, row) => (
         <Space size={4}>
           <Dropdown trigger={['click']} menu={{ items: rowActions(row) }}>
-            <Button size="small" type="text" icon={<MoreOutlined />} />
+            <Button aria-label={t('more')} size="small" type="text" icon={<MoreOutlined />} />
           </Dropdown>
           <Tooltip title={t('pages.groups.rename')}>
-            <Button size="small" type="text" icon={<EditOutlined />} onClick={() => openRename(row)} />
+            <Button aria-label={t('pages.groups.rename')} size="small" type="text" icon={<EditOutlined />} onClick={() => openRename(row)} />
           </Tooltip>
         </Space>
       ),
@@ -427,7 +427,7 @@ export default function GroupsPage() {
   }, [isDark, isUltra]);
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       {modalContextHolder}
       <Layout className={pageClass}>
@@ -485,7 +485,7 @@ export default function GroupsPage() {
                         </div>
                       }
                     >
-                      <Table<GroupSummary>
+                      <Table<GroupSummary> scroll={{ x: 'max-content' }}
                         dataSource={groups}
                         columns={columns}
                         rowKey="name"

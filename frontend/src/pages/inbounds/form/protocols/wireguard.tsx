@@ -46,7 +46,7 @@ export default function WireguardFields({ wgPubKey, regenInboundWg, regenWgPeerK
           <Form.Item name={['settings', 'secretKey']} noStyle>
             <Input style={{ width: 'calc(100% - 32px)' }} />
           </Form.Item>
-          <Button icon={<ReloadOutlined />} onClick={regenInboundWg} />
+          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={regenInboundWg} />
         </Space.Compact>
       </Form.Item>
       <Form.Item label={t('pages.xray.wireguard.publicKey')}>
@@ -88,7 +88,7 @@ export default function WireguardFields({ wgPubKey, regenInboundWg, regenWgPeerK
                   <Space>
                     <span>{t('pages.inbounds.info.peerNumber', { n: idx + 1 })}</span>
                     {fields.length > 1 && (
-                      <Button
+                      <Button aria-label={t('remove')}
                         size="small"
                         danger
                         icon={<MinusOutlined />}
@@ -102,7 +102,7 @@ export default function WireguardFields({ wgPubKey, regenInboundWg, regenWgPeerK
                     <Form.Item name={[field.name, 'privateKey']} noStyle>
                       <Input style={{ width: 'calc(100% - 32px)' }} />
                     </Form.Item>
-                    <Button
+                    <Button aria-label={t('regenerate')}
                       icon={<ReloadOutlined />}
                       onClick={() => regenWgPeerKeypair(field.name)}
                     />

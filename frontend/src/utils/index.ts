@@ -855,6 +855,13 @@ export class LanguageManager {
   static isSupportLanguage(language: string): boolean {
     return LanguageManager.supportedLanguages.some((lang) => lang.value === language);
   }
+
+  // Whether the given (or current) language is right-to-left. Persian is RTL
+  // (and Arabic, if it's ever re-added).
+  static isRTL(language?: string): boolean {
+    const l = (language || LanguageManager.getLanguage()).toLowerCase();
+    return l.startsWith('fa') || l.startsWith('ar');
+  }
 }
 
 export class FileManager {

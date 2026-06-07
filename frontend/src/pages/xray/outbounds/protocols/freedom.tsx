@@ -121,7 +121,7 @@ export default function FreedomFields({ form }: { form: FormInstance<OutboundFor
                 }}
               />
               {fields.length > 0 && (
-                <Button
+                <Button aria-label={t('add')}
                   size="small"
                   type="primary"
                   className="ml-8"
@@ -182,7 +182,7 @@ export default function FreedomFields({ form }: { form: FormInstance<OutboundFor
         {(fields, { add, remove }) => (
           <>
             <Form.Item label={t('pages.xray.outboundForm.finalRules')}>
-              <Button
+              <Button aria-label={t('add')}
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}

@@ -8,7 +8,7 @@
 }
 
 .log-toolbar .download-item {
-  margin-left: auto;
+  margin-inline-start: auto;
 }
 
 .log-container {
@@ -139,7 +139,7 @@ html[data-theme="ultra-dark"] .log-container {
 .xraylog-table td,
 .xraylog-table th {
   padding: 2px 15px;
-  text-align: left;
+  text-align: start;
 }
 
 .xraylog-table .log-row-1 {

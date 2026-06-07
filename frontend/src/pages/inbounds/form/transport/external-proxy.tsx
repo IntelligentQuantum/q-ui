@@ -72,7 +72,7 @@ export default function ExternalProxyForm({
                           <div key={field.key} className="ext-proxy-card">
                             <div className="ext-proxy-card__head">
                               <span className="ext-proxy-card__title">#{idx + 1}</span>
-                              <Button
+                              <Button aria-label={t('delete')}
                                 size="small"
                                 type="text"
                                 danger

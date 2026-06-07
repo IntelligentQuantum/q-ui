@@ -204,7 +204,7 @@ export default function RuleFormModal({
         </Form.Item>
 
         <Form.Item label={t('pages.xray.ruleForm.attributes')}>
-          <Button size="small" icon={<PlusOutlined />} onClick={() => update('attrs', [...form.attrs, ['', '']])} />
+          <Button aria-label={t('add')} size="small" icon={<PlusOutlined />} onClick={() => update('attrs', [...form.attrs, ['', '']])} />
         </Form.Item>
         <Form.Item wrapperCol={{ span: 24 }}>
           {form.attrs.map((attr, idx) => (
@@ -226,7 +226,7 @@ export default function RuleFormModal({
                   update('attrs', next);
                 }}
               />
-              <Button
+              <Button aria-label={t('remove')}
                 icon={<MinusOutlined />}
                 onClick={() => update('attrs', form.attrs.filter((_, i) => i !== idx))}
               />

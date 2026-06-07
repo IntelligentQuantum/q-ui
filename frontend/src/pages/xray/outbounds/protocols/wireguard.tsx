@@ -19,7 +19,7 @@ export default function WireguardFields({ form }: { form: FormInstance<OutboundF
           <Form.Item name={['settings', 'secretKey']} noStyle>
             <Input style={{ width: 'calc(100% - 32px)' }} />
           </Form.Item>
-          <Button
+          <Button aria-label={t('regenerate')}
             icon={<ReloadOutlined />}
             onClick={() => {
               const pair = Wireguard.generateKeypair();
@@ -60,7 +60,7 @@ export default function WireguardFields({ form }: { form: FormInstance<OutboundF
         {(fields, { add, remove }) => (
           <>
             <Form.Item label={t('pages.inbounds.form.peers')}>
-              <Button
+              <Button aria-label={t('add')}
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}
@@ -120,7 +120,7 @@ export default function WireguardFields({ form }: { form: FormInstance<OutboundF
                             )}
                           </Space.Compact>
                         ))}
-                        <Button
+                        <Button aria-label={t('add')}
                           size="small"
                           icon={<PlusOutlined />}
                           onClick={() => addIp('')}

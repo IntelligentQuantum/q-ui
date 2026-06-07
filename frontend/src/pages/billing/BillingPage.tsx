@@ -146,7 +146,7 @@ export default function BillingPage() {
   const disabled = !!me && !me.zarinpalEnable;
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       <Layout className={pageClass}>
         <AppSidebar />
@@ -221,7 +221,7 @@ export default function BillingPage() {
                 )}
 
                 <Card size="small" hoverable title={t('pages.billing.history')} style={{ marginTop: 16 }}>
-                  <Table<Payment>
+                  <Table<Payment> scroll={{ x: 'max-content' }}
                     dataSource={paymentsQuery.data ?? []}
                     columns={columns}
                     rowKey="id"

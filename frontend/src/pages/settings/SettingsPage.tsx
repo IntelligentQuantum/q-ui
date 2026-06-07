@@ -206,7 +206,7 @@ export default function SettingsPage() {
   }, [activeSlug, allSetting, updateSetting]);
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       {modalContextHolder}
       <Layout className={pageClass}>

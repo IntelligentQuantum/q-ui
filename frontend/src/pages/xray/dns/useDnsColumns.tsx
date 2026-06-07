@@ -37,7 +37,7 @@ export function useDnsServerColumns({
                 ],
               }}
             >
-              <Button shape="circle" size="small" icon={<MoreOutlined />} />
+              <Button aria-label="More" shape="circle" size="small" icon={<MoreOutlined />} />
             </Dropdown>
           </Space>
         ),
@@ -83,7 +83,7 @@ export function useFakednsColumns({
         render: (_v, _record, index) => (
           <Space size={6}>
             <span className="row-index">{index + 1}</span>
-            <Button shape="circle" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteFakedns(index)} />
+            <Button aria-label="Delete" shape="circle" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteFakedns(index)} />
           </Space>
         ),
       },

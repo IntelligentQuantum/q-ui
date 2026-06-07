@@ -197,7 +197,7 @@ export default function OutboundsTab({
                 title={t('pages.inbounds.resetAllTrafficContent')}
                 onConfirm={() => onResetTraffic('-alltags-')}
               >
-                <Button icon={<RetweetOutlined />} />
+                <Button aria-label={t('pages.inbounds.resetAllTrafficContent')} icon={<RetweetOutlined />} />
               </Popconfirm>
             </Space>
           </Col>
@@ -216,7 +216,7 @@ export default function OutboundsTab({
             onTest={onTest}
           />
         ) : (
-          <Table
+          <Table scroll={{ x: 'max-content' }}
             columns={columns}
             dataSource={rows}
             rowKey={(r) => r.key}

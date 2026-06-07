@@ -84,7 +84,7 @@ export default function OutboundCardList({
                 ],
               }}
             >
-              <Button shape="circle" size="small" icon={<MoreOutlined />} />
+              <Button aria-label={t('more')} shape="circle" size="small" icon={<MoreOutlined />} />
             </Dropdown>
           </div>
           {outboundAddresses(record).length > 0 && (
@@ -113,6 +113,7 @@ export default function OutboundCardList({
                 type="primary"
                 shape="circle"
                 size="small"
+                aria-label="Test outbound"
                 loading={isTesting(outboundTestStates, index)}
                 disabled={isUntestable(record, testMode) || isTesting(outboundTestStates, index)}
                 icon={<ThunderboltOutlined />}

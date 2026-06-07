@@ -208,7 +208,7 @@ export default function BalancerFormModal({
               />
             </Form.Item>
             <Form.Item label={t('pages.xray.balancer.baselines')}>
-              <Button
+              <Button aria-label={t('add')}
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}
@@ -228,7 +228,7 @@ export default function BalancerFormModal({
               ))}
             </Form.Item>
             <Form.Item label={t('pages.xray.balancer.costs')}>
-              <Button
+              <Button aria-label={t('add')}
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}

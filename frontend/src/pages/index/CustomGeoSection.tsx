@@ -195,7 +195,7 @@ export default function CustomGeoSection({ active }: CustomGeoSectionProps) {
         render: (_v, record) => (
           <Space size="small">
             <Tooltip title={t('pages.index.customGeoEdit')}>
-              <Button
+              <Button aria-label={t('pages.index.customGeoEdit')}
                 type="link"
                 size="small"
                 icon={<EditOutlined />}
@@ -203,7 +203,7 @@ export default function CustomGeoSection({ active }: CustomGeoSectionProps) {
               />
             </Tooltip>
             <Tooltip title={t('pages.index.customGeoDownload')}>
-              <Button
+              <Button aria-label={t('pages.index.customGeoDownload')}
                 type="link"
                 size="small"
                 loading={actionId === record.id}
@@ -212,7 +212,7 @@ export default function CustomGeoSection({ active }: CustomGeoSectionProps) {
               />
             </Tooltip>
             <Tooltip title={t('pages.index.customGeoDelete')}>
-              <Button
+              <Button aria-label={t('pages.index.customGeoDelete')}
                 type="link"
                 size="small"
                 danger

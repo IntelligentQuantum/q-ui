@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Switch, Table, Tag } from 'antd';
+import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Statistic, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CheckCircleOutlined, CloudServerOutlined, EditOutlined, QrcodeOutlined, ReloadOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
+import { TableSkeleton, ErrorState } from '@/components/ui';
 import ClientQrModal from '@/pages/clients/ClientQrModal';
 import { ME_QUERY_KEY } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -66,10 +67,11 @@ export default function ServicesPage() {
   const [renewProductId, setRenewProductId] = useState<number | undefined>(undefined);
   const [busy, setBusy] = useState(false);
 
-  const { data: clients, isLoading } = useQuery({
+  const { data: clients, isLoading, isError, refetch } = useQuery({
     queryKey: ['clients', 'mine'],
     queryFn: async () => {
       const msg = await HttpUtil.get('/panel/api/clients/list/paged?pageSize=200', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || '');
       const obj = msg.obj as { items?: ClientRow[] } | null;
       return obj?.items ?? [];
     },
@@ -220,7 +222,7 @@ export default function ServicesPage() {
 
   return (
     <PageShell name="services-page">
-      <Spin spinning={isLoading} delay={200} size="large">
+      <>
         <Row gutter={[16, 12]}>
           <Col span={24}>
             <Card size="small" hoverable className="summary-card">
@@ -264,6 +266,7 @@ export default function ServicesPage() {
                       size="small"
                       style={{ width: 200 }}
                       prefix={<SearchOutlined />}
+                      aria-label={t('search')}
                       placeholder={t('search')}
                       value={q}
                       onChange={(e) => setQ(e.target.value)}
@@ -272,7 +275,11 @@ export default function ServicesPage() {
                 ) : undefined
               }
             >
-              {!list.length ? (
+              {isLoading ? (
+                <TableSkeleton rows={6} />
+              ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
+              ) : !list.length ? (
                 <Empty description={t('pages.services.empty')} />
               ) : (
                 <Table
@@ -280,13 +287,14 @@ export default function ServicesPage() {
                   size="small"
                   columns={columns}
                   dataSource={filtered}
+                  scroll={{ x: 'max-content' }}
                   pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
                 />
               )}
             </Card>
           </Col>
         </Row>
-      </Spin>
+      </>
 
       {/* Same QR + per-link details modal as the Clients page. */}
       <ClientQrModal

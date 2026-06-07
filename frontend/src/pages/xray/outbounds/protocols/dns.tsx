@@ -31,7 +31,7 @@ export default function DnsFields() {
         {(fields, { add, remove }) => (
           <>
             <Form.Item label={t('pages.xray.outboundForm.rules')}>
-              <Button
+              <Button aria-label={t('add')}
                 size="small"
                 type="primary"
                 icon={<PlusOutlined />}

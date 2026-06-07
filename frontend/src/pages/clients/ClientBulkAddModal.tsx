@@ -260,7 +260,7 @@ export default function ClientBulkAddModal({
                 onChange={(e) => update('subId', e.target.value)}
                 style={{ flex: 1 }}
               />
-              <Button
+              <Button aria-label={t('regenerate')}
                 icon={<ReloadOutlined />}
                 onClick={() => update('subId', RandomUtil.randomLowerAndNum(16))}
               />

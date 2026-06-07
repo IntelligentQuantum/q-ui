@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Spin, Statistic, Switch, Table } from 'antd';
+import { Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Statistic, Switch, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { AppstoreOutlined, CheckCircleOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
+import { TableSkeleton, ErrorState } from '@/components/ui';
 
 // The panel's axios defaults to form-urlencoded; backend product/order handlers
 // bind JSON, so these mutations must declare a JSON content-type (matches the
@@ -43,10 +44,11 @@ export default function ProductsPage() {
   const [editing, setEditing] = useState<Product | null>(null);
   const [open, setOpen] = useState(false);
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading, isError, refetch } = useQuery({
     queryKey: ['products', 'manage'],
     queryFn: async () => {
       const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || '');
       return (msg.obj as Product[] | null) ?? [];
     },
   });
@@ -170,7 +172,7 @@ export default function ProductsPage() {
 
   return (
     <PageShell name="products-page">
-      <Spin spinning={isLoading} delay={200} size="large">
+      <>
         <Row gutter={[16, 12]}>
           <Col span={24}>
             <Card size="small" hoverable className="summary-card">
@@ -224,6 +226,7 @@ export default function ProductsPage() {
                     size="small"
                     style={{ width: 200 }}
                     prefix={<SearchOutlined />}
+                    aria-label={t('search')}
                     placeholder={t('search')}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -231,17 +234,24 @@ export default function ProductsPage() {
                 </Space>
               }
             >
-              <Table
-                rowKey="id"
-                size="small"
-                columns={columns}
-                dataSource={filtered}
-                pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-              />
+              {isLoading ? (
+                <TableSkeleton rows={6} />
+              ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
+              ) : (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  columns={columns}
+                  dataSource={filtered}
+                  scroll={{ x: 'max-content' }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
+                />
+              )}
             </Card>
           </Col>
         </Row>
-      </Spin>
+      </>
 
       <Modal
         open={open}

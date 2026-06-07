@@ -111,7 +111,7 @@ export default function SubLinksModal({
       key: 'actions',
       width: 64,
       render: (_v, row) => (
-        <Button size="small" type="text" icon={<CopyOutlined />} onClick={() => copy(row.link, t('copied'))} />
+        <Button aria-label={t('copy')} size="small" type="text" icon={<CopyOutlined />} onClick={() => copy(row.link, t('copied'))} />
       ),
     },
   ];

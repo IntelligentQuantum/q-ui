@@ -131,7 +131,7 @@ function TcpMasksList({ base, form }: { base: (string | number)[]; form: FormIns
       {(fields, { add, remove }) => (
         <>
           <Form.Item label="TCP Masks">
-            <Button
+            <Button aria-label="Add"
               type="primary"
               size="small"
               icon={<PlusOutlined />}
@@ -298,7 +298,7 @@ function HeaderCustomGroups({
           {(groups, { add: addGroup, remove: removeGroup }) => (
             <>
               <Form.Item label={groupKey === 'clients' ? 'Clients' : 'Servers'}>
-                <Button
+                <Button aria-label="Add"
                   type="primary"
                   size="small"
                   icon={<PlusOutlined />}
@@ -315,7 +315,7 @@ function HeaderCustomGroups({
                     {(items, { add: addItem, remove: removeItem }) => (
                       <>
                         <Form.Item label="Items">
-                          <Button
+                          <Button aria-label="Add"
                             size="small"
                             icon={<PlusOutlined />}
                             onClick={() => addItem(defaultClientServerItem())}
@@ -352,7 +352,7 @@ function UdpMasksList({
       {(fields, { add, remove }) => (
         <>
           <Form.Item label="UDP Masks">
-            <Button
+            <Button aria-label="Add"
               type="primary"
               size="small"
               icon={<PlusOutlined />}
@@ -436,7 +436,7 @@ function UdpMaskItem({
                   <Form.Item name={[fieldName, 'settings', 'password']} noStyle>
                     <Input placeholder="Obfuscation password" style={{ width: 'calc(100% - 32px)' }} />
                   </Form.Item>
-                  <Button
+                  <Button aria-label="Regenerate"
                     icon={<ReloadOutlined />}
                     onClick={() => form.setFieldValue(
                       [...absolutePath, 'settings', 'password'],
@@ -539,7 +539,7 @@ function UdpHeaderCustom({
           {(items, { add, remove }) => (
             <>
               <Form.Item label={groupKey === 'client' ? 'Client' : 'Server'}>
-                <Button
+                <Button aria-label="Add"
                   type="primary"
                   size="small"
                   icon={<PlusOutlined />}
@@ -584,7 +584,7 @@ function NoiseItems({
         {(items, { add, remove }) => (
           <>
             <Form.Item label="Noise">
-              <Button
+              <Button aria-label="Add"
                 type="primary"
                 size="small"
                 icon={<PlusOutlined />}
@@ -687,7 +687,7 @@ function ItemEditor({
                   <Form.Item name={[fieldName, 'packet']} noStyle>
                     <Input placeholder="binary data" style={{ width: 'calc(100% - 32px)' }} />
                   </Form.Item>
-                  <Button
+                  <Button aria-label="Regenerate"
                     icon={<ReloadOutlined />}
                     onClick={() => form.setFieldValue([...absoluteItemPath, 'packet'], RandomUtil.randomBase64())}
                   />

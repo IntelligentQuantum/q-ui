@@ -36,6 +36,6 @@
 }
 
 .server-load-tag {
-  margin-right: 0;
+  margin-inline-end: 0;
   flex-shrink: 0;
 }

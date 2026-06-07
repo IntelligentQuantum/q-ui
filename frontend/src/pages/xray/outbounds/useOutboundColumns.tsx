@@ -71,7 +71,7 @@ export function useOutboundColumns({
           <div className="action-cell">
             <span className="row-index">{index + 1}</span>
             <div className="action-buttons">
-              <Button shape="circle" size="small" icon={<EditOutlined />} onClick={() => openEdit(index)} />
+              <Button aria-label={t('edit')} shape="circle" size="small" icon={<EditOutlined />} onClick={() => openEdit(index)} />
               <Dropdown
                 trigger={['click']}
                 menu={{
@@ -88,7 +88,7 @@ export function useOutboundColumns({
                   ],
                 }}
               >
-                <Button shape="circle" size="small" icon={<MoreOutlined />} />
+                <Button aria-label={t('more')} shape="circle" size="small" icon={<MoreOutlined />} />
               </Dropdown>
             </div>
           </div>
@@ -199,7 +199,7 @@ export function useOutboundColumns({
         width: 80,
         render: (_v, record, index) => (
           <Tooltip title={`${t('check')} (${(isUdpOutbound(record) ? 'http' : testMode).toUpperCase()})`}>
-            <Button
+            <Button aria-label={`${t('check')} (${(isUdpOutbound(record) ? 'http' : testMode).toUpperCase()})`}
               type="primary"
               shape="circle"
               loading={isTesting(outboundTestStates, index)}

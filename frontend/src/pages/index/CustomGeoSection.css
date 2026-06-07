@@ -7,7 +7,7 @@
 }
 
 .custom-geo-count {
-  margin-left: 4px;
+  margin-inline-start: 4px;
   padding: 2px 8px;
   border-radius: 10px;
   background: var(--ant-color-fill-tertiary);

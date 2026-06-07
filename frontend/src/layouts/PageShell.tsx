@@ -29,7 +29,7 @@ export default function PageShell({ name, children }: { name: string; children: 
   }, [name, isDark, isUltra]);
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageHolder}
       <Layout className={pageClass}>
         <AppSidebar />

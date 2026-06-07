@@ -337,7 +337,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
                     syncHosts(next);
                   }}
                 />
-                <Button danger icon={<DeleteOutlined />} onClick={() => syncHosts(hostsList.filter((_, i) => i !== idx))} />
+                <Button aria-label={t('delete')} danger icon={<DeleteOutlined />} onClick={() => syncHosts(hostsList.filter((_, i) => i !== idx))} />
               </div>
             ))}
           </Space>
@@ -371,7 +371,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
                 {t('pages.xray.dns.clearAll')}
               </Button>
             </Space>
-            <Table
+            <Table scroll={{ x: 'max-content' }}
               columns={dnsColumns}
               dataSource={dnsServers}
               rowKey={(r) => r.key}
@@ -397,7 +397,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
             <Button type="primary" icon={<PlusOutlined />} onClick={addFakedns}>
               {t('pages.xray.fakedns.add')}
             </Button>
-            <Table
+            <Table scroll={{ x: 'max-content' }}
               columns={fakednsColumns}
               dataSource={fakeDnsList}
               rowKey={(r) => r.key}

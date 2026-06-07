@@ -160,7 +160,7 @@ export default function XrayLogModal({ open, onClose }: XrayLogModalProps) {
           </Checkbox>
         </Form.Item>
         <Form.Item className="download-item">
-          <Button type="primary" onClick={download} icon={<DownloadOutlined />} />
+          <Button aria-label={t('download')} type="primary" onClick={download} icon={<DownloadOutlined />} />
         </Form.Item>
       </Form>
 

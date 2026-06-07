@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, Tag } from 'antd';
+import { Card, Col, Input, Row, Select, Space, Statistic, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { CheckCircleOutlined, SearchOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { HttpUtil } from '@/utils';
 import { useCurrency } from '@/hooks/useCurrency';
 import PageShell from '@/layouts/PageShell';
+import { TableSkeleton, ErrorState } from '@/components/ui';
 
 interface Order {
   id: number;
@@ -34,10 +35,11 @@ export default function OrdersPage() {
   const { t } = useTranslation();
   const { format, formatNumber, unit } = useCurrency();
 
-  const { data: orders, isLoading } = useQuery({
+  const { data: orders, isLoading, isError, refetch } = useQuery({
     queryKey: ['orders'],
     queryFn: async () => {
       const msg = await HttpUtil.get('/panel/api/orders', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || '');
       return (msg.obj as Order[] | null) ?? [];
     },
   });
@@ -90,7 +92,7 @@ export default function OrdersPage() {
 
   return (
     <PageShell name="orders-page">
-      <Spin spinning={isLoading} delay={200} size="large">
+      <>
         <Row gutter={[16, 12]}>
           <Col span={24}>
             <Card size="small" hoverable className="summary-card">
@@ -138,6 +140,7 @@ export default function OrdersPage() {
                     size="small"
                     style={{ width: 200 }}
                     prefix={<SearchOutlined />}
+                    aria-label={t('search')}
                     placeholder={t('search')}
                     value={q}
                     onChange={(e) => setQ(e.target.value)}
@@ -145,17 +148,24 @@ export default function OrdersPage() {
                 </Space>
               }
             >
-              <Table
-                rowKey="id"
-                size="small"
-                columns={columns}
-                dataSource={filtered}
-                pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-              />
+              {isLoading ? (
+                <TableSkeleton rows={6} />
+              ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
+              ) : (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  columns={columns}
+                  dataSource={filtered}
+                  scroll={{ x: 'max-content' }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
+                />
+              )}
             </Card>
           </Col>
         </Row>
-      </Spin>
+      </>
     </PageShell>
   );
 }

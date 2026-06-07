@@ -7,7 +7,7 @@
   max-height: 280px;
   min-width: 160px;
   overflow-y: auto;
-  padding-right: 4px;
+  padding-inline-end: 4px;
 }
 
 .client-email-list > div {
@@ -59,7 +59,7 @@
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-right: 4px;
+  margin-inline-end: 4px;
   vertical-align: middle;
 }
 

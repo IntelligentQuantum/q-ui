@@ -205,7 +205,7 @@ export default function DnsServerModal({
         <Form.List name="domains">
           {(fields, { add, remove }) => (
             <Form.Item label={t('pages.xray.dns.domains')}>
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
+              <Button aria-label={t('add')} size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
               {fields.map((field) => (
                 <Space.Compact key={field.key} block style={{ marginTop: 4 }}>
                   <Form.Item name={field.name} noStyle>
@@ -223,7 +223,7 @@ export default function DnsServerModal({
         <Form.List name="expectedIPs">
           {(fields, { add, remove }) => (
             <Form.Item label={t('pages.xray.dns.expectIPs')}>
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
+              <Button aria-label={t('add')} size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
               {fields.map((field) => (
                 <Space.Compact key={field.key} block style={{ marginTop: 4 }}>
                   <Form.Item name={field.name} noStyle>
@@ -241,7 +241,7 @@ export default function DnsServerModal({
         <Form.List name="unexpectedIPs">
           {(fields, { add, remove }) => (
             <Form.Item label={t('pages.xray.dns.unexpectIPs')}>
-              <Button size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
+              <Button aria-label={t('add')} size="small" type="primary" icon={<PlusOutlined />} onClick={() => add('')} />
               {fields.map((field) => (
                 <Space.Compact key={field.key} block style={{ marginTop: 4 }}>
                   <Form.Item name={field.name} noStyle>

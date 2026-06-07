@@ -592,19 +592,19 @@ export default function ClientsPage() {
       render: (_v, record) => (
         <Space size={4}>
           <Tooltip title={t('pages.clients.qrCode')}>
-            <Button size="small" type="text" icon={<QrcodeOutlined />} onClick={() => onShowQr(record)} />
+            <Button size="small" type="text" aria-label={t('pages.clients.qrCode')} icon={<QrcodeOutlined />} onClick={() => onShowQr(record)} />
           </Tooltip>
           <Tooltip title={t('pages.clients.clientInfo')}>
-            <Button size="small" type="text" icon={<InfoCircleOutlined />} onClick={() => onShowInfo(record)} />
+            <Button size="small" type="text" aria-label={t('pages.clients.clientInfo')} icon={<InfoCircleOutlined />} onClick={() => onShowInfo(record)} />
           </Tooltip>
           <Tooltip title={t('pages.inbounds.resetTraffic')}>
-            <Button size="small" type="text" icon={<RetweetOutlined />} onClick={() => onResetTraffic(record)} />
+            <Button size="small" type="text" aria-label={t('pages.inbounds.resetTraffic')} icon={<RetweetOutlined />} onClick={() => onResetTraffic(record)} />
           </Tooltip>
           <Tooltip title={t('edit')}>
-            <Button size="small" type="text" icon={<EditOutlined />} onClick={() => onEdit(record)} />
+            <Button size="small" type="text" aria-label={t('edit')} icon={<EditOutlined />} onClick={() => onEdit(record)} />
           </Tooltip>
           <Tooltip title={t('delete')}>
-            <Button size="small" type="text" danger icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
+            <Button size="small" type="text" danger aria-label={t('delete')} icon={<DeleteOutlined />} onClick={() => onDelete(record)} />
           </Tooltip>
         </Space>
       ),
@@ -814,7 +814,7 @@ export default function ClientsPage() {
   }
 
   return (
-    <ConfigProvider theme={antdThemeConfig}>
+    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
       {messageContextHolder}
       {modalContextHolder}
       <Layout className={pageClass}>

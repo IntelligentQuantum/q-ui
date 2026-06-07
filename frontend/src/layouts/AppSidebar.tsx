@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import type { ComponentType } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Drawer, Layout, Menu } from 'antd';
@@ -13,6 +13,7 @@ import {
   CodeOutlined,
   DashboardOutlined,
   DatabaseOutlined,
+  DesktopOutlined,
   FundOutlined,
   IdcardOutlined,
   ImportOutlined,
@@ -36,7 +37,7 @@ import {
 } from '@ant-design/icons';
 
 import { HttpUtil } from '@/utils';
-import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import { pauseAnimationsUntilLeave, useTheme, type ThemeMode } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useMe, type Permission } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -76,31 +77,37 @@ function readCollapsed(): boolean {
   }
 }
 
-function ThemeCycleButton({ id, isDark, isUltra, onCycle, ariaLabel }: {
+const THEME_ICON: Record<ThemeMode, ReactNode> = {
+  light: <SunOutlined />,
+  dark: <MoonOutlined />,
+  ultra: <MoonFilled />,
+  system: <DesktopOutlined />,
+};
+
+function ThemeCycleButton({ id, mode, onCycle, ariaLabel }: {
   id: string;
-  isDark: boolean;
-  isUltra: boolean;
+  mode: ThemeMode;
   onCycle: () => void;
   ariaLabel: string;
 }) {
-  const icon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+  const label = `${ariaLabel}: ${mode}`;
   return (
     <button
       id={id}
       type="button"
       className="sidebar-theme-cycle"
-      aria-label={ariaLabel}
-      title={ariaLabel}
+      aria-label={label}
+      title={label}
       onClick={onCycle}
     >
-      {icon}
+      {THEME_ICON[mode]}
     </button>
   );
 }
 
 export default function AppSidebar() {
   const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra } = useTheme();
+  const { isDark, mode, cycleMode } = useTheme();
   const navigate = useNavigate();
   const { pathname, hash } = useLocation();
   const { allSetting } = useAllSettings();
@@ -237,16 +244,8 @@ export default function AppSidebar() {
 
   const cycleTheme = useCallback((id: string) => {
     pauseAnimationsUntilLeave(id);
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  }, [isDark, isUltra, toggleTheme, toggleUltra]);
+    cycleMode();
+  }, [cycleMode]);
 
   return (
     <div className="ant-sidebar">
@@ -266,8 +265,7 @@ export default function AppSidebar() {
             <div className="brand-actions">
               <ThemeCycleButton
                 id="theme-cycle"
-                isDark={isDark}
-                isUltra={isUltra}
+                mode={mode}
                 onCycle={() => cycleTheme('theme-cycle')}
                 ariaLabel={t('menu.theme')}
               />
@@ -322,8 +320,7 @@ export default function AppSidebar() {
           <div className="drawer-header-actions">
             <ThemeCycleButton
               id="theme-cycle-drawer"
-              isDark={isDark}
-              isUltra={isUltra}
+              mode={mode}
               onCycle={() => cycleTheme('theme-cycle-drawer')}
               ariaLabel={t('menu.theme')}
             />

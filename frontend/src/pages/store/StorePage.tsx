@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Input, Modal, Row, Spin, Statistic, Table } from 'antd';
+import { Button, Card, Col, Input, Modal, Row, Statistic, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { AppstoreOutlined, SearchOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -10,6 +10,7 @@ import { getMessage } from '@/utils/messageBus';
 import { ME_QUERY_KEY, useMe } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import PageShell from '@/layouts/PageShell';
+import { TableSkeleton, ErrorState } from '@/components/ui';
 
 interface Product {
   id: number;
@@ -36,10 +37,11 @@ export default function StorePage() {
   const [name, setName] = useState('');
   const [busy, setBusy] = useState(false);
 
-  const { data: products, isLoading } = useQuery({
+  const { data: products, isLoading, isError, refetch } = useQuery({
     queryKey: ['products', 'store'],
     queryFn: async () => {
       const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
+      if (!msg?.success) throw new Error(msg?.msg || '');
       return (msg.obj as Product[] | null) ?? [];
     },
   });
@@ -149,7 +151,7 @@ export default function StorePage() {
           </>
         )}
       </Modal>
-      <Spin spinning={isLoading} delay={200} size="large">
+      <>
         <Row gutter={[16, 12]}>
           <Col span={24}>
             <Card size="small" hoverable className="summary-card">
@@ -180,23 +182,31 @@ export default function StorePage() {
                   size="small"
                   style={{ width: 200 }}
                   prefix={<SearchOutlined />}
+                  aria-label={t('search')}
                   placeholder={t('search')}
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
                 />
               }
             >
-              <Table
-                rowKey="id"
-                size="small"
-                columns={columns}
-                dataSource={filtered}
-                pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-              />
+              {isLoading ? (
+                <TableSkeleton rows={6} />
+              ) : isError ? (
+                <ErrorState onRetry={() => refetch()} />
+              ) : (
+                <Table
+                  rowKey="id"
+                  size="small"
+                  columns={columns}
+                  dataSource={filtered}
+                  scroll={{ x: 'max-content' }}
+                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
+                />
+              )}
             </Card>
           </Col>
         </Row>
-      </Spin>
+      </>
     </PageShell>
   );
 }

@@ -436,7 +436,7 @@ export default function ClientFormModal({
                     style={{ flex: 1 }}
                     onChange={(e) => update('email', e.target.value)}
                   />
-                  <Button icon={<ReloadOutlined />} onClick={() => update('email', RandomUtil.randomLowerAndNum(12))} />
+                  <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={() => update('email', RandomUtil.randomLowerAndNum(12))} />
                 </Space.Compact>
               </Form.Item>
             </Col>
@@ -444,7 +444,7 @@ export default function ClientFormModal({
               <Form.Item label={t('pages.clients.subId')}>
                 <Space.Compact style={{ display: 'flex' }}>
                   <Input value={form.subId} style={{ flex: 1 }} onChange={(e) => update('subId', e.target.value)} />
-                  <Button icon={<ReloadOutlined />} onClick={() => update('subId', RandomUtil.randomLowerAndNum(16))} />
+                  <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={() => update('subId', RandomUtil.randomLowerAndNum(16))} />
                 </Space.Compact>
               </Form.Item>
             </Col>
@@ -455,7 +455,7 @@ export default function ClientFormModal({
               <Form.Item label={t('pages.clients.hysteriaAuth')}>
                 <Space.Compact style={{ display: 'flex' }}>
                   <Input value={form.auth} style={{ flex: 1 }} onChange={(e) => update('auth', e.target.value)} />
-                  <Button icon={<ReloadOutlined />} onClick={() => update('auth', RandomUtil.randomLowerAndNum(16))} />
+                  <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={() => update('auth', RandomUtil.randomLowerAndNum(16))} />
                 </Space.Compact>
               </Form.Item>
             </Col>
@@ -463,7 +463,7 @@ export default function ClientFormModal({
               <Form.Item label={t('pages.clients.password')}>
                 <Space.Compact style={{ display: 'flex' }}>
                   <Input value={form.password} style={{ flex: 1 }} onChange={(e) => update('password', e.target.value)} />
-                  <Button icon={<ReloadOutlined />} onClick={() => update('password', RandomUtil.randomLowerAndNum(16))} />
+                  <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={() => update('password', RandomUtil.randomLowerAndNum(16))} />
                 </Space.Compact>
               </Form.Item>
             </Col>
@@ -474,7 +474,7 @@ export default function ClientFormModal({
               <Form.Item label={t('pages.clients.uuid')}>
                 <Space.Compact style={{ display: 'flex' }}>
                   <Input value={form.uuid} style={{ flex: 1 }} onChange={(e) => update('uuid', e.target.value)} />
-                  <Button icon={<ReloadOutlined />} onClick={() => update('uuid', RandomUtil.randomUUID())} />
+                  <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={() => update('uuid', RandomUtil.randomUUID())} />
                 </Space.Compact>
               </Form.Item>
             </Col>

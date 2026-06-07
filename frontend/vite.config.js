@@ -254,6 +254,33 @@ export default defineConfig({
             id.includes('/node_modules/swagger-ui-react/')
             || id.includes('/node_modules/swagger-ui/')
             || id.includes('/node_modules/swagger-client/')
+            // swagger-ui-react's heavy transitive deps. They are used ONLY by the
+            // lazy api-docs page, but without this they fall into the eager
+            // `vendor` catch-all and bloat initial load. Keep them in the lazy
+            // swagger chunk. (None are used anywhere else in the app.)
+            || id.includes('/node_modules/react-syntax-highlighter/')
+            || id.includes('/node_modules/refractor/')
+            || id.includes('/node_modules/highlight.js/')
+            || id.includes('/node_modules/lowlight/')
+            || id.includes('/node_modules/prismjs/')
+            || id.includes('/node_modules/react-inspector/')
+            || id.includes('/node_modules/remarkable/')
+            || id.includes('/node_modules/react-immutable-pure-component/')
+            || id.includes('/node_modules/react-debounce-input/')
+            || id.includes('/node_modules/react-copy-to-clipboard/')
+            || id.includes('/node_modules/randexp/')
+            || id.includes('/node_modules/xml-but-prettier/')
+            || id.includes('/node_modules/drange/')
+            // swagger-ui's state stack (redux/immutable/lodash/…) — swagger-only.
+            || id.includes('/node_modules/immutable/')
+            || id.includes('/node_modules/redux/')
+            || id.includes('/node_modules/react-redux/')
+            || id.includes('/node_modules/reselect/')
+            || id.includes('/node_modules/lodash/')
+            || id.includes('/node_modules/js-yaml/')
+            || id.includes('/node_modules/dompurify/')
+            || id.includes('/node_modules/serialize-error/')
+            || id.includes('/node_modules/zenscroll/')
           ) return 'vendor-swagger';
           if (
             id.includes('/node_modules/recharts/')

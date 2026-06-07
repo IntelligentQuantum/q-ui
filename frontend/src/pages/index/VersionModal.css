@@ -20,7 +20,7 @@
 .reload-icon {
   cursor: pointer;
   font-size: 16px;
-  margin-right: 8px;
+  margin-inline-end: 8px;
 }
 
 .actions-row {
