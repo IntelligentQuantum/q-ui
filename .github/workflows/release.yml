@@ -69,6 +69,14 @@ jobs:
           npm run build
         working-directory: frontend
 
+      # Stamp the embedded version from the tag so the released binary always
+      # reports its own tag (e.g. v1.0.6 -> "1.0.6"). This guarantees each new
+      # tag is strictly newer than the previous release, so the panel's
+      # auto-update detects every release without manual config/version edits.
+      - name: Stamp release version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: printf '%s\n' "${GITHUB_REF_NAME#v}" > config/version
+
       - name: Build 3X-UI
         run: |
           export CGO_ENABLED=1
@@ -170,7 +178,7 @@ jobs:
           file: q-ui-linux-${{ matrix.platform }}.tar.gz
           asset_name: q-ui-linux-${{ matrix.platform }}.tar.gz
           overwrite: true
-          prerelease: true
+          prerelease: false
 
   # =================================
   #  Windows Build
@@ -220,6 +228,12 @@ jobs:
             mingw-w64-x86_64-gcc
             mingw-w64-x86_64-sqlite3
             mingw-w64-x86_64-pkg-config
+
+      # Stamp the embedded version from the tag (see the Linux job for why).
+      - name: Stamp release version from tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        shell: pwsh
+        run: ($env:GITHUB_REF_NAME -replace '^v','') | Set-Content -NoNewline -Encoding ascii config/version
 
       - name: Build 3X-UI for Windows (CGO)
         shell: msys2 {0}
@@ -282,4 +296,4 @@ jobs:
           file: q-ui-windows-amd64.zip
           asset_name: q-ui-windows-amd64.zip
           overwrite: true
-          prerelease: true
+          prerelease: false
