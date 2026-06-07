@@ -83,6 +83,25 @@ export default function ServicesPage() {
     },
   });
 
+  // Subscription settings (sub URIs) so the config modal can show the buyer's
+  // subscription link/QR — same as the Clients page. /panel/setting/defaultSettings
+  // exposes only these non-sensitive presentation values and is open to any
+  // logged-in user, so members can read it.
+  const { data: subSettings } = useQuery({
+    queryKey: ['settings', 'defaults', 'sub'],
+    queryFn: async () => {
+      const msg = await HttpUtil.post('/panel/setting/defaultSettings', undefined, { silent: true });
+      const d = (msg?.obj ?? {}) as Record<string, unknown>;
+      return {
+        enable: !!d.subEnable,
+        subURI: (d.subURI as string) || '',
+        subJsonURI: (d.subJsonURI as string) || '',
+        subJsonEnable: !!d.subJsonEnable,
+      };
+    },
+    staleTime: Infinity,
+  });
+
   const list = clients ?? [];
   const activeCount = useMemo(() => list.filter((c) => c.enable).length, [list]);
 
@@ -230,6 +249,7 @@ export default function ServicesPage() {
       <ClientQrModal
         open={!!qrClient}
         client={qrClient ? ({ email: qrClient.email, subId: qrClient.subId } as unknown as ClientRecord) : null}
+        subSettings={subSettings}
         onOpenChange={(o) => { if (!o) setQrClient(null); }}
       />
 
