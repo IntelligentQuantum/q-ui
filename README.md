@@ -1,4 +1,4 @@
-[English](/README.md) | [فارسی](/README.fa_IR.md) | [العربية](/README.ar_EG.md) | [中文](/README.zh_CN.md) | [Español](/README.es_ES.md) | [Русский](/README.ru_RU.md)
+[English](/README.md) | [فارسی](/README.fa_IR.md)
 
 <p align="center">
   <picture>
@@ -37,7 +37,7 @@ Built as an enhanced fork of the original Q-UI project, 3X-UI adds broader proto
 - **Telegram bot** for remote monitoring and management.
 - **RESTful API** with in-panel Swagger documentation.
 - **Flexible storage** — SQLite (default) or PostgreSQL.
-- **13 UI languages** with dark and light themes.
+- **English & Persian UI** with dark and light themes.
 - **Fail2ban integration** for enforcing per-client IP limits.
 - **Multi-role RBAC** — four roles (Admin, Moderator, Reseller, Member) with a backend-enforced permission matrix, ownership scoping (no IDOR), and a role-aware dynamic sidebar and route guards.
 - **Wallet & transactions** — per-user credit balance with an atomic, auditable transaction ledger; admins add/remove/set balances, ZarinPal top-ups for users.
@@ -141,9 +141,9 @@ docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuant
 
 ## Supported Languages
 
-The panel UI is available in 13 languages:
+The panel UI is available in 2 languages:
 
-English · فارسی · العربية · 中文（简体） · 中文（繁體） · Español · Русский · Українська · Türkçe · Tiếng Việt · 日本語 · Bahasa Indonesia · Português (Brasil)
+English · فارسی
 
 ## Contributing
 

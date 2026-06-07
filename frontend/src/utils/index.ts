@@ -823,26 +823,15 @@ export interface SupportedLanguage {
 }
 
 export class LanguageManager {
+  // The panel ships in two languages only: English and Persian.
   static readonly supportedLanguages: readonly SupportedLanguage[] = [
-    { name: 'العربية', value: 'ar-EG', icon: '🇪🇬' },
-    { name: 'English', value: 'en-US', icon: '🇺🇸' },
     { name: 'فارسی', value: 'fa-IR', icon: '🇮🇷' },
-    { name: '简体中文', value: 'zh-CN', icon: '🇨🇳' },
-    { name: '繁體中文', value: 'zh-TW', icon: '🇹🇼' },
-    { name: '日本語', value: 'ja-JP', icon: '🇯🇵' },
-    { name: 'Русский', value: 'ru-RU', icon: '🇷🇺' },
-    { name: 'Tiếng Việt', value: 'vi-VN', icon: '🇻🇳' },
-    { name: 'Español', value: 'es-ES', icon: '🇪🇸' },
-    { name: 'Indonesian', value: 'id-ID', icon: '🇮🇩' },
-    { name: 'Український', value: 'uk-UA', icon: '🇺🇦' },
-    { name: 'Türkçe', value: 'tr-TR', icon: '🇹🇷' },
-    { name: 'Português', value: 'pt-BR', icon: '🇧🇷' },
+    { name: 'English', value: 'en-US', icon: '🇺🇸' },
   ];
 
-  // Default UI language. This is a Persian-first panel, so when the user has
-  // not explicitly chosen a language the panel opens in Persian. The browser's
-  // language is still honored for the other supported locales; only English and
-  // unrecognized locales fall through to the Persian default.
+  // Default UI language. This is a Persian-first panel, so when the user has not
+  // explicitly chosen a language the panel opens in Persian; English is always
+  // available from the language switcher.
   static readonly DEFAULT_LANGUAGE = 'fa-IR';
 
   static getLanguage(): string {
@@ -850,31 +839,9 @@ export class LanguageManager {
     if (cookie && LanguageManager.isSupportLanguage(cookie)) {
       return cookie;
     }
-
-    let lang = LanguageManager.DEFAULT_LANGUAGE;
-    if (window.navigator) {
-      const nav = window.navigator as Navigator & { userLanguage?: string };
-      const raw = (nav.language || nav.userLanguage || '').toLowerCase();
-
-      // English (and anything unrecognized) intentionally keeps the Persian
-      // default; every other supported locale is auto-selected from the browser.
-      if (raw && !raw.startsWith('en')) {
-        const exact = LanguageManager.supportedLanguages.find((l) => l.value.toLowerCase() === raw);
-        if (exact) {
-          lang = exact.value;
-        } else {
-          const prefixMap: Record<string, string> = {
-            ar: 'ar-EG', fa: 'fa-IR', ja: 'ja-JP', ru: 'ru-RU', vi: 'vi-VN',
-            es: 'es-ES', id: 'id-ID', uk: 'uk-UA', tr: 'tr-TR', pt: 'pt-BR', zh: 'zh-CN',
-          };
-          const mapped = prefixMap[raw.split('-')[0]];
-          if (mapped) lang = mapped;
-        }
-      }
-    }
-
-    CookieManager.setCookie('lang', lang, 365);
-    return lang;
+    // No explicit choice yet → default to Persian.
+    CookieManager.setCookie('lang', LanguageManager.DEFAULT_LANGUAGE, 365);
+    return LanguageManager.DEFAULT_LANGUAGE;
   }
 
   static setLanguage(language: string): void {
