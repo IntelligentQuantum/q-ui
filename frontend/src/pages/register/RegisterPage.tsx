@@ -37,7 +37,7 @@ import {
 import '../login/LoginPage.css';
 import './RegisterPage.css';
 
-const basePath = window.X_UI_BASE_PATH || '';
+const basePath = window.Q_UI_BASE_PATH || '';
 const REDIRECT_DELAY_MS = 1200;
 
 export default function RegisterPage() {

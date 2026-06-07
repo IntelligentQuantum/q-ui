@@ -70,8 +70,11 @@ export default function IndexPage() {
     latestVersion: '',
     updateAvailable: false,
   });
+  // True when the update check itself failed (GitHub unreachable / rate-limited),
+  // as opposed to "checked successfully, already up to date".
+  const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
 
-  const basePath = window.X_UI_BASE_PATH || '';
+  const basePath = window.Q_UI_BASE_PATH || '';
 
   const [showIp, setShowIp] = useState(false);
   const [logsOpen, setLogsOpen] = useState(false);
@@ -91,12 +94,19 @@ export default function IndexPage() {
       if (msg?.success && msg.obj) setIpLimitEnable(!!msg.obj.ipLimitEnable);
     });
     HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo').then((msg) => {
-      if (msg?.success && msg.obj) setPanelUpdateInfo(msg.obj);
+      if (msg?.success && msg.obj) {
+        setPanelUpdateInfo(msg.obj);
+        setUpdateCheckFailed(false);
+      } else {
+        // The check errored (the message is also toasted by HttpUtil); flag it so
+        // the version chip doesn't masquerade as "up to date".
+        setUpdateCheckFailed(true);
+      }
     });
   }, []);
 
   const displayVersion = useMemo(
-    () => panelUpdateInfo.currentVersion || window.X_UI_CUR_VER || '?',
+    () => panelUpdateInfo.currentVersion || window.Q_UI_CUR_VER || '?',
     [panelUpdateInfo.currentVersion],
   );
 
@@ -222,10 +232,13 @@ export default function IndexPage() {
                         <Space>
                           <span>Q-UI</span>
                           {isMobile && displayVersion && (
-                            <Tag color={panelUpdateInfo.updateAvailable ? 'orange' : 'green'}>
+                            <Tag
+                              color={panelUpdateInfo.updateAvailable ? 'orange' : updateCheckFailed ? 'red' : 'green'}
+                              title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}
+                            >
                               {panelUpdateInfo.updateAvailable
                                 ? `v${panelUpdateInfo.latestVersion}`
-                                : `v${displayVersion}`}
+                                : `v${displayVersion}${updateCheckFailed ? ' ⚠' : ''}`}
                             </Tag>
                           )}
                         </Space>
@@ -252,10 +265,10 @@ export default function IndexPage() {
                         >
                           <CloudDownloadOutlined />
                           {!isMobile && (
-                            <span>
+                            <span title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}>
                               {panelUpdateInfo.updateAvailable
                                 ? `${t('update')} ${panelUpdateInfo.latestVersion}`
-                                : `v${displayVersion}`}
+                                : `v${displayVersion}${updateCheckFailed ? ' ⚠' : ''}`}
                             </span>
                           )}
                         </Space>,

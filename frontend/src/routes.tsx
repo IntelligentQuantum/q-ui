@@ -52,7 +52,7 @@ const routes: RouteObject[] = [
 ];
 
 function computeBasename() {
-  const raw = (typeof window !== 'undefined' && window.X_UI_BASE_PATH) || '/';
+  const raw = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '/';
   const trimmed = raw.replace(/\/+$/, '');
   return `${trimmed}/panel`;
 }

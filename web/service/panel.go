@@ -90,14 +90,24 @@ func (s *PanelService) StartUpdate() error {
 	mainFolder, serviceFolder := resolveUpdateFolders()
 	updateScript := fmt.Sprintf("set -e; trap 'rm -f %s' EXIT; %s %s", shellQuote(scriptPath), shellQuote(bash), shellQuote(scriptPath))
 
+	// update.sh downloads the release tarball + helper scripts with plain curl,
+	// which honors the *_proxy env vars. Forward the configured panel proxy so
+	// the self-update works on servers that can only reach GitHub through it
+	// (e.g. where raw.githubusercontent.com / the release CDN is blocked direct).
+	proxyEnv := updateProxyEnv()
+
 	if systemdRun, err := exec.LookPath("systemd-run"); err == nil {
 		unitName := fmt.Sprintf("q-ui-web-update-%d", time.Now().Unix())
-		cmd := exec.Command(systemdRun,
+		args := []string{
 			"--unit", unitName,
-			"--setenv", "QUI_MAIN_FOLDER="+mainFolder,
-			"--setenv", "QUI_SERVICE="+serviceFolder,
-			bash, "-lc", updateScript,
-		)
+			"--setenv", "QUI_MAIN_FOLDER=" + mainFolder,
+			"--setenv", "QUI_SERVICE=" + serviceFolder,
+		}
+		for _, e := range proxyEnv {
+			args = append(args, "--setenv", e)
+		}
+		args = append(args, bash, "-lc", updateScript)
+		cmd := exec.Command(systemdRun, args...)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			output := strings.TrimSpace(string(out))
@@ -118,6 +128,7 @@ func (s *PanelService) StartUpdate() error {
 		"QUI_MAIN_FOLDER="+mainFolder,
 		"QUI_SERVICE="+serviceFolder,
 	)
+	cmd.Env = append(cmd.Env, proxyEnv...)
 	setDetachedProcess(cmd)
 	if err := cmd.Start(); err != nil {
 		_ = os.Remove(scriptPath)
@@ -205,6 +216,29 @@ func resolveUpdateFolders() (string, string) {
 		serviceFolder = "/etc/systemd/system"
 	}
 	return mainFolder, serviceFolder
+}
+
+// updateProxyEnv returns proxy environment variables for the updater process
+// when a panel proxy is configured. curl (used throughout update.sh) honors the
+// lowercase http_proxy/https_proxy/all_proxy variables; the URL's scheme
+// (http/https/socks5) is taken from the configured proxy. Returns nil when no
+// proxy is set, so direct connections are unchanged.
+func updateProxyEnv() []string {
+	proxy, err := (&SettingService{}).GetPanelProxy()
+	if err != nil {
+		return nil
+	}
+	proxy = strings.TrimSpace(proxy)
+	if proxy == "" {
+		return nil
+	}
+	return []string{
+		"http_proxy=" + proxy,
+		"https_proxy=" + proxy,
+		"HTTPS_PROXY=" + proxy,
+		"all_proxy=" + proxy,
+		"ALL_PROXY=" + proxy,
+	}
 }
 
 func isNewerVersion(latest string, current string) bool {

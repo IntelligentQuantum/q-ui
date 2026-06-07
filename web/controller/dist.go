@@ -77,11 +77,11 @@ func serveDistPage(c *gin.Context, name string) {
 	if nonce := c.GetString("csp_nonce"); nonce != "" {
 		nonceAttr = ` nonce="` + htmlpkg.EscapeString(nonce) + `"`
 	}
-	script := `<script` + nonceAttr + `>window.X_UI_BASE_PATH="` + escapedBase + `"`
+	script := `<script` + nonceAttr + `>window.Q_UI_BASE_PATH="` + escapedBase + `"`
 	if name != "login.html" {
 		escapedVer := jsEscape.Replace(config.GetVersion())
-		script += `;window.X_UI_CUR_VER="` + escapedVer + `"`
-		script += `;window.X_UI_DB_TYPE="` + config.GetDBKind() + `"`
+		script += `;window.Q_UI_CUR_VER="` + escapedVer + `"`
+		script += `;window.Q_UI_DB_TYPE="` + config.GetDBKind() + `"`
 	}
 	script += `;</script>`
 	inject := []byte(script)

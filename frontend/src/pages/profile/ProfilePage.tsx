@@ -25,7 +25,7 @@ import { setMessageInstance } from '@/utils/messageBus';
 import AppSidebar from '@/layouts/AppSidebar';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
-const basePath = window.X_UI_BASE_PATH || '/';
+const basePath = window.Q_UI_BASE_PATH || '/';
 
 interface ProfileFormValues {
   username: string;

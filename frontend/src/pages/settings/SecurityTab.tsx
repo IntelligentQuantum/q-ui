@@ -99,7 +99,7 @@ export default function SecurityTab({ allSetting, updateSetting }: SecurityTabPr
       const msg = await HttpUtil.post('/panel/setting/updateUser', user) as ApiMsg;
       if (msg?.success) {
         await HttpUtil.post('/logout');
-        const basePath = window.X_UI_BASE_PATH || '/';
+        const basePath = window.Q_UI_BASE_PATH || '/';
         window.location.replace(basePath);
       }
     } finally {

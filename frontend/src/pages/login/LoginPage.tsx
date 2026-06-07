@@ -33,7 +33,7 @@ const HEADLINE_INTERVAL_MS = 2000;
 
 type LoginForm = LoginFormValues;
 
-const basePath = window.X_UI_BASE_PATH || '';
+const basePath = window.Q_UI_BASE_PATH || '';
 
 export default function LoginPage() {
   const { t } = useTranslation();

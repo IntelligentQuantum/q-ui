@@ -233,6 +233,7 @@
       "currentPanelVersion": "نسخه فعلی پنل",
       "latestPanelVersion": "آخرین نسخه پنل",
       "panelUpToDate": "پنل به‌روز است",
+      "panelUpdateCheckFailed": "بررسی به‌روزرسانی ناموفق بود — پیام خطا را ببینید (دسترسی به گیت‌هاب ممکن نشد یا محدودیت نرخ).",
       "upToDate": "به‌روز",
       "xrayStatusUnknown": "ناشناخته",
       "xrayStatusRunning": "در حال اجرا",

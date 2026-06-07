@@ -133,7 +133,7 @@ export default function AppSidebar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const currentTheme: 'light' | 'dark' = isDark ? 'dark' : 'light';
-  const panelVersion = window.X_UI_CUR_VER || '';
+  const panelVersion = window.Q_UI_CUR_VER || '';
 
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(() => {
     // The menu is built from the caller's permission set (mirrors the backend
@@ -239,7 +239,7 @@ export default function AppSidebar() {
   const openLink = useCallback(async (key: string) => {
     if (key === LOGOUT_KEY) {
       await HttpUtil.post('/logout');
-      window.location.href = window.X_UI_BASE_PATH || '/';
+      window.location.href = window.Q_UI_BASE_PATH || '/';
       return;
     }
     navigate(key);

@@ -8,7 +8,7 @@ import { sections } from '../src/pages/api-docs/endpoints.ts';
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const outPath = join(__dirname, '..', 'public', 'openapi.json');
 
-const PANEL_VERSION = process.env.X_UI_VERSION || '3.x';
+const PANEL_VERSION = process.env.Q_UI_VERSION || '3.x';
 
 const SECURITY_SCHEMES = {
   bearerAuth: {

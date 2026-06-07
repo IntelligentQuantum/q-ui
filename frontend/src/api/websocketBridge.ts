@@ -17,7 +17,7 @@ let sharedClient: SharedClient | null = null;
 
 function getSharedClient(): SharedClient {
   if (sharedClient) return sharedClient;
-  const basePath = (typeof window !== 'undefined' && window.X_UI_BASE_PATH) || '';
+  const basePath = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '';
   sharedClient = new WebSocketClient(basePath) as SharedClient;
   return sharedClient;
 }

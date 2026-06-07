@@ -17,7 +17,7 @@ function readMetaToken(): string | null {
 
 async function fetchCsrfToken(): Promise<string | null> {
   try {
-    const basePath = window.X_UI_BASE_PATH;
+    const basePath = window.Q_UI_BASE_PATH;
     const url = (typeof basePath === 'string' && basePath !== '' && basePath !== '/'
       ? basePath.replace(/\/$/, '') + CSRF_TOKEN_PATH
       : CSRF_TOKEN_PATH);
@@ -52,7 +52,7 @@ export function setupAxios(): void {
   axios.defaults.headers.post['Content-Type'] = 'application/x-www-form-urlencoded; charset=UTF-8';
   axios.defaults.headers.common['X-Requested-With'] = 'XMLHttpRequest';
 
-  let basePath: string | null | undefined = window.X_UI_BASE_PATH;
+  let basePath: string | null | undefined = window.Q_UI_BASE_PATH;
   if (!basePath) {
     const metaTag = document.querySelector('meta[name="base-path"]');
     basePath = metaTag ? metaTag.getAttribute('content') : null;
@@ -94,7 +94,7 @@ export function setupAxios(): void {
       if (status === 401) {
         if (!sessionExpired) {
           sessionExpired = true;
-          const basePath = window.X_UI_BASE_PATH || '/';
+          const basePath = window.Q_UI_BASE_PATH || '/';
           window.location.replace(basePath);
         }
         return new Promise(() => {});
