@@ -20,7 +20,7 @@ interface Product {
   trafficLimit: number;
   durationDays: number;
   price: number;
-  inboundId: number;
+  inboundIds: number[];
   status: string;
 }
 
@@ -128,7 +128,11 @@ export default function ProductsPage() {
     { title: t('pages.products.name'), dataIndex: 'name' },
     { title: t('pages.products.price'), dataIndex: 'price' },
     { title: t('pages.products.durationDays'), dataIndex: 'durationDays' },
-    { title: t('pages.products.inbound'), dataIndex: 'inboundId', render: (id: number) => inboundLabel(id) },
+    {
+      title: t('pages.products.inbound'),
+      dataIndex: 'inboundIds',
+      render: (ids: number[]) => (ids && ids.length ? ids.map(inboundLabel).join(', ') : '—'),
+    },
     {
       title: t('pages.products.status'),
       dataIndex: 'status',
@@ -224,8 +228,9 @@ export default function ProductsPage() {
           <Form.Item name="durationDays" label={t('pages.products.durationDays')}>
             <InputNumber min={0} style={{ width: '100%' }} />
           </Form.Item>
-          <Form.Item name="inboundId" label={t('pages.products.inbound')} tooltip={t('pages.products.inboundHint')}>
+          <Form.Item name="inboundIds" label={t('pages.products.inbound')} tooltip={t('pages.products.inboundHint')}>
             <Select
+              mode="multiple"
               allowClear
               placeholder={t('pages.products.inboundNone')}
               options={(inbounds ?? []).map((i) => ({

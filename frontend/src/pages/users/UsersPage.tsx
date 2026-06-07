@@ -156,7 +156,7 @@ export default function UsersPage() {
   function openCreate() {
     setEditing(null);
     userForm.resetFields();
-    userForm.setFieldsValue({ role: 'user', balance: 0 });
+    userForm.setFieldsValue({ role: 'reseller', balance: 0 });
     setUserModalOpen(true);
   }
 
@@ -168,7 +168,8 @@ export default function UsersPage() {
       fullName: row.fullName,
       phone: row.phone,
       email: row.email,
-      role: row.role,
+      // Legacy "user" maps to reseller (the role Select has no "user" option).
+      role: row.role === 'user' ? 'reseller' : row.role,
     });
     setUserModalOpen(true);
   }
@@ -261,9 +262,12 @@ export default function UsersPage() {
       title: t('pages.users.role'),
       dataIndex: 'role',
       key: 'role',
-      render: (role: string) => (
-        <Tag color={role === 'admin' ? 'gold' : 'blue'}>{t(`pages.users.role_${role === 'admin' ? 'admin' : 'user'}`)}</Tag>
-      ),
+      render: (role: string) => {
+        // Normalize the legacy "user" alias to reseller for display.
+        const r = role === 'user' ? 'reseller' : role;
+        const colors: Record<string, string> = { admin: 'gold', moderator: 'purple', reseller: 'blue', member: 'green' };
+        return <Tag color={colors[r] || 'default'}>{t(`pages.users.role_${r}`)}</Tag>;
+      },
     },
     { title: t('email'), dataIndex: 'email', key: 'email', responsive: ['md'] },
     {
@@ -433,8 +437,10 @@ export default function UsersPage() {
             <Form.Item label={t('pages.users.role')} name="role" rules={[{ required: true }]}>
               <Select
                 options={[
-                  { value: 'user', label: t('pages.users.role_user') },
                   { value: 'admin', label: t('pages.users.role_admin') },
+                  { value: 'moderator', label: t('pages.users.role_moderator') },
+                  { value: 'reseller', label: t('pages.users.role_reseller') },
+                  { value: 'member', label: t('pages.users.role_member') },
                 ]}
               />
             </Form.Item>

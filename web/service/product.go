@@ -25,7 +25,7 @@ type ProductInput struct {
 	TrafficLimit int64  `json:"trafficLimit"`
 	DurationDays int    `json:"durationDays"`
 	Price        int64  `json:"price"`
-	InboundId    int    `json:"inboundId"`
+	InboundIds   []int  `json:"inboundIds"`
 	Status       string `json:"status"`
 }
 
@@ -80,7 +80,7 @@ func (s *ProductService) Create(in ProductInput, createdBy int) (*model.Product,
 		TrafficLimit: in.TrafficLimit,
 		DurationDays: in.DurationDays,
 		Price:        in.Price,
-		InboundId:    in.InboundId,
+		InboundIds:   model.IntList(in.InboundIds),
 		Status:       normalizeProductStatus(in.Status),
 		CreatedBy:    createdBy,
 	}
@@ -104,7 +104,7 @@ func (s *ProductService) Update(id int, in ProductInput) (*model.Product, error)
 		"traffic_limit": in.TrafficLimit,
 		"duration_days": in.DurationDays,
 		"price":         in.Price,
-		"inbound_id":    in.InboundId,
+		"inbound_ids":   model.IntList(in.InboundIds),
 		"status":        normalizeProductStatus(in.Status),
 	}
 	if err := database.GetDB().Model(&model.Product{}).Where("id = ?", p.Id).Updates(updates).Error; err != nil {

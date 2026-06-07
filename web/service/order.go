@@ -72,8 +72,8 @@ func (s *OrderService) Purchase(buyer *model.User, productId int) (*model.Order,
 		return nil, err
 	}
 
-	// Provision a real Xray config when the product targets an inbound.
-	if product.InboundId > 0 {
+	// Provision a real Xray config when the product targets one or more inbounds.
+	if len(product.InboundIds) > 0 {
 		email, provErr := s.provision(buyer, product, order.Id)
 		if provErr != nil {
 			s.refund(buyer.Id, charged, product)
@@ -192,8 +192,9 @@ func (s *OrderService) refund(userId int, amount int64, product *model.Product) 
 	}
 }
 
-// provision creates a buyer-owned Xray client on the product's inbound, sized
-// by the product's traffic limit and duration. Returns the client's email.
+// provision creates a buyer-owned Xray client on the product's inbound(s), sized
+// by the product's traffic limit and duration. The single config is attached to
+// every inbound the product targets. Returns the client's email.
 func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int) (string, error) {
 	var expiry int64
 	if product.DurationDays > 0 {
@@ -206,7 +207,7 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 			ExpiryTime: expiry,
 			Enable:     true,
 		},
-		InboundIds: []int{product.InboundId},
+		InboundIds: []int(product.InboundIds),
 		OwnerId:    buyer.Id,
 	}
 	needRestart, err := s.clientService.Create(&s.inboundService, payload)
