@@ -200,12 +200,20 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 	if product.DurationDays > 0 {
 		expiry = time.Now().AddDate(0, 0, product.DurationDays).UnixMilli()
 	}
+	// Generate the per-client secrets up front, exactly like the Clients page
+	// does (random uuid / subId / password / auth). ClientService.Create also
+	// fills protocol defaults, but pre-seeding here guarantees a purchased config
+	// always gets fresh random credentials regardless of the inbound's protocol.
 	payload := &ClientCreatePayload{
 		Client: model.Client{
 			Email:      buildClientEmail(buyer.Username, orderId),
 			TotalGB:    product.TrafficLimit,
 			ExpiryTime: expiry,
 			Enable:     true,
+			ID:         uuid.NewString(),  // vmess / vless
+			SubID:      randSecret()[:16], // subscription id
+			Password:   randSecret(),      // trojan / shadowsocks
+			Auth:       randSecret(),      // hysteria
 		},
 		InboundIds: []int(product.InboundIds),
 		OwnerId:    buyer.Id,
@@ -218,6 +226,13 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 		s.xrayService.SetToNeedRestart()
 	}
 	return payload.Client.Email, nil
+}
+
+// randSecret returns a random hex token (a UUID with dashes stripped) used to
+// seed per-client secrets (subId / trojan & shadowsocks password / hysteria
+// auth) on a provisioned config.
+func randSecret() string {
+	return strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
 // buildClientEmail derives a unique, valid client email from the buyer's

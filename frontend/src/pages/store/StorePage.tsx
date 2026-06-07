@@ -1,7 +1,8 @@
+import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Modal, Row, Spin, Statistic, Table } from 'antd';
+import { Button, Card, Col, Input, Modal, Row, Spin, Statistic, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { AppstoreOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, SearchOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
@@ -78,6 +79,11 @@ export default function StorePage() {
   };
 
   const list = products ?? [];
+  const [q, setQ] = useState('');
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return s ? list.filter((p) => p.name.toLowerCase().includes(s)) : list;
+  }, [list, q]);
 
   const columns: ColumnsType<Product> = [
     { title: t('pages.store.product'), dataIndex: 'name' },
@@ -138,12 +144,27 @@ export default function StorePage() {
           </Col>
 
           <Col span={24}>
-            <Card size="small" hoverable title={t('menu.store')}>
+            <Card
+              size="small"
+              hoverable
+              title={t('menu.store')}
+              extra={
+                <Input
+                  allowClear
+                  size="small"
+                  style={{ width: 200 }}
+                  prefix={<SearchOutlined />}
+                  placeholder={t('search')}
+                  value={q}
+                  onChange={(e) => setQ(e.target.value)}
+                />
+              }
+            >
               <Table
                 rowKey="id"
                 size="small"
                 columns={columns}
-                dataSource={list}
+                dataSource={filtered}
                 pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
               />
             </Card>

@@ -218,6 +218,11 @@ func (a *ClientController) create(c *gin.Context) {
 	if !user.IsAdmin() {
 		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
 		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
+		// Per-account override: when set (>0), this user's own per-GB price wins
+		// over the role default (e.g. user "test" at 10000/GB instead of 15000).
+		if user.CostPerGBOverride > 0 {
+			perGB = user.CostPerGBOverride
+		}
 		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
 		if cost > 0 {
 			if _, err := a.walletService.Debit(user.Id, cost, "client create: "+payload.Client.Email); err != nil {

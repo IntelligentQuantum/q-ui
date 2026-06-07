@@ -27,6 +27,7 @@ var (
 	ErrWeakPassword    = errors.New("password does not meet the strength requirements")
 	ErrLastAdmin       = errors.New("cannot remove the last administrator")
 	ErrWrongPassword   = errors.New("current password is incorrect")
+	ErrUserNotFound    = errors.New("user not found")
 )
 
 var (
@@ -297,13 +298,14 @@ func (s *UserService) UpdateFirstUser(username string, password string) error {
 // AdminUserInput carries the fields an admin supplies when creating or editing
 // a panel user. Password is optional on update (blank = keep current).
 type AdminUserInput struct {
-	Username string
-	Password string
-	FullName string
-	Phone    string
-	Email    string
-	Role     string
-	Balance  int64
+	Username          string
+	Password          string
+	FullName          string
+	Phone             string
+	Email             string
+	Role              string
+	Balance           int64
+	CostPerGBOverride int // per-GB price override; 0 = use role default
 }
 
 // normalizeRole canonicalizes an admin-supplied role into one of the four
@@ -375,14 +377,19 @@ func (s *UserService) AdminCreateUser(in AdminUserInput) (*model.User, error) {
 	if balance < 0 {
 		balance = 0
 	}
+	override := in.CostPerGBOverride
+	if override < 0 {
+		override = 0
+	}
 	user := &model.User{
-		Username: in.Username,
-		Password: hashed,
-		FullName: in.FullName,
-		Phone:    in.Phone,
-		Email:    email,
-		Role:     normalizeRole(in.Role),
-		Balance:  balance,
+		Username:          in.Username,
+		Password:          hashed,
+		FullName:          in.FullName,
+		Phone:             in.Phone,
+		Email:             email,
+		Role:              normalizeRole(in.Role),
+		Balance:           balance,
+		CostPerGBOverride: override,
 	}
 	err = database.GetDB().Transaction(func(tx *gorm.DB) error {
 		var count int64
@@ -426,12 +433,17 @@ func (s *UserService) AdminUpdateUser(id int, in AdminUserInput) (*model.User, e
 	}
 	newRole := normalizeRole(in.Role)
 
+	override := in.CostPerGBOverride
+	if override < 0 {
+		override = 0
+	}
 	updates := map[string]any{
-		"username":  in.Username,
-		"full_name": in.FullName,
-		"phone":     in.Phone,
-		"email":     email,
-		"role":      newRole,
+		"username":             in.Username,
+		"full_name":            in.FullName,
+		"phone":                in.Phone,
+		"email":                email,
+		"role":                 newRole,
+		"cost_per_gb_override": override,
 	}
 	if strings.TrimSpace(in.Password) != "" {
 		if err := ValidatePasswordStrength(in.Password); err != nil {

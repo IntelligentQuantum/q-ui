@@ -55,6 +55,7 @@ interface PanelUser {
   phone: string;
   email: string;
   balance: number;
+  costPerGbOverride: number;
 }
 
 interface Transaction {
@@ -76,6 +77,7 @@ interface UserFormValues {
   email?: string;
   role: string;
   balance?: number;
+  costPerGbOverride?: number;
 }
 
 type BalanceOp = 'add' | 'deduct' | 'set';
@@ -171,6 +173,7 @@ export default function UsersPage() {
       // Normalize casing + legacy "user" alias so the Select pre-selects the
       // right option regardless of how the role was stored.
       role: (() => { const r = (row.role || '').toLowerCase(); return r === 'user' ? 'reseller' : (r || 'member'); })(),
+      costPerGbOverride: row.costPerGbOverride || undefined,
     });
     setUserModalOpen(true);
   }
@@ -452,6 +455,18 @@ export default function UsersPage() {
                 <InputNumber min={0} style={{ width: '100%' }} addonAfter={unit} />
               </Form.Item>
             )}
+            <Form.Item
+              label={t('pages.users.costPerGb')}
+              name="costPerGbOverride"
+              extra={t('pages.users.costPerGbHint')}
+            >
+              <InputNumber
+                min={0}
+                style={{ width: '100%' }}
+                addonAfter={unit}
+                placeholder={t('pages.users.costPerGbDefault')}
+              />
+            </Form.Item>
           </Form>
         </Modal>
 

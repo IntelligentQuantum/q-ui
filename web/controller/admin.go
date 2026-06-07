@@ -42,13 +42,14 @@ func (a *AdminController) initRouter(g *gin.RouterGroup) {
 }
 
 type adminUserForm struct {
-	Username string `json:"username"`
-	Password string `json:"password"`
-	FullName string `json:"fullName"`
-	Phone    string `json:"phone"`
-	Email    string `json:"email"`
-	Role     string `json:"role"`
-	Balance  int64  `json:"balance"`
+	Username          string `json:"username"`
+	Password          string `json:"password"`
+	FullName          string `json:"fullName"`
+	Phone             string `json:"phone"`
+	Email             string `json:"email"`
+	Role              string `json:"role"`
+	Balance           int64  `json:"balance"`
+	CostPerGbOverride int    `json:"costPerGbOverride"`
 }
 
 type balanceAdjustForm struct {
@@ -73,13 +74,14 @@ func (a *AdminController) createUser(c *gin.Context) {
 		return
 	}
 	user, err := a.userService.AdminCreateUser(service.AdminUserInput{
-		Username: form.Username,
-		Password: form.Password,
-		FullName: form.FullName,
-		Phone:    form.Phone,
-		Email:    form.Email,
-		Role:     form.Role,
-		Balance:  form.Balance,
+		Username:          form.Username,
+		Password:          form.Password,
+		FullName:          form.FullName,
+		Phone:             form.Phone,
+		Email:             form.Email,
+		Role:              form.Role,
+		Balance:           form.Balance,
+		CostPerGBOverride: form.CostPerGbOverride,
 	})
 	if err != nil {
 		if msg := adminUserErrorMessage(c, err); msg != "" {
@@ -104,12 +106,13 @@ func (a *AdminController) updateUser(c *gin.Context) {
 		return
 	}
 	user, err := a.userService.AdminUpdateUser(id, service.AdminUserInput{
-		Username: form.Username,
-		Password: form.Password,
-		FullName: form.FullName,
-		Phone:    form.Phone,
-		Email:    form.Email,
-		Role:     form.Role,
+		Username:          form.Username,
+		Password:          form.Password,
+		FullName:          form.FullName,
+		Phone:             form.Phone,
+		Email:             form.Email,
+		Role:              form.Role,
+		CostPerGBOverride: form.CostPerGbOverride,
 	})
 	if err != nil {
 		if msg := adminUserErrorMessage(c, err); msg != "" {

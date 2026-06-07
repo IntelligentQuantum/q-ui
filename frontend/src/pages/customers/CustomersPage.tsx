@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Empty, Row, Spin, Statistic, Table, Tag } from 'antd';
+import { Card, Col, Empty, Input, Row, Select, Space, Spin, Statistic, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CheckCircleOutlined, TeamOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, SearchOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
@@ -50,6 +50,18 @@ export default function CustomersPage() {
 
   const list = customers ?? [];
   const activeCount = useMemo(() => list.filter((c) => c.enable).length, [list]);
+
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return list.filter((c) => {
+      if (statusFilter === 'active' && !c.enable) return false;
+      if (statusFilter === 'disabled' && c.enable) return false;
+      if (!s) return true;
+      return c.email.toLowerCase().includes(s) || (c.ownerName || '').toLowerCase().includes(s);
+    });
+  }, [list, q, statusFilter]);
 
   const columns: ColumnsType<CustomerRow> = [
     { title: t('pages.customers.customer'), dataIndex: 'email' },
@@ -104,7 +116,38 @@ export default function CustomersPage() {
           </Col>
 
           <Col span={24}>
-            <Card size="small" hoverable title={t('menu.customers')}>
+            <Card
+              size="small"
+              hoverable
+              title={t('menu.customers')}
+              extra={
+                list.length ? (
+                  <Space wrap>
+                    <Select
+                      allowClear
+                      size="small"
+                      style={{ minWidth: 130 }}
+                      placeholder={t('pages.customers.statusCol')}
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                      options={[
+                        { value: 'active', label: t('pages.customers.active') },
+                        { value: 'disabled', label: t('pages.customers.disabled') },
+                      ]}
+                    />
+                    <Input
+                      allowClear
+                      size="small"
+                      style={{ width: 200 }}
+                      prefix={<SearchOutlined />}
+                      placeholder={t('search')}
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                    />
+                  </Space>
+                ) : undefined
+              }
+            >
               {!list.length ? (
                 <Empty description={t('pages.customers.empty')} />
               ) : (
@@ -112,7 +155,7 @@ export default function CustomersPage() {
                   rowKey="email"
                   size="small"
                   columns={columns}
-                  dataSource={list}
+                  dataSource={filtered}
                   pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
                 />
               )}

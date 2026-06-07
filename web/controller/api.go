@@ -126,6 +126,11 @@ func (a *APIController) me(c *gin.Context) {
 	// purchase/create preview matches what the backend will actually charge.
 	cost, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
 	costPerGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
+	// Per-account per-GB override (when set) so the SPA's cost preview matches
+	// what the backend will actually charge this user.
+	if user.CostPerGBOverride > 0 {
+		costPerGB = user.CostPerGBOverride
+	}
 	zarinpalEnable, _ := a.settingService.GetZarinpalEnable()
 	currency, _ := a.settingService.GetZarinpalCurrency()
 	jsonObj(c, gin.H{

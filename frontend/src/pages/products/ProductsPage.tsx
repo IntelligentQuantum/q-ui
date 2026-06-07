@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Spin, Statistic, Switch, Table } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { AppstoreOutlined, CheckCircleOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons';
+import { AppstoreOutlined, CheckCircleOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
@@ -66,10 +66,21 @@ export default function ProductsPage() {
   };
 
   const list = products ?? [];
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
   const stats = useMemo(() => {
     const active = list.filter((p) => p.status === 'active').length;
     return { total: list.length, active, inactive: list.length - active };
   }, [list]);
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return list.filter((p) => {
+      if (statusFilter && p.status !== statusFilter) return false;
+      if (!s) return true;
+      return p.name.toLowerCase().includes(s);
+    });
+  }, [list, q, statusFilter]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] });
 
@@ -194,12 +205,37 @@ export default function ProductsPage() {
                   {t('pages.products.create')}
                 </Button>
               }
+              extra={
+                <Space wrap>
+                  <Select
+                    allowClear
+                    size="small"
+                    style={{ minWidth: 130 }}
+                    placeholder={t('pages.products.status')}
+                    value={statusFilter}
+                    onChange={setStatusFilter}
+                    options={[
+                      { value: 'active', label: t('pages.products.statusActive') },
+                      { value: 'inactive', label: t('pages.products.statusInactive') },
+                    ]}
+                  />
+                  <Input
+                    allowClear
+                    size="small"
+                    style={{ width: 200 }}
+                    prefix={<SearchOutlined />}
+                    placeholder={t('search')}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                </Space>
+              }
             >
               <Table
                 rowKey="id"
                 size="small"
                 columns={columns}
-                dataSource={list}
+                dataSource={filtered}
                 pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
               />
             </Card>

@@ -1,8 +1,8 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Spin, Statistic, Table, Tag } from 'antd';
+import { Card, Col, Input, Row, Select, Space, Spin, Statistic, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CheckCircleOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, SearchOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
@@ -42,11 +42,25 @@ export default function OrdersPage() {
   });
 
   const list = orders ?? [];
+  const [q, setQ] = useState('');
+  const [status, setStatus] = useState<string | undefined>();
+
+  // Stats reflect ALL orders (not the filtered view), so the cards stay stable
+  // while searching/filtering.
   const stats = useMemo(() => {
     const completed = list.filter((o) => o.status === 'completed' || o.status === 'paid');
     const spent = completed.reduce((sum, o) => sum + (o.amount || 0), 0);
     return { total: list.length, completed: completed.length, spent };
   }, [list]);
+
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return list.filter((o) => {
+      if (status && o.status !== status) return false;
+      if (!s) return true;
+      return (o.productName || '').toLowerCase().includes(s) || String(o.id).includes(s);
+    });
+  }, [list, q, status]);
 
   const columns: ColumnsType<Order> = [
     { title: '#', dataIndex: 'id', width: 80 },
@@ -98,12 +112,38 @@ export default function OrdersPage() {
           </Col>
 
           <Col span={24}>
-            <Card size="small" hoverable title={t('menu.orders')}>
+            <Card
+              size="small"
+              hoverable
+              title={t('menu.orders')}
+              extra={
+                <Space wrap>
+                  <Select
+                    allowClear
+                    size="small"
+                    style={{ minWidth: 130 }}
+                    placeholder={t('pages.orders.status')}
+                    value={status}
+                    onChange={setStatus}
+                    options={Object.keys(STATUS_COLOR).map((s) => ({ value: s, label: s }))}
+                  />
+                  <Input
+                    allowClear
+                    size="small"
+                    style={{ width: 200 }}
+                    prefix={<SearchOutlined />}
+                    placeholder={t('search')}
+                    value={q}
+                    onChange={(e) => setQ(e.target.value)}
+                  />
+                </Space>
+              }
+            >
               <Table
                 rowKey="id"
                 size="small"
                 columns={columns}
-                dataSource={list}
+                dataSource={filtered}
                 pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
               />
             </Card>

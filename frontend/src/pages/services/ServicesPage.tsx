@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Switch, Table, Tag } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
-import { CheckCircleOutlined, CloudServerOutlined, EditOutlined, QrcodeOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
+import { CheckCircleOutlined, CloudServerOutlined, EditOutlined, QrcodeOutlined, ReloadOutlined, SearchOutlined, SyncOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 
 import { HttpUtil } from '@/utils';
@@ -104,6 +104,18 @@ export default function ServicesPage() {
 
   const list = clients ?? [];
   const activeCount = useMemo(() => list.filter((c) => c.enable).length, [list]);
+
+  const [q, setQ] = useState('');
+  const [statusFilter, setStatusFilter] = useState<string | undefined>();
+  const filtered = useMemo(() => {
+    const s = q.trim().toLowerCase();
+    return list.filter((c) => {
+      if (statusFilter === 'active' && !c.enable) return false;
+      if (statusFilter === 'disabled' && c.enable) return false;
+      if (!s) return true;
+      return c.email.toLowerCase().includes(s);
+    });
+  }, [list, q, statusFilter]);
 
   const invalidate = () => {
     qc.invalidateQueries({ queryKey: ['clients'] });
@@ -228,7 +240,38 @@ export default function ServicesPage() {
           </Col>
 
           <Col span={24}>
-            <Card size="small" hoverable title={t('menu.services')}>
+            <Card
+              size="small"
+              hoverable
+              title={t('menu.services')}
+              extra={
+                list.length ? (
+                  <Space wrap>
+                    <Select
+                      allowClear
+                      size="small"
+                      style={{ minWidth: 130 }}
+                      placeholder={t('pages.services.statusCol')}
+                      value={statusFilter}
+                      onChange={setStatusFilter}
+                      options={[
+                        { value: 'active', label: t('pages.services.active') },
+                        { value: 'disabled', label: t('pages.services.disabled') },
+                      ]}
+                    />
+                    <Input
+                      allowClear
+                      size="small"
+                      style={{ width: 200 }}
+                      prefix={<SearchOutlined />}
+                      placeholder={t('search')}
+                      value={q}
+                      onChange={(e) => setQ(e.target.value)}
+                    />
+                  </Space>
+                ) : undefined
+              }
+            >
               {!list.length ? (
                 <Empty description={t('pages.services.empty')} />
               ) : (
@@ -236,7 +279,7 @@ export default function ServicesPage() {
                   rowKey="email"
                   size="small"
                   columns={columns}
-                  dataSource={list}
+                  dataSource={filtered}
                   pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
                 />
               )}

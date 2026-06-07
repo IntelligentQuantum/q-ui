@@ -14,7 +14,6 @@ import {
   DashboardOutlined,
   DatabaseOutlined,
   FundOutlined,
-  GithubOutlined,
   IdcardOutlined,
   ImportOutlined,
   LogoutOutlined,
@@ -44,7 +43,6 @@ import { useCurrency } from '@/hooks/useCurrency';
 import './AppSidebar.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
-const REPO_URL = 'https://github.com/IntelligentQuantum/q-ui';
 const LOGOUT_KEY = '__logout__';
 
 type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store' | 'orders' | 'products' | 'services' | 'customers';
@@ -76,24 +74,6 @@ function readCollapsed(): boolean {
   } catch {
     return false;
   }
-}
-
-function VersionBadge({ version, collapsed }: { version: string; collapsed?: boolean }) {
-  if (!version) return null;
-  const label = `v${version}`;
-  return (
-    <a
-      href={REPO_URL}
-      target="_blank"
-      rel="noopener noreferrer"
-      className={`sider-version${collapsed ? ' is-collapsed' : ''}`}
-      aria-label={`GitHub ${label}`}
-      title={label}
-    >
-      <GithubOutlined />
-      {!collapsed && <span className="sider-version-text">{label}</span>}
-    </a>
-  );
 }
 
 function ThemeCycleButton({ id, isDark, isUltra, onCycle, ariaLabel }: {
@@ -133,7 +113,6 @@ export default function AppSidebar() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const currentTheme: 'light' | 'dark' = isDark ? 'dark' : 'light';
-  const panelVersion = window.Q_UI_CUR_VER || '';
 
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(() => {
     // The menu is built from the caller's permission set (mirrors the backend
@@ -320,7 +299,6 @@ export default function AppSidebar() {
               {!collapsed && <span className="sider-balance-text">{t('balance')}: <strong>{formatMoney(me.balance)}</strong></span>}
             </div>
           )}
-          <VersionBadge version={panelVersion} collapsed={collapsed} />
         </div>
       </Layout.Sider>
 
@@ -384,7 +362,6 @@ export default function AppSidebar() {
               <span className="sider-balance-text">{t('balance')}: <strong>{formatMoney(me.balance)}</strong></span>
             </div>
           )}
-          <VersionBadge version={panelVersion} />
         </div>
       </Drawer>
 

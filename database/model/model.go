@@ -47,8 +47,13 @@ type User struct {
 	Role string `json:"role" gorm:"default:'user';index"`
 	// Balance is the user's wallet in integer credits. Clients cost credits to
 	// create; admins top up balances. Integer (not float) to avoid rounding.
-	Balance    int64 `json:"balance" gorm:"default:0"`
-	LoginEpoch int64 `json:"-" gorm:"default:0"`
+	Balance int64 `json:"balance" gorm:"default:0"`
+	// CostPerGBOverride, when > 0, is this account's per-GB client-creation price
+	// in credits, overriding the role default (clientCostPerGB<Role>). 0 means
+	// "use the role default". Set per account by an admin. Admins are never
+	// charged regardless.
+	CostPerGBOverride int   `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
+	LoginEpoch        int64 `json:"-" gorm:"default:0"`
 }
 
 // Role constants for the RBAC system. Four roles, in descending privilege:
