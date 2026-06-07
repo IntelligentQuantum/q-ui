@@ -839,50 +839,47 @@ export class LanguageManager {
     { name: 'Português', value: 'pt-BR', icon: '🇧🇷' },
   ];
 
+  // Default UI language. This is a Persian-first panel, so when the user has
+  // not explicitly chosen a language the panel opens in Persian. The browser's
+  // language is still honored for the other supported locales; only English and
+  // unrecognized locales fall through to the Persian default.
+  static readonly DEFAULT_LANGUAGE = 'fa-IR';
+
   static getLanguage(): string {
-    let lang = CookieManager.getCookie('lang');
-    if (lang) return lang;
-
-    if (window.navigator) {
-      const nav = window.navigator as Navigator & { userLanguage?: string };
-      lang = nav.language || nav.userLanguage || '';
-
-      const simularLangs: [string, string][] = [
-        ['ar', LanguageManager.supportedLanguages[0].value],
-        ['fa', LanguageManager.supportedLanguages[2].value],
-        ['ja', LanguageManager.supportedLanguages[5].value],
-        ['ru', LanguageManager.supportedLanguages[6].value],
-        ['vi', LanguageManager.supportedLanguages[7].value],
-        ['es', LanguageManager.supportedLanguages[8].value],
-        ['id', LanguageManager.supportedLanguages[9].value],
-        ['uk', LanguageManager.supportedLanguages[10].value],
-        ['tr', LanguageManager.supportedLanguages[11].value],
-        ['pt', LanguageManager.supportedLanguages[12].value],
-      ];
-
-      simularLangs.forEach((pair) => {
-        if (lang === pair[0]) {
-          lang = pair[1];
-        }
-      });
-
-      if (LanguageManager.isSupportLanguage(lang)) {
-        CookieManager.setCookie('lang', lang, 365);
-      } else {
-        CookieManager.setCookie('lang', 'en-US', 365);
-        window.location.reload();
-      }
-    } else {
-      CookieManager.setCookie('lang', 'en-US', 365);
-      window.location.reload();
+    const cookie = CookieManager.getCookie('lang');
+    if (cookie && LanguageManager.isSupportLanguage(cookie)) {
+      return cookie;
     }
 
+    let lang = LanguageManager.DEFAULT_LANGUAGE;
+    if (window.navigator) {
+      const nav = window.navigator as Navigator & { userLanguage?: string };
+      const raw = (nav.language || nav.userLanguage || '').toLowerCase();
+
+      // English (and anything unrecognized) intentionally keeps the Persian
+      // default; every other supported locale is auto-selected from the browser.
+      if (raw && !raw.startsWith('en')) {
+        const exact = LanguageManager.supportedLanguages.find((l) => l.value.toLowerCase() === raw);
+        if (exact) {
+          lang = exact.value;
+        } else {
+          const prefixMap: Record<string, string> = {
+            ar: 'ar-EG', fa: 'fa-IR', ja: 'ja-JP', ru: 'ru-RU', vi: 'vi-VN',
+            es: 'es-ES', id: 'id-ID', uk: 'uk-UA', tr: 'tr-TR', pt: 'pt-BR', zh: 'zh-CN',
+          };
+          const mapped = prefixMap[raw.split('-')[0]];
+          if (mapped) lang = mapped;
+        }
+      }
+    }
+
+    CookieManager.setCookie('lang', lang, 365);
     return lang;
   }
 
   static setLanguage(language: string): void {
     if (!LanguageManager.isSupportLanguage(language)) {
-      language = 'en-US';
+      language = LanguageManager.DEFAULT_LANGUAGE;
     }
     CookieManager.setCookie('lang', language, 365);
     window.location.reload();
