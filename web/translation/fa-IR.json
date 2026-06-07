@@ -134,11 +134,14 @@
       "balance": "موجودی شما",
       "available": "محصولات موجود",
       "confirmTitle": "تأیید خرید",
+      "configName": "نام کانفیگ (اختیاری)",
+      "configNamePlaceholder": "مثلاً گوشی من — خالی بگذارید تا خودکار ساخته شود",
       "price": "قیمت",
       "balanceAfter": "موجودی پس از خرید"
     },
     "orders": {
       "product": "محصول",
+      "config": "کانفیگ",
       "amount": "مبلغ",
       "status": "وضعیت",
       "date": "تاریخ",

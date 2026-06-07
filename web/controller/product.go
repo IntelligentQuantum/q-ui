@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v3/database/model"
+	"github.com/mhsanaei/3x-ui/v3/logger"
 	"github.com/mhsanaei/3x-ui/v3/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/web/service"
 	"github.com/mhsanaei/3x-ui/v3/web/session"
@@ -19,6 +20,22 @@ import (
 type ProductController struct {
 	BaseController
 	productService service.ProductService
+	orderService   service.OrderService
+}
+
+// intsNotIn returns the elements of a that are not present in b.
+func intsNotIn(a, b []int) []int {
+	set := make(map[int]bool, len(b))
+	for _, x := range b {
+		set[x] = true
+	}
+	var out []int
+	for _, x := range a {
+		if !set[x] {
+			out = append(out, x)
+		}
+	}
+	return out
 }
 
 // NewProductController registers the product routes on the given group.
@@ -107,6 +124,12 @@ func (a *ProductController) update(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
+	// Capture the product's previous inbound set so we can re-sync existing
+	// purchased configs to any inbounds added/removed by this edit.
+	var oldInbounds []int
+	if old, oerr := a.productService.Get(id); oerr == nil {
+		oldInbounds = []int(old.InboundIds)
+	}
 	p, err := a.productService.Update(id, in)
 	if err != nil {
 		if errors.Is(err, service.ErrProductNotFound) || errors.Is(err, service.ErrInvalidProduct) {
@@ -115,6 +138,16 @@ func (a *ProductController) update(c *gin.Context) {
 		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
+	}
+	// Propagate the inbound change to configs already sold from this product:
+	// attach newly-added inbounds, detach removed ones (best-effort).
+	newInbounds := []int(p.InboundIds)
+	added := intsNotIn(newInbounds, oldInbounds)
+	removed := intsNotIn(oldInbounds, newInbounds)
+	if len(added) > 0 || len(removed) > 0 {
+		if _, serr := a.orderService.SyncProductInbounds(id, added, removed); serr != nil {
+			logger.Warning("product update: sync existing configs' inbounds failed:", serr)
+		}
 	}
 	jsonObj(c, p, nil)
 }

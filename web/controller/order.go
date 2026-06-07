@@ -92,7 +92,8 @@ func (a *OrderController) get(c *gin.Context) {
 }
 
 type purchaseForm struct {
-	ProductId int `json:"productId"`
+	ProductId int    `json:"productId"`
+	Name      string `json:"name"` // buyer-chosen config name (client email); optional
 }
 
 // purchase buys a product for the CURRENT user. The buyer id is taken from the
@@ -110,7 +111,7 @@ func (a *OrderController) purchase(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	order, err := a.orderService.Purchase(user, form.ProductId)
+	order, err := a.orderService.Purchase(user, form.ProductId, form.Name)
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInsufficientBalance):

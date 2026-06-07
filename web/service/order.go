@@ -41,8 +41,10 @@ type OrderService struct {
 }
 
 // Purchase buys a product for the given buyer (taken from the session, never
-// from request input, so a caller cannot purchase as someone else).
-func (s *OrderService) Purchase(buyer *model.User, productId int) (*model.Order, error) {
+// from request input, so a caller cannot purchase as someone else). name is the
+// buyer-chosen config name (the client "email"); blank falls back to an
+// auto-generated name.
+func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (*model.Order, error) {
 	if buyer == nil {
 		return nil, ErrBuyerRequired
 	}
@@ -74,7 +76,7 @@ func (s *OrderService) Purchase(buyer *model.User, productId int) (*model.Order,
 
 	// Provision a real Xray config when the product targets one or more inbounds.
 	if len(product.InboundIds) > 0 {
-		email, provErr := s.provision(buyer, product, order.Id)
+		email, provErr := s.provision(buyer, product, order.Id, name)
 		if provErr != nil {
 			s.refund(buyer.Id, charged, product)
 			_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
@@ -195,10 +197,16 @@ func (s *OrderService) refund(userId int, amount int64, product *model.Product) 
 // provision creates a buyer-owned Xray client on the product's inbound(s), sized
 // by the product's traffic limit and duration. The single config is attached to
 // every inbound the product targets. Returns the client's email.
-func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int) (string, error) {
+func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int, name string) (string, error) {
 	var expiry int64
 	if product.DurationDays > 0 {
 		expiry = time.Now().AddDate(0, 0, product.DurationDays).UnixMilli()
+	}
+	// The config name is the client "email" (as on the Clients page). Use the
+	// buyer-chosen name when given; otherwise auto-generate a unique one.
+	email := sanitizeClientName(name)
+	if email == "" {
+		email = buildClientEmail(buyer.Username, orderId)
 	}
 	// Generate the per-client secrets up front, exactly like the Clients page
 	// does (random uuid / subId / password / auth). ClientService.Create also
@@ -206,7 +214,7 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 	// always gets fresh random credentials regardless of the inbound's protocol.
 	payload := &ClientCreatePayload{
 		Client: model.Client{
-			Email:      buildClientEmail(buyer.Username, orderId),
+			Email:      email,
 			TotalGB:    product.TrafficLimit,
 			ExpiryTime: expiry,
 			Enable:     true,
@@ -228,6 +236,44 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 	return payload.Client.Email, nil
 }
 
+// SyncProductInbounds re-aligns every config already provisioned from a product
+// to the product's updated inbound set: each client created by a past purchase
+// of this product is attached to the newly-added inbounds and detached from the
+// removed ones — the same per-client inbound management the Clients page offers.
+// Best-effort per client (one failure is logged and skipped, not fatal).
+func (s *OrderService) SyncProductInbounds(productId int, added, removed []int) (bool, error) {
+	if len(added) == 0 && len(removed) == 0 {
+		return false, nil
+	}
+	var emails []string
+	if err := database.GetDB().Model(&model.Order{}).
+		Where("product_id = ? AND client_email <> ?", productId, "").
+		Distinct().Pluck("client_email", &emails).Error; err != nil {
+		return false, err
+	}
+	needRestart := false
+	for _, email := range emails {
+		if len(added) > 0 {
+			if nr, err := s.clientService.AttachByEmail(&s.inboundService, email, added); err != nil {
+				logger.Warningf("sync product %d inbounds: attach %s: %v", productId, email, err)
+			} else if nr {
+				needRestart = true
+			}
+		}
+		if len(removed) > 0 {
+			if nr, err := s.clientService.DetachByEmailMany(&s.inboundService, email, removed); err != nil {
+				logger.Warningf("sync product %d inbounds: detach %s: %v", productId, email, err)
+			} else if nr {
+				needRestart = true
+			}
+		}
+	}
+	if needRestart {
+		s.xrayService.SetToNeedRestart()
+	}
+	return needRestart, nil
+}
+
 // randSecret returns a random hex token (a UUID with dashes stripped) used to
 // seed per-client secrets (subId / trojan & shadowsocks password / hysteria
 // auth) on a provisioned config.
@@ -235,17 +281,23 @@ func randSecret() string {
 	return strings.ReplaceAll(uuid.NewString(), "-", "")
 }
 
+// sanitizeClientName maps characters not allowed in a client email/config name
+// (slashes, spaces, control chars) to '-', trimming surrounding whitespace.
+func sanitizeClientName(name string) string {
+	return strings.Map(func(r rune) rune {
+		if r == '/' || r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
+			return '-'
+		}
+		return r
+	}, strings.TrimSpace(name))
+}
+
 // buildClientEmail derives a unique, valid client email from the buyer's
 // username and the order id. Usernames are already restricted to [A-Za-z0-9_]
 // but we defensively replace any forbidden character, and append a short random
 // token so retries never collide.
 func buildClientEmail(username string, orderId int) string {
-	u := strings.Map(func(r rune) rune {
-		if r == '/' || r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
-			return '-'
-		}
-		return r
-	}, strings.TrimSpace(username))
+	u := sanitizeClientName(username)
 	if u == "" {
 		u = "user"
 	}

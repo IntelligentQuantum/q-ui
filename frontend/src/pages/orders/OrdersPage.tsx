@@ -14,6 +14,7 @@ interface Order {
   userId: number;
   productId: number;
   productName: string;
+  clientEmail: string;
   amount: number;
   status: string;
   createdAt: number;
@@ -68,6 +69,11 @@ export default function OrdersPage() {
       title: t('pages.orders.product'),
       dataIndex: 'productName',
       render: (name: string, o) => name || `#${o.productId}`,
+    },
+    {
+      title: t('pages.orders.config'),
+      dataIndex: 'clientEmail',
+      render: (email: string) => email || '—',
     },
     { title: t('pages.orders.amount'), dataIndex: 'amount', render: (v: number) => format(v) },
     {

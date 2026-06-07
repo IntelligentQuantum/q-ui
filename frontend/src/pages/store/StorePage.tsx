@@ -32,7 +32,9 @@ export default function StorePage() {
   const qc = useQueryClient();
   const { balance } = useMe();
   const { format, formatNumber, unit } = useCurrency();
-  const [modal, modalCtx] = Modal.useModal();
+  const [buying, setBuying] = useState<Product | null>(null);
+  const [name, setName] = useState('');
+  const [busy, setBusy] = useState(false);
 
   const { data: products, isLoading } = useQuery({
     queryKey: ['products', 'store'],
@@ -42,40 +44,34 @@ export default function StorePage() {
     },
   });
 
-  const doBuy = async (p: Product) => {
-    const msg = await HttpUtil.post('/panel/api/orders', { productId: p.id }, { ...JSON_HEADERS, silent: true });
-    if (msg.success) {
-      getMessage().success(t('pages.store.purchased'));
-      qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
-      qc.invalidateQueries({ queryKey: ['orders'] });
-      qc.invalidateQueries({ queryKey: ['clients'] });
-    } else {
-      getMessage().error(msg.msg || t('somethingWentWrong'));
-    }
+  // Open the buy dialog where the buyer can name the config (the config name is
+  // the client "email", as on the Clients page).
+  const openBuy = (p: Product) => {
+    setBuying(p);
+    setName('');
   };
 
-  // Confirm before spending balance — shows what they're buying, the price, and
-  // the balance left afterwards, so a purchase is never a single misclick.
-  const confirmBuy = (p: Product) => {
-    modal.confirm({
-      title: t('pages.store.confirmTitle'),
-      okText: t('pages.store.buy'),
-      cancelText: t('cancel'),
-      content: (
-        <div>
-          <p style={{ marginBottom: 4 }}>
-            <strong>{p.name}</strong>
-          </p>
-          <p style={{ marginBottom: 4 }}>
-            {t('pages.store.price')}: <strong>{format(p.price)}</strong>
-          </p>
-          <p style={{ marginBottom: 0, opacity: 0.75 }}>
-            {t('pages.store.balanceAfter')}: {format(Math.max(0, balance - p.price))}
-          </p>
-        </div>
-      ),
-      onOk: () => doBuy(p),
-    });
+  const doBuy = async () => {
+    if (!buying) return;
+    setBusy(true);
+    try {
+      const msg = await HttpUtil.post(
+        '/panel/api/orders',
+        { productId: buying.id, name: name.trim() },
+        { ...JSON_HEADERS, silent: true },
+      );
+      if (msg.success) {
+        getMessage().success(t('pages.store.purchased'));
+        setBuying(null);
+        qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+        qc.invalidateQueries({ queryKey: ['orders'] });
+        qc.invalidateQueries({ queryKey: ['clients'] });
+      } else {
+        getMessage().error(msg.msg || t('somethingWentWrong'));
+      }
+    } finally {
+      setBusy(false);
+    }
   };
 
   const list = products ?? [];
@@ -112,7 +108,7 @@ export default function StorePage() {
           size="small"
           icon={<ShoppingCartOutlined />}
           disabled={balance < p.price}
-          onClick={() => confirmBuy(p)}
+          onClick={() => openBuy(p)}
         >
           {t('pages.store.buy')}
         </Button>
@@ -122,7 +118,37 @@ export default function StorePage() {
 
   return (
     <PageShell name="store-page">
-      {modalCtx}
+      <Modal
+        open={!!buying}
+        title={t('pages.store.confirmTitle')}
+        okText={t('pages.store.buy')}
+        cancelText={t('cancel')}
+        confirmLoading={busy}
+        onCancel={() => setBuying(null)}
+        onOk={doBuy}
+        destroyOnClose
+      >
+        {buying && (
+          <>
+            <p style={{ marginBottom: 4 }}>
+              <strong>{buying.name}</strong>
+            </p>
+            <p style={{ marginBottom: 4 }}>
+              {t('pages.store.price')}: <strong>{format(buying.price)}</strong>
+            </p>
+            <p style={{ marginBottom: 12, opacity: 0.75 }}>
+              {t('pages.store.balanceAfter')}: {format(Math.max(0, balance - buying.price))}
+            </p>
+            <div style={{ marginBottom: 4 }}>{t('pages.store.configName')}</div>
+            <Input
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t('pages.store.configNamePlaceholder')}
+              maxLength={64}
+            />
+          </>
+        )}
+      </Modal>
       <Spin spinning={isLoading} delay={200} size="large">
         <Row gutter={[16, 12]}>
           <Col span={24}>

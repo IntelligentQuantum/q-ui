@@ -145,11 +145,14 @@
       "balance": "Your Balance",
       "available": "Available Products",
       "confirmTitle": "Confirm purchase",
+      "configName": "Config name (optional)",
+      "configNamePlaceholder": "e.g. My phone — leave empty to auto-generate",
       "price": "Price",
       "balanceAfter": "Balance after purchase"
     },
     "orders": {
       "product": "Product",
+      "config": "Config",
       "amount": "Amount",
       "status": "Status",
       "date": "Date",
