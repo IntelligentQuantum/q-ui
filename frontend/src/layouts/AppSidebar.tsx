@@ -320,7 +320,6 @@ export default function AppSidebar() {
               {!collapsed && <span className="sider-balance-text">{t('balance')}: <strong>{formatMoney(me.balance)}</strong></span>}
             </div>
           )}
-          <VersionBadge version={panelVersion} collapsed={collapsed} />
         </div>
       </Layout.Sider>
 
@@ -384,7 +383,6 @@ export default function AppSidebar() {
               <span className="sider-balance-text">{t('balance')}: <strong>{formatMoney(me.balance)}</strong></span>
             </div>
           )}
-          <VersionBadge version={panelVersion} />
         </div>
       </Drawer>
 
