@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/q-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/q-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/q-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/q-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -39,6 +39,11 @@
 - **تخزين مرن** — SQLite (افتراضي) أو PostgreSQL.
 - **13 لغة لواجهة المستخدم** مع سمات داكنة وفاتحة.
 - **تكامل مع Fail2ban** لفرض حدود IP لكل عميل.
+- **‏RBAC متعدد الأدوار** — أربعة أدوار (مدير، مشرف، موزّع، عضو) مع مصفوفة صلاحيات تُفرض بالكامل من الخادم، وتحديد الملكية (بدون IDOR)، وشريط جانبي ديناميكي وحُرّاس مسارات حسب الدور.
+- **المحفظة والمعاملات** — رصيد ائتماني لكل مستخدم مع سجل معاملات ذرّي قابل للتدقيق؛ المديرون يضيفون/يزيلون/يضبطون الأرصدة، وشحن للمستخدمين عبر ZarinPal.
+- **كتالوج المنتجات والمتجر** — المديرون/المشرفون يديرون الخطط القابلة للبيع (الترافيك، المدة، السعر، الاتصال الوارد المستهدف)؛ والموزّعون/الأعضاء يتصفحون المتجر ويشترون برصيدهم.
+- **خدمات ذاتية** — شراء منتج يُنشئ تهيئة Xray حقيقية للمشتري؛ يرى الأعضاء تهيئاتهم (رموز QR + روابط المشاركة)، ويعدّلون/يُعيدون توليد معرّف الاشتراك والأسرار، ويجدّدون أو يغيّرون الخطة.
+- **الطلبات** — كل عملية شراء/تجديد تُسجَّل كطلب، محدّدة حسب الدور (المديرون/المشرفون يرون الكل، والموزّعون/الأعضاء يرون طلباتهم فقط).
 
 ## لقطات الشاشة
 
@@ -70,12 +75,12 @@
 ## البدء السريع
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/q-ui/master/install.sh)
 ```
 
 أثناء التثبيت، يتم إنشاء اسم مستخدم وكلمة مرور ومسار وصول عشوائية. بعد التثبيت، شغّل `q-ui` لفتح قائمة الإدارة، حيث يمكنك بدء/إيقاف الخدمة، وعرض أو إعادة تعيين بيانات تسجيل الدخول، وإدارة شهادات SSL، والمزيد.
 
-للحصول على الوثائق الكاملة، يرجى زيارة [ويكي المشروع](https://github.com/IntelligentQuantum/3x-ui/wiki).
+للحصول على الوثائق الكاملة، يرجى زيارة [ويكي المشروع](https://github.com/IntelligentQuantum/q-ui/wiki).
 
 ## المنصات المدعومة
 
@@ -118,7 +123,7 @@ docker compose --profile postgres up -d
 تتضمن الصورة Fail2ban (مُفعَّل افتراضيًا) لفرض **حدود IP** لكل عميل. يحظر Fail2ban المخالفين باستخدام `iptables`، الذي يتطلب صلاحية `NET_ADMIN`. يمنح `docker-compose.yml` هذه الصلاحية مسبقًا عبر `cap_add`؛ إذا شغّلت الحاوية باستخدام `docker run` بدلاً من ذلك، فأضِف الصلاحيات بنفسك، وإلا فسيتم تسجيل عمليات الحظر دون تطبيقها أبدًا:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/q-ui
 ```
 
 ## متغيرات البيئة
@@ -159,18 +164,6 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 
 - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (الترخيص: **MIT**): _إدارة الاتصالات الواردة والعملاء وإعدادات اللوحة وتكوين Xray كرمز باستخدام Terraform / OpenTofu._
 
-## دعم المشروع
-
-**إذا كان هذا المشروع مفيدًا لك، فقد ترغب في إعطائه**:star2:
-
-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
-</a>
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
 ## النجوم عبر الزمن
 
-[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/q-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/q-ui)

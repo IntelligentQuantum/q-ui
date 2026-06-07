@@ -94,6 +94,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// RBAC + wallet administration (admin-only; gated inside the controller).
 	a.adminController = NewAdminController(api)
 
+	// Product catalog + orders. Per-route permission gating lives inside these
+	// controllers (RequirePermission), so a moderator can manage products and a
+	// reseller/member can browse + purchase, while infra stays admin-only.
+	NewProductController(api)
+	NewOrderController(api)
+
 	// Identity + wallet snapshot for the current session (any logged-in user).
 	api.GET("/me", a.me)
 	// Self-service profile editing (any logged-in user; never admin-gated).
@@ -114,16 +120,26 @@ func (a *APIController) me(c *gin.Context) {
 		return
 	}
 	balance, _ := a.walletService.GetBalance(user.Id)
-	cost, _ := a.settingService.GetClientCost()
-	costPerGB, _ := a.settingService.GetClientCostPerGB()
+	// Per-role pricing: report the cost for THIS user's role so the SPA's
+	// purchase/create preview matches what the backend will actually charge.
+	cost, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
+	costPerGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
 	zarinpalEnable, _ := a.settingService.GetZarinpalEnable()
 	currency, _ := a.settingService.GetZarinpalCurrency()
 	jsonObj(c, gin.H{
-		"id":              user.Id,
-		"username":        user.Username,
-		"email":           user.Email,
-		"role":            user.Role,
+		"id":       user.Id,
+		"username": user.Username,
+		"email":    user.Email,
+		// Canonical role drives all frontend gating; permissions is the exact
+		// capability set the backend will enforce, so the SPA never has to
+		// hard-code role->menu logic. isAdmin/isModerator/isReseller/isMember
+		// are convenience flags. The backend enforces every one independently.
+		"role":            user.CanonicalRole(),
+		"permissions":     user.Permissions(),
 		"isAdmin":         user.IsAdmin(),
+		"isModerator":     user.IsModerator(),
+		"isReseller":      user.IsReseller(),
+		"isMember":        user.IsMember(),
 		"balance":         balance,
 		"clientCost":      cost,
 		"clientCostPerGB": costPerGB,

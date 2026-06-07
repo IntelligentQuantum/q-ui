@@ -48,6 +48,14 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g.GET("/settings", a.panelSPA)
 	g.GET("/xray", a.panelSPA)
 	g.GET("/api-docs", a.panelSPA)
+	// Commerce / RBAC pages (admin/moderator/reseller/member). Each needs its own
+	// GET route so a direct load or refresh of the URL serves the SPA shell;
+	// without this the server 404s and only client-side navigation works.
+	g.GET("/store", a.panelSPA)
+	g.GET("/orders", a.panelSPA)
+	g.GET("/products", a.panelSPA)
+	g.GET("/customers", a.panelSPA)
+	g.GET("/services", a.panelSPA)
 
 	// SPA pages built by Vite don't have a server-rendered <meta name="csrf-token">,
 	// so they fetch the session token via this endpoint at startup and replay it

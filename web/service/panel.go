@@ -31,7 +31,7 @@ type PanelUpdateInfo struct {
 }
 
 const (
-	panelUpdaterURL      = "https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/update.sh"
+	panelUpdaterURL      = "https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/update.sh"
 	maxPanelUpdaterBytes = 2 << 20
 )
 
@@ -170,7 +170,7 @@ func downloadPanelUpdater() (string, error) {
 
 func fetchLatestPanelVersion() (string, error) {
 	client := (&SettingService{}).NewProxiedHTTPClient(10 * time.Second)
-	resp, err := client.Get("https://api.github.com/repos/IntelligentQuantum/3x-ui/releases/latest")
+	resp, err := client.Get("https://api.github.com/repos/IntelligentQuantum/q-ui/releases/latest")
 	if err != nil {
 		return "", err
 	}

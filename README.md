@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/q-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/q-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/q-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/q-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -39,6 +39,11 @@ Built as an enhanced fork of the original Q-UI project, 3X-UI adds broader proto
 - **Flexible storage** — SQLite (default) or PostgreSQL.
 - **13 UI languages** with dark and light themes.
 - **Fail2ban integration** for enforcing per-client IP limits.
+- **Multi-role RBAC** — four roles (Admin, Moderator, Reseller, Member) with a backend-enforced permission matrix, ownership scoping (no IDOR), and a role-aware dynamic sidebar and route guards.
+- **Wallet & transactions** — per-user credit balance with an atomic, auditable transaction ledger; admins add/remove/set balances, ZarinPal top-ups for users.
+- **Product catalog & store** — admins/moderators manage sellable plans (traffic, duration, price, target inbound); resellers/members browse the store and purchase with their balance.
+- **Self-service services** — purchasing a product provisions a real Xray config for the buyer; members view their configs (QR codes + share links), edit/regenerate the subscription ID & secrets, and renew or change plan.
+- **Orders** — every purchase/renewal is recorded as an order, scoped per role (admins/moderators see all, resellers/members see their own).
 
 ## Screenshots
 
@@ -70,12 +75,12 @@ Built as an enhanced fork of the original Q-UI project, 3X-UI adds broader proto
 ## Quick Start
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/q-ui/master/install.sh)
 ```
 
 During installation a random username, password, and access path are generated. After installation, run `q-ui` to open the management menu, where you can start/stop the service, view or reset your login credentials, manage SSL certificates, and more.
 
-For full documentation, please visit the [project Wiki](https://github.com/IntelligentQuantum/3x-ui/wiki).
+For full documentation, please visit the [project Wiki](https://github.com/IntelligentQuantum/q-ui/wiki).
 
 ## Supported Platforms
 
@@ -118,7 +123,7 @@ docker compose --profile postgres up -d
 The image bundles Fail2ban (enabled by default) to enforce per-client **IP limits**. Fail2ban bans offenders with `iptables`, which requires the `NET_ADMIN` capability. `docker-compose.yml` already grants it via `cap_add`; if you start the container with `docker run` instead, add the capabilities yourself, otherwise bans are logged but never applied:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/q-ui
 ```
 
 ## Environment Variables
@@ -159,19 +164,6 @@ Tools and integrations built by the community around 3x-ui.
 
 - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (License: **MIT**): _Manage inbounds, clients, panel settings, and Xray configuration as code with Terraform / OpenTofu._
 
-## Support project
-
-**If this project is helpful to you, you may wish to give it a**:star2:
-
-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
-</a>
-
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
 ## Stargazers over Time
 
-[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/q-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/q-ui)

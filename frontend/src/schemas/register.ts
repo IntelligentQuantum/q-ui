@@ -26,13 +26,10 @@ export const UsernameSchema = z
   .trim()
   .regex(/^[A-Za-z0-9_]{3,32}$/, 'pages.register.errors.username');
 
-export const PasswordSchema = z
-  .string()
-  .min(8, 'pages.register.errors.password')
-  .refine(
-    (pw) => /[a-z]/.test(pw) && /[A-Z]/.test(pw) && /[0-9]/.test(pw),
-    'pages.register.errors.password',
-  );
+// Simple password rule: a minimum length only (mirrors the backend's
+// minPasswordLen). The previous upper/lower/digit complexity requirement was
+// removed in favour of this simpler policy.
+export const PasswordSchema = z.string().min(6, 'pages.register.errors.password');
 
 export interface RegisterFormValues {
   fullName: string;
@@ -41,21 +38,4 @@ export interface RegisterFormValues {
   username: string;
   password: string;
   confirmPassword: string;
-}
-
-/**
- * passwordScore returns a 0-4 strength score used by the strength meter. It
- * rewards length and character-class diversity. Purely advisory — the binding
- * acceptance rule is PasswordSchema (and the server) which require length 8 +
- * mixed case + a digit.
- */
-export function passwordScore(pw: string): number {
-  if (!pw) return 0;
-  let score = 0;
-  if (pw.length >= 8) score++;
-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
-  if (/[0-9]/.test(pw)) score++;
-  if (/[^A-Za-z0-9]/.test(pw)) score++;
-  if (pw.length >= 12 && score >= 3) score++;
-  return Math.min(score, 4);
 }

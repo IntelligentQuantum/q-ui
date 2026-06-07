@@ -38,6 +38,11 @@
 #                        Linux Docker build so it runs on any Linux, not just
 #                        Alpine. Set this to override either default.
 #   CC="..."             Override the C compiler for CGO cross-compiles.
+#   OBFUSCATE=1          Build the Go binary through `garble` instead of the
+#                        stock toolchain: obfuscates identifiers, strips build
+#                        metadata and encrypts string literals so the released
+#                        binary is hard to reverse-engineer. Source stays
+#                        untouched. Auto-installs garble if missing. Default off.
 # ----------------------------------------------------------------------------
 set -euo pipefail
 
@@ -52,6 +57,7 @@ OUT="build"
 # binary that only runs on Alpine (the original "cannot execute" bug).
 LDFLAGS="${LDFLAGS-}"
 CGO="${CGO:-1}"
+OBFUSCATE="${OBFUSCATE:-0}"
 IMAGE_PREFIX="3x-ui-builder"
 VENDORED_BY_US=0
 
@@ -72,6 +78,25 @@ build_frontend() {
 ensure_frontend() { [ "${SKIP_FRONTEND:-0}" = 1 ] || build_frontend; }
 
 # ---------------------------------------------------------------------------
+# Resolve the Go build driver. With OBFUSCATE=1 we route the build through
+# `garble` (installing it on demand) so identifiers are mangled, build info is
+# stripped and string literals are encrypted; otherwise the stock `go` toolchain
+# is used. Echoes the command prefix to run instead of `go build`.
+# ---------------------------------------------------------------------------
+go_builder() {
+  if [ "$OBFUSCATE" != 1 ]; then echo "go build"; return; fi
+  if ! command -v garble >/dev/null 2>&1; then
+    command -v go >/dev/null 2>&1 || die "OBFUSCATE=1 needs a Go toolchain to install/run garble."
+    log "Installing garble (mvdan.cc/garble@latest)" >&2
+    go install mvdan.cc/garble@latest >&2 || die "failed to install garble."
+    export PATH="$PATH:$(go env GOPATH)/bin"
+    command -v garble >/dev/null 2>&1 || die "garble installed but not on PATH ($(go env GOPATH)/bin)."
+  fi
+  # -tiny strips file/line panic info, -literals encrypts string/byte literals.
+  echo "garble -tiny -literals build"
+}
+
+# ---------------------------------------------------------------------------
 # Generic Go build for a single target. ext is the output suffix (".exe" / "").
 # cc (optional) is the C cross-compiler used only when CGO=1.
 # ---------------------------------------------------------------------------
@@ -80,6 +105,8 @@ go_build() {
   mkdir -p "$OUT"
   local out="$OUT/q-ui-$goos-$goarch$ext"
   local ldflags="${LDFLAGS:--w -s}"
+  local builder; builder="$(go_builder)"
+  [ "$OBFUSCATE" = 1 ] && log "Obfuscation ON (garble)"
   if [ "$CGO" = 1 ]; then
     [ -n "$cc" ] || cc="${CC:-gcc}"
     command -v "$cc" >/dev/null 2>&1 || die \
@@ -87,11 +114,11 @@ go_build() {
     log "Building $goos/$goarch (CGO=1, CC=$cc) -> $out"
     CGO_ENABLED=1 CC="$cc" GOOS="$goos" GOARCH="$goarch" \
       CGO_CFLAGS="-D_LARGEFILE64_SOURCE" \
-      go build -ldflags "$ldflags" -o "$out" main.go
+      $builder -ldflags "$ldflags" -o "$out" main.go
   else
     log "Building $goos/$goarch (CGO=0, pure-Go) -> $out"
     CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" \
-      go build -ldflags "$ldflags" -o "$out" main.go
+      $builder -ldflags "$ldflags" -o "$out" main.go
     warn "CGO=0: SQLite is unavailable — run with QUI_DB_TYPE=postgres. Xray binary is NOT bundled."
   fi
   log "done: $out"
@@ -138,8 +165,10 @@ build_linux() {
   local ldflags="${LDFLAGS:--w -s -linkmode external -extldflags '-static'}"
   local img="$IMAGE_PREFIX:linux-$arch"
   log "Building Linux/$arch via Docker (CGO, static musl) — this compiles xray-core, be patient"
+  [ "$OBFUSCATE" = 1 ] && log "Obfuscation ON (garble) for Docker build"
   docker buildx build --platform "linux/$arch" --target builder \
-    --provenance=false --sbom=false --build-arg "LDFLAGS=$ldflags" -t "$img" --load .
+    --provenance=false --sbom=false \
+    --build-arg "LDFLAGS=$ldflags" --build-arg "OBFUSCATE=$OBFUSCATE" -t "$img" --load .
 
   log "Extracting binary + xray/geo assets"
   mkdir -p "$OUT"

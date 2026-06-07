@@ -31,7 +31,16 @@ ENV CGO_CFLAGS="-D_LARGEFILE64_SOURCE"
 # (-extldflags '-static') that runs on any Linux (glibc or musl), not just
 # inside this Alpine image. Default keeps the lean dynamic build for the image.
 ARG LDFLAGS="-w -s"
-RUN go build -ldflags "$LDFLAGS" -o build/q-ui main.go
+# OBFUSCATE=1 routes the build through garble (identifier mangling, stripped
+# build info, encrypted literals) so the released binary resists reverse
+# engineering. Default 0 keeps the stock toolchain.
+ARG OBFUSCATE=0
+RUN if [ "$OBFUSCATE" = "1" ]; then \
+      go install mvdan.cc/garble@latest && \
+      garble -tiny -literals build -ldflags "$LDFLAGS" -o build/q-ui main.go; \
+    else \
+      go build -ldflags "$LDFLAGS" -o build/q-ui main.go; \
+    fi
 RUN ./DockerInit.sh "$TARGETARCH"
 
 # ========================================================

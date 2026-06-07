@@ -101,8 +101,8 @@ func TestRegisterValidatesFields(t *testing.T) {
 		{"bad email", func(in *RegisterInput) { in.Email = "not-an-email" }, ErrInvalidEmail},
 		{"bad phone", func(in *RegisterInput) { in.Phone = "abc" }, ErrInvalidPhone},
 		{"short full name", func(in *RegisterInput) { in.FullName = "J" }, ErrInvalidFullName},
-		{"weak password no digit", func(in *RegisterInput) { in.Password = "Password" }, ErrWeakPassword},
-		{"weak password too short", func(in *RegisterInput) { in.Password = "Ab1" }, ErrWeakPassword},
+		{"password too short", func(in *RegisterInput) { in.Password = "Ab1" }, ErrWeakPassword},
+		{"password just under min", func(in *RegisterInput) { in.Password = "12345" }, ErrWeakPassword},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -116,16 +116,18 @@ func TestRegisterValidatesFields(t *testing.T) {
 }
 
 func TestValidatePasswordStrength(t *testing.T) {
-	good := []string{"Sup3rSecret", "aB3aaaaa", "LongerPass1"}
+	// Policy is now simply a minimum length (minPasswordLen = 6); the previous
+	// upper/lower/digit complexity requirement was removed.
+	good := []string{"abcdef", "password", "Sup3rSecret", "این یک رمز است"}
 	for _, pw := range good {
 		if err := ValidatePasswordStrength(pw); err != nil {
-			t.Errorf("expected %q to be strong enough, got %v", pw, err)
+			t.Errorf("expected %q to be accepted, got %v", pw, err)
 		}
 	}
-	bad := []string{"", "short1A", "alllowercase1", "ALLUPPERCASE1", "NoDigitsHere"}
+	bad := []string{"", "a", "ab", "abc", "12345"}
 	for _, pw := range bad {
 		if err := ValidatePasswordStrength(pw); !errors.Is(err, ErrWeakPassword) {
-			t.Errorf("expected %q to be rejected as weak, got %v", pw, err)
+			t.Errorf("expected %q to be rejected as too short, got %v", pw, err)
 		}
 	}
 }

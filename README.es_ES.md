@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/q-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/q-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/q-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/q-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -39,6 +39,11 @@ Construido como un fork mejorado del proyecto Q-UI original, 3X-UI añade un sop
 - **Almacenamiento flexible** — SQLite (predeterminado) o PostgreSQL.
 - **13 idiomas de interfaz** con temas oscuro y claro.
 - **Integración con Fail2ban** para aplicar límites de IP por cliente.
+- **RBAC multi-rol** — cuatro roles (Administrador, Moderador, Revendedor, Miembro) con una matriz de permisos aplicada por completo en el backend, alcance por propiedad (sin IDOR) y una barra lateral dinámica y guardias de ruta según el rol.
+- **Monedero y transacciones** — saldo de crédito por usuario con un libro de transacciones atómico y auditable; los administradores añaden/quitan/establecen saldos, y recargas con ZarinPal para los usuarios.
+- **Catálogo de productos y tienda** — los administradores/moderadores gestionan planes vendibles (tráfico, duración, precio, inbound de destino); los revendedores/miembros exploran la tienda y compran con su saldo.
+- **Servicios de autoservicio** — comprar un producto aprovisiona una configuración real de Xray para el comprador; los miembros ven sus configuraciones (códigos QR + enlaces para compartir), editan/regeneran el ID de suscripción y los secretos, y renuevan o cambian de plan.
+- **Pedidos** — cada compra/renovación se registra como un pedido, con alcance por rol (los administradores/moderadores ven todos, los revendedores/miembros ven los suyos).
 
 ## Capturas de pantalla
 
@@ -70,12 +75,12 @@ Construido como un fork mejorado del proyecto Q-UI original, 3X-UI añade un sop
 ## Inicio Rápido
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/q-ui/master/install.sh)
 ```
 
 Durante la instalación se generan un nombre de usuario, una contraseña y una ruta de acceso aleatorios. Tras la instalación, ejecuta `q-ui` para abrir el menú de gestión, donde puedes iniciar/detener el servicio, ver o restablecer tus credenciales de acceso, gestionar certificados SSL y mucho más.
 
-Para la documentación completa, visita la [Wiki del proyecto](https://github.com/IntelligentQuantum/3x-ui/wiki).
+Para la documentación completa, visita la [Wiki del proyecto](https://github.com/IntelligentQuantum/q-ui/wiki).
 
 ## Plataformas Compatibles
 
@@ -118,7 +123,7 @@ docker compose --profile postgres up -d
 La imagen incluye Fail2ban (habilitado de forma predeterminada) para aplicar **límites de IP** por cliente. Fail2ban banea a los infractores con `iptables`, lo que requiere la capacidad `NET_ADMIN`. `docker-compose.yml` ya la concede mediante `cap_add`; si en su lugar inicias el contenedor con `docker run`, añade tú mismo las capacidades, de lo contrario los baneos se registran pero nunca se aplican:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/q-ui
 ```
 
 ## Variables de Entorno
@@ -159,19 +164,6 @@ Herramientas e integraciones construidas por la comunidad alrededor de 3x-ui.
 
 - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (Licencia: **MIT**): _Gestiona inbounds, clientes, configuración del panel y configuración de Xray como código con Terraform / OpenTofu._
 
-## Apoyar el Proyecto
-
-**Si este proyecto te es útil, puedes darle una**:star2:
-
-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
-</a>
-
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
 ## Estrellas a lo Largo del Tiempo
 
-[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/q-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/q-ui)

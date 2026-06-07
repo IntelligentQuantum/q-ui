@@ -28,38 +28,44 @@ import (
 var xrayTemplateConfig string
 
 var defaultValueMap = map[string]string{
-	"panelGuid":          uuid.NewString(),
-	"xrayTemplateConfig": xrayTemplateConfig,
-	"webListen":          "",
-	"webDomain":          "",
-	"webPort":            "2053",
-	"webCertFile":        "",
-	"webKeyFile":         "",
-	"secret":             random.Seq(32),
-	"apiToken":           "",
-	"webBasePath":        "/",
-	"sessionMaxAge":      "360",
-	"trustedProxyCIDRs":  "127.0.0.1/32,::1/128",
-	"pageSize":           "25",
-	"expireDiff":         "0",
-	"trafficDiff":        "0",
-	"remarkModel":        "-ieo",
-	"timeLocation":       "Local",
-	"tgBotEnable":        "false",
-	"tgBotToken":         "",
-	"tgBotProxy":         "",
-	"tgBotAPIServer":     "",
-	"tgBotChatId":        "",
-	"tgRunTime":          "@daily",
-	"tgBotBackup":        "false",
-	"tgBotLoginNotify":   "true",
-	"tgCpu":              "80",
-	"tgLang":             "en-US",
-	"twoFactorEnable":    "false",
-	"twoFactorToken":     "",
-	"registrationEnable": "false",
-	"clientCost":         "0",
-	"clientCostPerGB":    "0",
+	"panelGuid":                     uuid.NewString(),
+	"xrayTemplateConfig":            xrayTemplateConfig,
+	"webListen":                     "",
+	"webDomain":                     "",
+	"webPort":                       "2053",
+	"webCertFile":                   "",
+	"webKeyFile":                    "",
+	"secret":                        random.Seq(32),
+	"apiToken":                      "",
+	"webBasePath":                   "/",
+	"sessionMaxAge":                 "360",
+	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",
+	"pageSize":                      "25",
+	"expireDiff":                    "0",
+	"trafficDiff":                   "0",
+	"remarkModel":                   "-ieo",
+	"timeLocation":                  "Local",
+	"tgBotEnable":                   "false",
+	"tgBotToken":                    "",
+	"tgBotProxy":                    "",
+	"tgBotAPIServer":                "",
+	"tgBotChatId":                   "",
+	"tgRunTime":                     "@daily",
+	"tgBotBackup":                   "false",
+	"tgBotLoginNotify":              "true",
+	"tgCpu":                         "80",
+	"tgLang":                        "en-US",
+	"twoFactorEnable":               "false",
+	"twoFactorToken":                "",
+	"registrationEnable":            "false",
+	"clientCostReseller":            "0",
+	"clientCostMember":              "0",
+	"clientCostPerGBReseller":       "0",
+	"clientCostPerGBMember":         "0",
+	"resetTrafficCostReseller":      "0",
+	"resetTrafficCostMember":        "0",
+	"resetTrafficCostPerGBReseller": "0",
+	"resetTrafficCostPerGBMember":   "0",
 
 	// ZarinPal payment gateway (balance top-up)
 	"zarinpalEnable":              "false",
@@ -471,25 +477,56 @@ func (s *SettingService) SetRegistrationEnable(value bool) error {
 	return s.setBool("registrationEnable", value)
 }
 
-// GetClientCost returns the number of wallet credits a non-admin user is
-// charged to create a single client. 0 means client creation is free.
-func (s *SettingService) GetClientCost() (int, error) {
-	return s.getInt("clientCost")
+// roleCostSuffix maps a user's role to the per-role setting-key suffix used by
+// the cost getters. Reseller and member are priced independently; any other
+// non-admin role (e.g. moderator) falls back to the member rate. Admin is
+// handled by the callers, which return 0 (admins are never charged).
+func roleCostSuffix(role string) string {
+	switch model.NormalizeRole(role) {
+	case model.RoleReseller:
+		return "Reseller"
+	default:
+		return "Member"
+	}
 }
 
-func (s *SettingService) SetClientCost(value int) error {
-	return s.setInt("clientCost", value)
+// GetClientCostForRole returns the flat wallet credits charged to a user of the
+// given role to create a single client. Admins are always free (0). 0 means no
+// flat fee for that role.
+func (s *SettingService) GetClientCostForRole(role string) (int, error) {
+	if model.NormalizeRole(role) == model.RoleAdmin {
+		return 0, nil
+	}
+	return s.getInt("clientCost" + roleCostSuffix(role))
 }
 
-// GetClientCostPerGB returns the credits charged per GB of a client's traffic
-// quota (totalGB) on creation. The total charge is base clientCost plus
-// clientCostPerGB × (quota in GB). 0 disables per-GB pricing.
-func (s *SettingService) GetClientCostPerGB() (int, error) {
-	return s.getInt("clientCostPerGB")
+// GetClientCostPerGBForRole returns the credits charged per GB of a client's
+// traffic quota on creation, for the given role. Total = base + perGB × quotaGB.
+// Admins are always free (0).
+func (s *SettingService) GetClientCostPerGBForRole(role string) (int, error) {
+	if model.NormalizeRole(role) == model.RoleAdmin {
+		return 0, nil
+	}
+	return s.getInt("clientCostPerGB" + roleCostSuffix(role))
 }
 
-func (s *SettingService) SetClientCostPerGB(value int) error {
-	return s.setInt("clientCostPerGB", value)
+// GetResetTrafficCostForRole returns the flat credits charged to a user of the
+// given role to reset a client's traffic. Resetting re-grants the quota, so it
+// is billed independently of client creation. Admins are always free (0).
+func (s *SettingService) GetResetTrafficCostForRole(role string) (int, error) {
+	if model.NormalizeRole(role) == model.RoleAdmin {
+		return 0, nil
+	}
+	return s.getInt("resetTrafficCost" + roleCostSuffix(role))
+}
+
+// GetResetTrafficCostPerGBForRole returns the credits charged per GB of the
+// client's quota when its traffic is reset, for the given role. Admins free (0).
+func (s *SettingService) GetResetTrafficCostPerGBForRole(role string) (int, error) {
+	if model.NormalizeRole(role) == model.RoleAdmin {
+		return 0, nil
+	}
+	return s.getInt("resetTrafficCostPerGB" + roleCostSuffix(role))
 }
 
 // --- ZarinPal payment gateway ---

@@ -39,6 +39,10 @@ func migrationModels() []any {
 		&model.ClientInbound{},
 		&model.InboundFallback{},
 		&model.NodeClientTraffic{},
+		&model.Transaction{},
+		&model.Payment{},
+		&model.Product{},
+		&model.Order{},
 	}
 }
 

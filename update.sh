@@ -811,19 +811,19 @@ update_q-ui() {
 
     echo -e "${green}Downloading new q-ui version...${plain}"
 
-    tag_version=$(${curl_bin} -Ls "https://api.github.com/repos/IntelligentQuantum/3x-ui/releases/latest" 2> /dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+    tag_version=$(${curl_bin} -Ls "https://api.github.com/repos/IntelligentQuantum/q-ui/releases/latest" 2> /dev/null | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
     if [[ ! -n "$tag_version" ]]; then
         echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
-        tag_version=$(${curl_bin} -4 -Ls "https://api.github.com/repos/IntelligentQuantum/3x-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
+        tag_version=$(${curl_bin} -4 -Ls "https://api.github.com/repos/IntelligentQuantum/q-ui/releases/latest" | grep '"tag_name":' | sed -E 's/.*"([^"]+)".*/\1/')
         if [[ ! -n "$tag_version" ]]; then
             _fail "ERROR: Failed to fetch q-ui version, it may be due to GitHub API restrictions, please try it later"
         fi
     fi
     echo -e "Got q-ui latest version: ${tag_version}, beginning the installation..."
-    ${curl_bin} -fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/3x-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
+    ${curl_bin} -fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
     if [[ $? -ne 0 ]]; then
         echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
-        ${curl_bin} -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/3x-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
+        ${curl_bin} -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
         if [[ $? -ne 0 ]]; then
             _fail "ERROR: Failed to download q-ui, please be sure that your server can access GitHub"
         fi
@@ -886,10 +886,10 @@ update_q-ui() {
     chmod +x q-ui bin/xray-linux-$(arch) > /dev/null 2>&1
 
     echo -e "${green}Downloading and installing q-ui.sh script...${plain}"
-    ${curl_bin} -fLRo /usr/bin/q-ui https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.sh > /dev/null 2>&1
+    ${curl_bin} -fLRo /usr/bin/q-ui https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.sh > /dev/null 2>&1
     if [[ $? -ne 0 ]]; then
         echo -e "${yellow}Trying to fetch q-ui with IPv4...${plain}"
-        ${curl_bin} -4fLRo /usr/bin/q-ui https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.sh > /dev/null 2>&1
+        ${curl_bin} -4fLRo /usr/bin/q-ui https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.sh > /dev/null 2>&1
         if [[ $? -ne 0 ]]; then
             _fail "ERROR: Failed to download q-ui.sh script, please be sure that your server can access GitHub"
         fi
@@ -909,9 +909,9 @@ update_q-ui() {
 
     if [[ $release == "alpine" ]]; then
         echo -e "${green}Downloading and installing startup unit q-ui.rc...${plain}"
-        ${curl_bin} -fLRo /etc/init.d/q-ui https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.rc > /dev/null 2>&1
+        ${curl_bin} -fLRo /etc/init.d/q-ui https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.rc > /dev/null 2>&1
         if [[ $? -ne 0 ]]; then
-            ${curl_bin} -4fLRo /etc/init.d/q-ui https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.rc > /dev/null 2>&1
+            ${curl_bin} -4fLRo /etc/init.d/q-ui https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.rc > /dev/null 2>&1
             if [[ $? -ne 0 ]]; then
                 _fail "ERROR: Failed to download startup unit q-ui.rc, please be sure that your server can access GitHub"
             fi
@@ -965,13 +965,13 @@ update_q-ui() {
                 echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
                 case "${release}" in
                     ubuntu | debian | armbian)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.service.debian > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.debian > /dev/null 2>&1
                         ;;
                     arch | manjaro | parch)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.service.arch > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.arch > /dev/null 2>&1
                         ;;
                     *)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/main/q-ui.service.rhel > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.rhel > /dev/null 2>&1
                         ;;
                 esac
 

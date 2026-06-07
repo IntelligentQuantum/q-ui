@@ -6,6 +6,7 @@ import { Drawer, Layout, Menu } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   ApiOutlined,
+  AppstoreOutlined,
   CloseOutlined,
   CloudServerOutlined,
   ClusterOutlined,
@@ -25,6 +26,8 @@ import {
   MoonOutlined,
   SafetyOutlined,
   SettingOutlined,
+  ShoppingCartOutlined,
+  ShoppingOutlined,
   SunOutlined,
   SwapOutlined,
   TagsOutlined,
@@ -37,16 +40,16 @@ import {
 import { HttpUtil } from '@/utils';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
-import { useMe } from '@/hooks/useMe';
+import { useMe, type Permission } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import './AppSidebar.css';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
 const DONATE_URL = 'https://donate.sanaei.dev/';
-const REPO_URL = 'https://github.com/IntelligentQuantum/3x-ui';
+const REPO_URL = 'https://github.com/IntelligentQuantum/q-ui';
 const LOGOUT_KEY = '__logout__';
 
-type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs';
+type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store' | 'orders' | 'products' | 'services' | 'customers';
 
 const iconByName: Record<IconName, ComponentType> = {
   dashboard: DashboardOutlined,
@@ -62,6 +65,11 @@ const iconByName: Record<IconName, ComponentType> = {
   cluster: ClusterOutlined,
   logout: LogoutOutlined,
   apidocs: ApiOutlined,
+  store: ShoppingOutlined,
+  orders: ShoppingCartOutlined,
+  products: AppstoreOutlined,
+  services: CloudServerOutlined,
+  customers: TeamOutlined,
 };
 
 function readCollapsed(): boolean {
@@ -135,7 +143,6 @@ export default function AppSidebar() {
   const { allSetting } = useAllSettings();
   const { me } = useMe();
   const { format: formatMoney } = useCurrency();
-  const isRestrictedUser = !!me && !me.isAdmin;
   const showBilling = !!me?.zarinpalEnable;
   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
 
@@ -146,35 +153,50 @@ export default function AppSidebar() {
   const panelVersion = window.X_UI_CUR_VER || '';
 
   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(() => {
-    // Non-admin users only ever see the Clients page (plus logout). The backend
-    // enforces the same restriction on every route/API regardless of this menu.
-    const billing: { key: string; icon: IconName; title: string }[] = showBilling
-      ? [{ key: '/billing', icon: 'billing', title: t('menu.billing') }]
-      : [];
-    if (isRestrictedUser) {
-      return [
-        { key: '/clients', icon: 'team', title: t('menu.clients') },
-        ...billing,
-        { key: '/profile', icon: 'profile', title: t('menu.profile') },
-        { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
-      ];
-    }
-    return [
-      { key: '/', icon: 'dashboard', title: t('menu.dashboard') },
-      { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
-      { key: '/clients', icon: 'team', title: t('menu.clients') },
-      { key: '/groups', icon: 'groups', title: t('menu.groups') },
-      { key: '/users', icon: 'users', title: t('menu.users') },
-      { key: '/reports', icon: 'reports', title: t('menu.reports') },
-      { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
-      { key: '/settings', icon: 'setting', title: t('menu.settings') },
-      { key: '/xray', icon: 'tool', title: t('menu.xray') },
-      { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
-      ...billing,
-      { key: '/profile', icon: 'profile', title: t('menu.profile') },
-      { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
-    ];
-  }, [t, isRestrictedUser, showBilling]);
+    // The menu is built from the caller's permission set (mirrors the backend
+    // matrix in database/model/rbac.go). The backend independently enforces the
+    // same gating on every route/API — this only decides what to render.
+    const has = (p: Permission): boolean => !!me && (me.isAdmin || me.permissions.includes(p));
+    const items: { key: string; icon: IconName; title: string }[] = [];
+    const push = (cond: boolean, key: string, icon: IconName, titleKey: string) => {
+      if (cond) items.push({ key, icon, title: t(titleKey) });
+    };
+
+    // The list is ordered by domain so each role reads top-to-bottom naturally,
+    // and every role's landing page (homeFor in PanelLayout) is its first
+    // visible item: admin -> Overview, moderator -> Products, reseller ->
+    // Clients, member -> Store.
+
+    // 1) Overview (admin).
+    push(has('stats.view_all'), '/', 'dashboard', 'menu.dashboard');
+
+    // 2) Infrastructure (admin): inbounds, clients, groups, nodes.
+    push(has('infra.manage'), '/inbounds', 'inbound', 'menu.inbounds');
+    push(has('client.manage'), '/clients', 'team', 'menu.clients'); // admin + reseller
+    push(has('infra.manage'), '/groups', 'groups', 'menu.groups');
+    push(has('infra.manage'), '/nodes', 'cluster', 'menu.nodes');
+
+    // 3) Commerce: catalog -> store -> my services -> orders -> customers.
+    push(has('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator
+    push(has('product.purchase'), '/store', 'store', 'menu.store');           // admin, reseller, member
+    push(me?.isMember === true, '/services', 'services', 'menu.services');    // member's own configs
+    push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
+    push(has('customer.view') && !me?.isAdmin, '/customers', 'customers', 'menu.customers'); // mod, reseller
+
+    // 4) Administration (admin): users, reports, settings, xray, API docs.
+    push(has('user.manage'), '/users', 'users', 'menu.users');
+    push(has('stats.view_all'), '/reports', 'reports', 'menu.reports');
+    push(has('infra.manage'), '/settings', 'setting', 'menu.settings');
+    push(has('infra.manage'), '/xray', 'tool', 'menu.xray');
+    push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
+
+    // 5) Account: top-up (when a gateway is on and the caller can purchase),
+    // profile, logout — always at the bottom.
+    push(showBilling && has('product.purchase'), '/billing', 'billing', 'menu.billing');
+    items.push({ key: '/profile', icon: 'profile', title: t('menu.profile') });
+    items.push({ key: LOGOUT_KEY, icon: 'logout', title: t('logout') });
+    return items;
+  }, [t, me, showBilling]);
 
   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);

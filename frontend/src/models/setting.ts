@@ -28,8 +28,14 @@ export class AllSetting {
   twoFactorEnable = false;
   twoFactorToken = '';
   registrationEnable = false;
-  clientCost = 0;
-  clientCostPerGB = 0;
+  clientCostReseller = 0;
+  clientCostMember = 0;
+  clientCostPerGBReseller = 0;
+  clientCostPerGBMember = 0;
+  resetTrafficCostReseller = 0;
+  resetTrafficCostMember = 0;
+  resetTrafficCostPerGBReseller = 0;
+  resetTrafficCostPerGBMember = 0;
   zarinpalEnable = false;
   zarinpalMerchantId = '';
   zarinpalSandbox = false;

@@ -15,6 +15,11 @@ const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
 const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
 const XrayPage = lazy(() => import('@/pages/xray/XrayPage'));
 const ApiDocsPage = lazy(() => import('@/pages/api-docs/ApiDocsPage'));
+const StorePage = lazy(() => import('@/pages/store/StorePage'));
+const OrdersPage = lazy(() => import('@/pages/orders/OrdersPage'));
+const ProductsPage = lazy(() => import('@/pages/products/ProductsPage'));
+const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
+const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
 
 function withSuspense(node: React.ReactNode) {
   return <Suspense fallback={null}>{node}</Suspense>;
@@ -37,6 +42,11 @@ const routes: RouteObject[] = [
       { path: 'settings', element: withSuspense(<SettingsPage />) },
       { path: 'xray', element: withSuspense(<XrayPage />) },
       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
+      { path: 'store', element: withSuspense(<StorePage />) },
+      { path: 'orders', element: withSuspense(<OrdersPage />) },
+      { path: 'products', element: withSuspense(<ProductsPage />) },
+      { path: 'customers', element: withSuspense(<CustomersPage />) },
+      { path: 'services', element: withSuspense(<ServicesPage />) },
     ],
   },
 ];

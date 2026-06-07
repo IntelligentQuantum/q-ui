@@ -113,6 +113,93 @@
   min-height: calc(100vh - 120px);
 }
 
+/* Commerce / RBAC pages (store, orders, products, customers, services) reuse the
+   exact page-shell chrome as the built-in pages: page background, dark/ultra
+   theme vars, transparent inner layouts, and the standard 24px content padding
+   (8px on mobile). Enumerated here to match the existing per-page selectors. */
+.store-page,
+.orders-page,
+.products-page,
+.customers-page,
+.services-page {
+  --bg-page: #e6e8ec;
+  --bg-card: #ffffff;
+  min-height: 100vh;
+  background: var(--bg-page);
+}
+
+.store-page.is-dark,
+.orders-page.is-dark,
+.products-page.is-dark,
+.customers-page.is-dark,
+.services-page.is-dark {
+  --bg-page: #1a1b1f;
+  --bg-card: #23252b;
+}
+
+.store-page.is-dark.is-ultra,
+.orders-page.is-dark.is-ultra,
+.products-page.is-dark.is-ultra,
+.customers-page.is-dark.is-ultra,
+.services-page.is-dark.is-ultra {
+  --bg-page: #000;
+  --bg-card: #101013;
+}
+
+.store-page .ant-layout,
+.store-page .ant-layout-content,
+.orders-page .ant-layout,
+.orders-page .ant-layout-content,
+.products-page .ant-layout,
+.products-page .ant-layout-content,
+.customers-page .ant-layout,
+.customers-page .ant-layout-content,
+.services-page .ant-layout,
+.services-page .ant-layout-content,
+.store-page .content-shell,
+.orders-page .content-shell,
+.products-page .content-shell,
+.customers-page .content-shell,
+.services-page .content-shell {
+  background: transparent;
+}
+
+.store-page .content-area,
+.orders-page .content-area,
+.products-page .content-area,
+.customers-page .content-area,
+.services-page .content-area {
+  padding: 24px;
+}
+
+@media (max-width: 768px) {
+  .store-page .content-area,
+  .orders-page .content-area,
+  .products-page .content-area,
+  .customers-page .content-area,
+  .services-page .content-area {
+    padding: 8px;
+  }
+}
+
+.store-page .summary-card,
+.orders-page .summary-card,
+.products-page .summary-card,
+.customers-page .summary-card,
+.services-page .summary-card {
+  padding: 16px;
+}
+
+@media (max-width: 768px) {
+  .store-page .summary-card,
+  .orders-page .summary-card,
+  .products-page .summary-card,
+  .customers-page .summary-card,
+  .services-page .summary-card {
+    padding: 8px;
+  }
+}
+
 .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover,
 .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover .ant-dropdown-menu-title-content,
 .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover > .anticon {

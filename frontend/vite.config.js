@@ -204,7 +204,11 @@ export default defineConfig({
   build: {
     outDir,
     emptyOutDir: true,
-    sourcemap: true,
+    // No source maps in the shipped bundle: they would let anyone reconstruct
+    // the original TSX from the minified output, defeating obfuscation. esbuild
+    // minification (Vite's default) still applies, so the emitted JS is minified
+    // and name-mangled. Set VITE_SOURCEMAP=1 locally if you need to debug a build.
+    sourcemap: process.env.VITE_SOURCEMAP === '1',
     target: 'es2020',
     chunkSizeWarningLimit: 1500,
     rollupOptions: {

@@ -1,0 +1,3337 @@
+diff --git a/README.md b/README.md
+index 98e21e6c..b622f888 100644
+--- a/README.md
++++ b/README.md
+@@ -39,6 +39,11 @@ Built as an enhanced fork of the original Q-UI project, 3X-UI adds broader proto
+ - **Flexible storage** — SQLite (default) or PostgreSQL.
+ - **13 UI languages** with dark and light themes.
+ - **Fail2ban integration** for enforcing per-client IP limits.
++- **Multi-role RBAC** — four roles (Admin, Moderator, Reseller, Member) with a backend-enforced permission matrix, ownership scoping (no IDOR), and a role-aware dynamic sidebar and route guards.
++- **Wallet & transactions** — per-user credit balance with an atomic, auditable transaction ledger; admins add/remove/set balances, ZarinPal top-ups for users.
++- **Product catalog & store** — admins/moderators manage sellable plans (traffic, duration, price, target inbound); resellers/members browse the store and purchase with their balance.
++- **Self-service services** — purchasing a product provisions a real Xray config for the buyer; members view their configs (QR codes + share links), edit/regenerate the subscription ID & secrets, and renew or change plan.
++- **Orders** — every purchase/renewal is recorded as an order, scoped per role (admins/moderators see all, resellers/members see their own).
+ 
+ ## Screenshots
+ 
+@@ -159,19 +164,6 @@ Tools and integrations built by the community around 3x-ui.
+ 
+ - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (License: **MIT**): _Manage inbounds, clients, panel settings, and Xray configuration as code with Terraform / OpenTofu._
+ 
+-## Support project
+-
+-**If this project is helpful to you, you may wish to give it a**:star2:
+-
+-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
+-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
+-</a>
+-
+-</br>
+-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
+-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
+-</a>
+-
+ ## Stargazers over Time
+ 
+ [![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)
+diff --git a/database/db.go b/database/db.go
+index af595d54..737e0119 100644
+--- a/database/db.go
++++ b/database/db.go
+@@ -75,6 +75,8 @@ func initModels() error {
+ 		&model.NodeClientTraffic{},
+ 		&model.Transaction{},
+ 		&model.Payment{},
++		&model.Product{},
++		&model.Order{},
+ 	}
+ 	for _, mdl := range models {
+ 		if err := db.AutoMigrate(mdl); err != nil {
+@@ -276,9 +278,33 @@ func runSeeders(isUsersEmpty bool) error {
+ 			return err
+ 		}
+ 	}
++
++	if !slices.Contains(seedersHistory, "LegacyUserToReseller") {
++		if err := migrateLegacyUserRole(); err != nil {
++			return err
++		}
++	}
+ 	return nil
+ }
+ 
++// migrateLegacyUserRole canonicalizes pre-redesign "user" rows to the new
++// "reseller" role. The old "user" role already owned clients and held a balance
++// (i.e. reseller semantics), so this preserves every capability while moving
++// stored values onto the four-role vocabulary. It runs AFTER RoleBalanceBackfill
++// so genuine legacy operators (which that seeder promotes to admin) are never
++// touched — only explicitly-created limited accounts from the two-role era are
++// remapped to reseller.
++func migrateLegacyUserRole() error {
++	return db.Transaction(func(tx *gorm.DB) error {
++		if err := tx.Model(&model.User{}).
++			Where("role = ?", model.RoleUser).
++			Update("role", model.RoleReseller).Error; err != nil {
++			return err
++		}
++		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyUserToReseller"}).Error
++	})
++}
++
+ // backfillUserRoles runs once on installs that predate the RBAC role column.
+ // AutoMigrate adds the column with its default ("user"), so every pre-existing
+ // operator row must be promoted back to "admin" or they would lose access.
+diff --git a/database/migrate_data.go b/database/migrate_data.go
+index 7e40a80d..3345dc8b 100644
+--- a/database/migrate_data.go
++++ b/database/migrate_data.go
+@@ -39,6 +39,10 @@ func migrationModels() []any {
+ 		&model.ClientInbound{},
+ 		&model.InboundFallback{},
+ 		&model.NodeClientTraffic{},
++		&model.Transaction{},
++		&model.Payment{},
++		&model.Product{},
++		&model.Order{},
+ 	}
+ }
+ 
+diff --git a/database/model/commerce.go b/database/model/commerce.go
+new file mode 100644
+index 00000000..264db3d1
+--- /dev/null
++++ b/database/model/commerce.go
+@@ -0,0 +1,59 @@
++package model
++
++// Product is a first-class sellable item in the catalog (a VPN plan: some
++// traffic for some duration at a price). Admins and moderators manage the
++// catalog; resellers and members purchase from it.
++type Product struct {
++	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
++	Name         string `json:"name" gorm:"not null"`
++	Description  string `json:"description"`
++	TrafficLimit int64  `json:"trafficLimit" gorm:"column:traffic_limit;default:0"` // bytes; 0 = unlimited
++	DurationDays int    `json:"durationDays" gorm:"column:duration_days;default:0"` // 0 = no expiry
++	Price        int64  `json:"price" gorm:"not null;default:0"`                    // credits
++	// InboundId is the inbound a purchased config (client) is provisioned on.
++	// 0 = no provisioning (e.g. a pure balance/credit product) — buying it just
++	// records an order without creating an Xray config.
++	InboundId int    `json:"inboundId" gorm:"column:inbound_id;default:0"`
++	Status    string `json:"status" gorm:"index;default:'active'"`     // active | inactive
++	CreatedBy int    `json:"createdBy" gorm:"column:created_by;index"` // user id of creator
++	CreatedAt    int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
++	UpdatedAt    int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
++}
++
++func (Product) TableName() string { return "products" }
++
++// Product status constants.
++const (
++	ProductActive   = "active"
++	ProductInactive = "inactive"
++)
++
++// Order records a purchase of a product by a user. The amount is captured at
++// purchase time (so later price changes never rewrite history). An order is
++// owned by user_id, which is how ownership filtering scopes it.
++type Order struct {
++	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
++	UserId    int    `json:"userId" gorm:"index;not null;column:user_id"`
++	ProductId int    `json:"productId" gorm:"index;not null;column:product_id"`
++	// ProductName is the product's name captured at purchase time so order
++	// history stays readable even if the product is later renamed or deleted.
++	ProductName string `json:"productName" gorm:"column:product_name;default:''"`
++	Amount      int64  `json:"amount" gorm:"not null"` // credits charged, snapshot of product price
++	Status    string `json:"status" gorm:"index;default:'pending'"` // pending | paid | completed | cancelled
++	// ClientEmail is the email of the Xray config (client) provisioned for this
++	// order, linking the purchase to the actual service the buyer received.
++	// Empty when the product does not provision a config.
++	ClientEmail string `json:"clientEmail" gorm:"column:client_email;default:''"`
++	CreatedAt   int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
++	UpdatedAt int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
++}
++
++func (Order) TableName() string { return "orders" }
++
++// Order status constants.
++const (
++	OrderPending   = "pending"
++	OrderPaid      = "paid"
++	OrderCompleted = "completed"
++	OrderCancelled = "cancelled"
++)
+diff --git a/database/model/model.go b/database/model/model.go
+index d54fb511..35e70e31 100644
+--- a/database/model/model.go
++++ b/database/model/model.go
+@@ -51,20 +51,62 @@ type User struct {
+ 	LoginEpoch int64 `json:"-" gorm:"default:0"`
+ }
+ 
+-// Role constants for the RBAC system.
++// Role constants for the RBAC system. Four roles, in descending privilege:
++//
++//	admin     - full, unrestricted control; bypasses all ownership checks.
++//	moderator - sales/product/support/marketing; NO infrastructure access.
++//	reseller  - business partner; owns and resells to their own clients/customers.
++//	member    - end customer; buys products and manages their own services.
++//
++// RoleUser is the pre-redesign role name. The old "user" already owned clients
++// and held a balance (i.e. reseller semantics), so it is normalized to
++// RoleReseller everywhere. It is kept only for backward compatibility.
+ const (
+-	RoleAdmin = "admin"
+-	RoleUser  = "user"
++	RoleAdmin     = "admin"
++	RoleModerator = "moderator"
++	RoleReseller  = "reseller"
++	RoleMember    = "member"
++
++	RoleUser = "user" // legacy alias -> reseller
+ )
+ 
+-// IsAdmin reports whether the user has the unrestricted admin role. Any role
+-// other than the explicit "user" role is treated as admin so a blank/unknown
+-// legacy value never silently downgrades an operator mid-migration; the
+-// backfill seeder normalizes pre-existing rows to "admin" regardless.
+-func (u *User) IsAdmin() bool {
+-	return u != nil && u.Role != RoleUser
++// NormalizeRole maps any stored or user-supplied role string to a canonical
++// role. Unknown/blank values fall back to the LEAST-privileged role (member) so
++// a bad or missing value can never silently grant elevated access.
++func NormalizeRole(role string) string {
++	switch strings.ToLower(strings.TrimSpace(role)) {
++	case RoleAdmin:
++		return RoleAdmin
++	case RoleModerator:
++		return RoleModerator
++	case RoleReseller, RoleUser:
++		return RoleReseller
++	case RoleMember:
++		return RoleMember
++	default:
++		return RoleMember
++	}
+ }
+ 
++// CanonicalRole returns the user's normalized role (member for a nil user).
++func (u *User) CanonicalRole() string {
++	if u == nil {
++		return RoleMember
++	}
++	return NormalizeRole(u.Role)
++}
++
++// IsAdmin reports whether the user is the unrestricted system administrator.
++//
++// SECURITY: this is a STRICT equality check. The previous implementation
++// (Role != "user") treated every non-"user" role as admin, which would have
++// granted full admin rights to moderator/reseller/member the instant those
++// roles were introduced. Do not loosen this.
++func (u *User) IsAdmin() bool     { return u.CanonicalRole() == RoleAdmin }
++func (u *User) IsModerator() bool { return u.CanonicalRole() == RoleModerator }
++func (u *User) IsReseller() bool  { return u.CanonicalRole() == RoleReseller }
++func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
++
+ // Transaction records a single credit or debit against a user's balance,
+ // capturing the before/after snapshot for an auditable wallet history.
+ type Transaction struct {
+diff --git a/database/model/rbac.go b/database/model/rbac.go
+new file mode 100644
+index 00000000..5e7d8812
+--- /dev/null
++++ b/database/model/rbac.go
+@@ -0,0 +1,116 @@
++package model
++
++// Permission is a fine-grained capability checked by the authorization layer.
++// Permissions are assigned to roles by the rolePermissions matrix below and
++// checked via User.Can(). Middleware (RequirePermission) and services both use
++// this single source of truth so the backend — never the frontend — decides
++// what a caller may do.
++type Permission string
++
++const (
++	// Infrastructure & system administration (admin only).
++	PermInfraManage  Permission = "infra.manage"  // nodes, inbounds, server, xray, settings, custom-geo
++	PermUserManage   Permission = "user.manage"   // create/edit/delete users, assign roles, manage mods/resellers
++	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
++	PermStatsViewAll Permission = "stats.view_all"
++	PermTxnViewAll   Permission = "transaction.view_all"
++
++	// Product catalog.
++	PermProductManage   Permission = "product.manage"   // create/edit/delete/activate products
++	PermProductView     Permission = "product.view"     // browse catalog / store
++	PermProductPurchase Permission = "product.purchase" // buy products / top up own balance
++
++	// Clients (VPN services). Non-admins are additionally ownership-scoped.
++	PermClientManage Permission = "client.manage" // create/edit/delete clients
++
++	// Customers / orders.
++	PermCustomerView Permission = "customer.view"  // view users/customers (mod=all, reseller=own)
++	PermOrderViewAll Permission = "order.view_all" // see every order
++	PermOrderViewOwn Permission = "order.view_own" // see own orders/services
++	PermBalanceViewOwn Permission = "balance.view_own"
++)
++
++// rolePermissions is the canonical role -> permission matrix. Admin is handled
++// specially in Can() (it has every permission and bypasses ownership), so it is
++// intentionally not enumerated here.
++var rolePermissions = map[string]map[Permission]bool{
++	RoleModerator: {
++		PermProductManage: true,
++		PermProductView:   true,
++		PermCustomerView:  true,
++		PermOrderViewAll:  true,
++		PermOrderViewOwn:  true,
++		PermBalanceViewOwn: true,
++	},
++	RoleReseller: {
++		PermProductView:     true,
++		PermProductPurchase: true,
++		PermClientManage:    true,
++		PermCustomerView:    true, // own customers only (ownership-scoped in services)
++		PermOrderViewOwn:    true,
++		PermBalanceViewOwn:  true,
++	},
++	RoleMember: {
++		PermProductView:     true,
++		PermProductPurchase: true,
++		PermOrderViewOwn:    true,
++		PermBalanceViewOwn:  true,
++	},
++}
++
++// Can reports whether the user holds the given permission. Admin holds every
++// permission unconditionally. Note this answers "may the caller use this
++// capability at all" — resource-level ownership (e.g. *which* clients/orders)
++// is enforced separately in the services and is bypassed only for admin.
++func (u *User) Can(p Permission) bool {
++	if u == nil {
++		return false
++	}
++	role := u.CanonicalRole()
++	if role == RoleAdmin {
++		return true
++	}
++	return rolePermissions[role][p]
++}
++
++// Permissions returns the sorted-by-insertion set of permissions granted to the
++// user, for surfacing to the frontend via /panel/api/me so the SPA can gate
++// navigation. The backend still enforces every one independently.
++func (u *User) Permissions() []Permission {
++	if u == nil {
++		return nil
++	}
++	role := u.CanonicalRole()
++	if role == RoleAdmin {
++		out := make([]Permission, 0, len(allPermissions))
++		out = append(out, allPermissions...)
++		return out
++	}
++	perms := rolePermissions[role]
++	out := make([]Permission, 0, len(perms))
++	for _, p := range allPermissions {
++		if perms[p] {
++			out = append(out, p)
++		}
++	}
++	return out
++}
++
++// allPermissions is the full ordered list, used to give admin every permission
++// and to keep Permissions() output deterministic.
++var allPermissions = []Permission{
++	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
++	PermProductManage, PermProductView, PermProductPurchase,
++	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
++}
++
++// IsValidRole reports whether s is one of the four canonical roles (the legacy
++// "user" alias is accepted too, since NormalizeRole folds it into reseller).
++func IsValidRole(s string) bool {
++	switch s {
++	case RoleAdmin, RoleModerator, RoleReseller, RoleMember, RoleUser:
++		return true
++	default:
++		return false
++	}
++}
+diff --git a/frontend/public/openapi.json b/frontend/public/openapi.json
+index 8ab22094..59c4a78b 100644
+--- a/frontend/public/openapi.json
++++ b/frontend/public/openapi.json
+@@ -3043,6 +3043,65 @@
+         }
+       }
+     },
++    "/panel/api/clients/{email}/rotate": {
++      "post": {
++        "tags": [
++          "Clients"
++        ],
++        "summary": "Owner self-service: rename a client, toggle its enable flag, and/or regenerate its subscription ID + protocol secrets (UUID / password / Hysteria auth). Ownership is enforced — a non-admin may only rotate a client they own. Regenerating invalidates existing share links.",
++        "operationId": "post_panel_api_clients_email_rotate",
++        "parameters": [
++          {
++            "name": "email",
++            "in": "path",
++            "required": true,
++            "description": "Current client email (unique identifier).",
++            "schema": {
++              "type": "string"
++            }
++          }
++        ],
++        "requestBody": {
++          "required": true,
++          "content": {
++            "application/json": {
++              "schema": {
++                "type": "object"
++              },
++              "example": {
++                "email": "alice-new",
++                "enable": true,
++                "regenerate": true
++              }
++            }
++          }
++        },
++        "responses": {
++          "200": {
++            "description": "Successful response",
++            "content": {
++              "application/json": {
++                "schema": {
++                  "type": "object",
++                  "properties": {
++                    "success": {
++                      "type": "boolean"
++                    },
++                    "msg": {
++                      "type": "string"
++                    },
++                    "obj": {}
++                  }
++                },
++                "example": {
++                  "success": true
++                }
++              }
++            }
++          }
++        }
++      }
++    },
+     "/panel/api/clients/resetAllTraffics": {
+       "post": {
+         "tags": [
+diff --git a/frontend/src/hooks/useMe.ts b/frontend/src/hooks/useMe.ts
+index 3cd0bef9..f54679b5 100644
+--- a/frontend/src/hooks/useMe.ts
++++ b/frontend/src/hooks/useMe.ts
+@@ -2,12 +2,38 @@ import { useQuery } from '@tanstack/react-query';
+ 
+ import { HttpUtil } from '@/utils';
+ 
++// Role names mirror the backend's canonical roles (database/model: admin,
++// moderator, reseller, member). The backend is the source of truth; these are
++// only used to drive presentation.
++export type Role = 'admin' | 'moderator' | 'reseller' | 'member';
++
++// Permission strings mirror database/model/rbac.go. Keep in sync with the
++// backend matrix; the backend independently enforces every one.
++export type Permission =
++  | 'infra.manage'
++  | 'user.manage'
++  | 'balance.manage'
++  | 'stats.view_all'
++  | 'transaction.view_all'
++  | 'product.manage'
++  | 'product.view'
++  | 'product.purchase'
++  | 'client.manage'
++  | 'customer.view'
++  | 'order.view_all'
++  | 'order.view_own'
++  | 'balance.view_own';
++
+ export interface MeInfo {
+   id: number;
+   username: string;
+   email: string;
+-  role: string;
++  role: Role;
++  permissions: Permission[];
+   isAdmin: boolean;
++  isModerator: boolean;
++  isReseller: boolean;
++  isMember: boolean;
+   balance: number;
+   clientCost: number;
+   clientCostPerGB: number;
+@@ -17,18 +43,36 @@ export interface MeInfo {
+ 
+ export const ME_QUERY_KEY = ['me'] as const;
+ 
++function normalizeRole(role: unknown): Role {
++  switch (String(role)) {
++    case 'admin':
++    case 'moderator':
++    case 'reseller':
++    case 'member':
++      return role as Role;
++    case 'user':
++      return 'reseller'; // legacy alias
++    default:
++      return 'member';
++  }
++}
++
+ async function fetchMe(): Promise<MeInfo> {
+   const msg = await HttpUtil.get('/panel/api/me', undefined, { silent: true });
+   if (!msg?.success || !msg.obj) {
+     throw new Error(msg?.msg || 'Failed to load profile');
+   }
+-  const o = msg.obj as Partial<MeInfo>;
++  const o = msg.obj as Partial<MeInfo> & { permissions?: unknown };
+   return {
+     id: Number(o.id) || 0,
+     username: String(o.username ?? ''),
+     email: String(o.email ?? ''),
+-    role: String(o.role ?? 'user'),
++    role: normalizeRole(o.role),
++    permissions: Array.isArray(o.permissions) ? (o.permissions as Permission[]) : [],
+     isAdmin: Boolean(o.isAdmin),
++    isModerator: Boolean(o.isModerator),
++    isReseller: Boolean(o.isReseller),
++    isMember: Boolean(o.isMember),
+     balance: Number(o.balance) || 0,
+     clientCost: Number(o.clientCost) || 0,
+     clientCostPerGB: Number(o.clientCostPerGB) || 0,
+@@ -38,10 +82,11 @@ async function fetchMe(): Promise<MeInfo> {
+ }
+ 
+ /**
+- * useMe loads the current session's identity, role, wallet balance and the
+- * per-client cost. It is the single source of truth the SPA uses to gate
+- * navigation, hide admin UI and preview purchases. The backend independently
+- * enforces every one of these — the hook only drives presentation.
++ * useMe loads the current session's identity, role, permission set, wallet
++ * balance and per-client cost. It is the single source of truth the SPA uses to
++ * gate navigation and hide UI. The backend independently enforces every one of
++ * these — the hook only drives presentation. `can()` mirrors the backend's
++ * User.Can(): admins implicitly hold every permission.
+  */
+ export function useMe() {
+   const query = useQuery({
+@@ -49,11 +94,16 @@ export function useMe() {
+     queryFn: fetchMe,
+     staleTime: 15_000,
+   });
++  const me = query.data;
++  const can = (perm: Permission): boolean =>
++    !!me && (me.isAdmin || me.permissions.includes(perm));
+   return {
+-    me: query.data,
+-    isAdmin: query.data?.isAdmin,
+-    balance: query.data?.balance ?? 0,
+-    clientCost: query.data?.clientCost ?? 0,
++    me,
++    role: me?.role,
++    can,
++    isAdmin: me?.isAdmin,
++    balance: me?.balance ?? 0,
++    clientCost: me?.clientCost ?? 0,
+     loading: query.isLoading,
+     refetch: query.refetch,
+   };
+diff --git a/frontend/src/hooks/usePageTitle.ts b/frontend/src/hooks/usePageTitle.ts
+index 8e220948..031cc229 100644
+--- a/frontend/src/hooks/usePageTitle.ts
++++ b/frontend/src/hooks/usePageTitle.ts
+@@ -15,6 +15,11 @@ const TITLE_KEYS: Record<string, string> = {
+   '/settings': 'menu.settings',
+   '/xray': 'menu.xray',
+   '/api-docs': 'menu.apiDocs',
++  '/store': 'menu.store',
++  '/orders': 'menu.orders',
++  '/products': 'menu.products',
++  '/customers': 'menu.customers',
++  '/services': 'menu.services',
+ };
+ 
+ export function usePageTitle() {
+diff --git a/frontend/src/layouts/AppSidebar.tsx b/frontend/src/layouts/AppSidebar.tsx
+index 15cb6e45..ed16be6a 100644
+--- a/frontend/src/layouts/AppSidebar.tsx
++++ b/frontend/src/layouts/AppSidebar.tsx
+@@ -6,6 +6,7 @@ import { Drawer, Layout, Menu } from 'antd';
+ import type { MenuProps } from 'antd';
+ import {
+   ApiOutlined,
++  AppstoreOutlined,
+   CloseOutlined,
+   CloudServerOutlined,
+   ClusterOutlined,
+@@ -25,6 +26,8 @@ import {
+   MoonOutlined,
+   SafetyOutlined,
+   SettingOutlined,
++  ShoppingCartOutlined,
++  ShoppingOutlined,
+   SunOutlined,
+   SwapOutlined,
+   TagsOutlined,
+@@ -37,7 +40,7 @@ import {
+ import { HttpUtil } from '@/utils';
+ import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+ import { useAllSettings } from '@/api/queries/useAllSettings';
+-import { useMe } from '@/hooks/useMe';
++import { useMe, type Permission } from '@/hooks/useMe';
+ import { useCurrency } from '@/hooks/useCurrency';
+ import './AppSidebar.css';
+ 
+@@ -46,7 +49,7 @@ const DONATE_URL = 'https://donate.sanaei.dev/';
+ const REPO_URL = 'https://github.com/IntelligentQuantum/3x-ui';
+ const LOGOUT_KEY = '__logout__';
+ 
+-type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs';
++type IconName = 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile' | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store' | 'orders' | 'products' | 'services' | 'customers';
+ 
+ const iconByName: Record<IconName, ComponentType> = {
+   dashboard: DashboardOutlined,
+@@ -62,6 +65,11 @@ const iconByName: Record<IconName, ComponentType> = {
+   cluster: ClusterOutlined,
+   logout: LogoutOutlined,
+   apidocs: ApiOutlined,
++  store: ShoppingOutlined,
++  orders: ShoppingCartOutlined,
++  products: AppstoreOutlined,
++  services: CloudServerOutlined,
++  customers: TeamOutlined,
+ };
+ 
+ function readCollapsed(): boolean {
+@@ -135,7 +143,6 @@ export default function AppSidebar() {
+   const { allSetting } = useAllSettings();
+   const { me } = useMe();
+   const { format: formatMoney } = useCurrency();
+-  const isRestrictedUser = !!me && !me.isAdmin;
+   const showBilling = !!me?.zarinpalEnable;
+   const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
+ 
+@@ -146,35 +153,50 @@ export default function AppSidebar() {
+   const panelVersion = window.X_UI_CUR_VER || '';
+ 
+   const tabs = useMemo<{ key: string; icon: IconName; title: string }[]>(() => {
+-    // Non-admin users only ever see the Clients page (plus logout). The backend
+-    // enforces the same restriction on every route/API regardless of this menu.
+-    const billing: { key: string; icon: IconName; title: string }[] = showBilling
+-      ? [{ key: '/billing', icon: 'billing', title: t('menu.billing') }]
+-      : [];
+-    if (isRestrictedUser) {
+-      return [
+-        { key: '/clients', icon: 'team', title: t('menu.clients') },
+-        ...billing,
+-        { key: '/profile', icon: 'profile', title: t('menu.profile') },
+-        { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
+-      ];
+-    }
+-    return [
+-      { key: '/', icon: 'dashboard', title: t('menu.dashboard') },
+-      { key: '/inbounds', icon: 'inbound', title: t('menu.inbounds') },
+-      { key: '/clients', icon: 'team', title: t('menu.clients') },
+-      { key: '/groups', icon: 'groups', title: t('menu.groups') },
+-      { key: '/users', icon: 'users', title: t('menu.users') },
+-      { key: '/reports', icon: 'reports', title: t('menu.reports') },
+-      { key: '/nodes', icon: 'cluster', title: t('menu.nodes') },
+-      { key: '/settings', icon: 'setting', title: t('menu.settings') },
+-      { key: '/xray', icon: 'tool', title: t('menu.xray') },
+-      { key: '/api-docs', icon: 'apidocs', title: t('menu.apiDocs') },
+-      ...billing,
+-      { key: '/profile', icon: 'profile', title: t('menu.profile') },
+-      { key: LOGOUT_KEY, icon: 'logout', title: t('logout') },
+-    ];
+-  }, [t, isRestrictedUser, showBilling]);
++    // The menu is built from the caller's permission set (mirrors the backend
++    // matrix in database/model/rbac.go). The backend independently enforces the
++    // same gating on every route/API — this only decides what to render.
++    const has = (p: Permission): boolean => !!me && (me.isAdmin || me.permissions.includes(p));
++    const items: { key: string; icon: IconName; title: string }[] = [];
++    const push = (cond: boolean, key: string, icon: IconName, titleKey: string) => {
++      if (cond) items.push({ key, icon, title: t(titleKey) });
++    };
++
++    // The list is ordered by domain so each role reads top-to-bottom naturally,
++    // and every role's landing page (homeFor in PanelLayout) is its first
++    // visible item: admin -> Overview, moderator -> Products, reseller ->
++    // Clients, member -> Store.
++
++    // 1) Overview (admin).
++    push(has('stats.view_all'), '/', 'dashboard', 'menu.dashboard');
++
++    // 2) Infrastructure (admin): inbounds, clients, groups, nodes.
++    push(has('infra.manage'), '/inbounds', 'inbound', 'menu.inbounds');
++    push(has('client.manage'), '/clients', 'team', 'menu.clients'); // admin + reseller
++    push(has('infra.manage'), '/groups', 'groups', 'menu.groups');
++    push(has('infra.manage'), '/nodes', 'cluster', 'menu.nodes');
++
++    // 3) Commerce: catalog -> store -> my services -> orders -> customers.
++    push(has('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator
++    push(has('product.purchase'), '/store', 'store', 'menu.store');           // admin, reseller, member
++    push(me?.isMember === true, '/services', 'services', 'menu.services');    // member's own configs
++    push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
++    push(has('customer.view') && !me?.isAdmin, '/customers', 'customers', 'menu.customers'); // mod, reseller
++
++    // 4) Administration (admin): users, reports, settings, xray, API docs.
++    push(has('user.manage'), '/users', 'users', 'menu.users');
++    push(has('stats.view_all'), '/reports', 'reports', 'menu.reports');
++    push(has('infra.manage'), '/settings', 'setting', 'menu.settings');
++    push(has('infra.manage'), '/xray', 'tool', 'menu.xray');
++    push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
++
++    // 5) Account: top-up (when a gateway is on and the caller can purchase),
++    // profile, logout — always at the bottom.
++    push(showBilling && has('product.purchase'), '/billing', 'billing', 'menu.billing');
++    items.push({ key: '/profile', icon: 'profile', title: t('menu.profile') });
++    items.push({ key: LOGOUT_KEY, icon: 'logout', title: t('logout') });
++    return items;
++  }, [t, me, showBilling]);
+ 
+   const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
+   const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
+diff --git a/frontend/src/layouts/PageShell.tsx b/frontend/src/layouts/PageShell.tsx
+new file mode 100644
+index 00000000..deebb3da
+--- /dev/null
++++ b/frontend/src/layouts/PageShell.tsx
+@@ -0,0 +1,44 @@
++import { useEffect, useMemo } from 'react';
++import type { ReactNode } from 'react';
++import { ConfigProvider, Layout, message } from 'antd';
++
++import { useTheme } from '@/hooks/useTheme';
++import { usePageTitle } from '@/hooks/usePageTitle';
++import { setMessageInstance } from '@/utils/messageBus';
++import AppSidebar from '@/layouts/AppSidebar';
++
++// PageShell is the standard panel page chrome: themed ConfigProvider + the
++// sidebar + the content-shell/content-area layout that every existing page
++// (e.g. UsersPage) composes itself. New pages render their content inside it so
++// they match the rest of the panel (sidebar, theme tokens, spacing).
++export default function PageShell({ name, children }: { name: string; children: ReactNode }) {
++  usePageTitle();
++  const { isDark, isUltra, antdThemeConfig } = useTheme();
++
++  // One themed message instance for the page, also registered as the global
++  // instance so HttpUtil's auto-toasts and getMessage() calls render here with
++  // the right theme/position (instead of the static fallback).
++  const [messageApi, messageHolder] = message.useMessage();
++  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
++
++  const pageClass = useMemo(() => {
++    const classes = [name];
++    if (isDark) classes.push('is-dark');
++    if (isUltra) classes.push('is-ultra');
++    return classes.join(' ');
++  }, [name, isDark, isUltra]);
++
++  return (
++    <ConfigProvider theme={antdThemeConfig}>
++      {messageHolder}
++      <Layout className={pageClass}>
++        <AppSidebar />
++        <Layout className="content-shell">
++          <Layout.Content id="content-layout" className="content-area">
++            {children}
++          </Layout.Content>
++        </Layout>
++      </Layout>
++    </ConfigProvider>
++  );
++}
+diff --git a/frontend/src/layouts/PanelLayout.tsx b/frontend/src/layouts/PanelLayout.tsx
+index d1d09337..c7e17cd9 100644
+--- a/frontend/src/layouts/PanelLayout.tsx
++++ b/frontend/src/layouts/PanelLayout.tsx
+@@ -3,13 +3,55 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+ 
+ import { useWebSocketBridge } from '@/api/websocketBridge';
+ import { usePageTitle } from '@/hooks/usePageTitle';
+-import { useMe } from '@/hooks/useMe';
++import { useMe, type MeInfo } from '@/hooks/useMe';
+ 
+-// Routes a non-admin "user" is allowed to render. Everything else is redirected
+-// to the clients page. This is a UX guard only — the backend independently
+-// enforces RBAC on every API, so a user who hand-types a URL or hits the API
+-// directly still gets nothing they are not entitled to.
+-const USER_ALLOWED_PATHS = new Set(['/clients', '/profile', '/billing']);
++// canAccess mirrors the backend permission matrix (database/model/rbac.go).
++// This is a UX guard ONLY — the backend independently enforces RBAC on every
++// API, so a user who hand-types a URL or hits the API directly still gets
++// nothing they are not entitled to. Keep it in sync with AppSidebar.
++function canAccess(me: MeInfo, path: string): boolean {
++  const has = (p: string) => me.isAdmin || me.permissions.includes(p as MeInfo['permissions'][number]);
++  switch (path) {
++    case '/':
++    case '/reports':
++      return has('stats.view_all'); // admin only
++    case '/inbounds':
++    case '/groups':
++    case '/nodes':
++    case '/settings':
++    case '/xray':
++    case '/api-docs':
++      return has('infra.manage'); // admin only
++    case '/users':
++      return has('user.manage'); // admin only
++    case '/clients':
++      return has('client.manage'); // admin, reseller
++    case '/products':
++      return has('product.manage'); // admin, moderator
++    case '/store':
++    case '/billing':
++      return has('product.purchase'); // admin, reseller, member
++    case '/orders':
++      return has('order.view_own'); // everyone with order visibility
++    case '/customers':
++      return has('customer.view'); // admin, moderator, reseller
++    case '/services':
++      return me.isMember || me.isAdmin;
++    case '/profile':
++      return true; // every authenticated user
++    default:
++      return true; // unknown path: let the router handle it
++  }
++}
++
++// homeFor returns the landing route each role is redirected to when it hits a
++// page it may not access.
++function homeFor(me: MeInfo): string {
++  if (me.isAdmin) return '/';
++  if (me.isModerator) return '/products';
++  if (me.isReseller) return '/clients';
++  return '/store'; // member
++}
+ 
+ export default function PanelLayout() {
+   useWebSocketBridge();
+@@ -19,13 +61,14 @@ export default function PanelLayout() {
+   const { pathname } = useLocation();
+   const navigate = useNavigate();
+ 
+-  const restricted = !!me && !me.isAdmin && !USER_ALLOWED_PATHS.has(pathname);
++  const home = me ? homeFor(me) : '/';
++  const restricted = !!me && !canAccess(me, pathname);
+ 
+   useEffect(() => {
+     if (restricted) {
+-      navigate('/clients', { replace: true });
++      navigate(home, { replace: true });
+     }
+-  }, [restricted, navigate]);
++  }, [restricted, home, navigate]);
+ 
+   // Avoid flashing a forbidden page for the frame before the redirect lands.
+   if (restricted) {
+diff --git a/frontend/src/pages/api-docs/endpoints.ts b/frontend/src/pages/api-docs/endpoints.ts
+index 3459d036..917d55d8 100644
+--- a/frontend/src/pages/api-docs/endpoints.ts
++++ b/frontend/src/pages/api-docs/endpoints.ts
+@@ -586,6 +586,19 @@ export const sections: readonly Section[] = [
+         body: '{\n  "inboundIds": [5]\n}',
+         response: '{\n  "success": true\n}',
+       },
++      {
++        method: 'POST',
++        path: '/panel/api/clients/:email/rotate',
++        summary: 'Owner self-service: rename a client, toggle its enable flag, and/or regenerate its subscription ID + protocol secrets (UUID / password / Hysteria auth). Ownership is enforced — a non-admin may only rotate a client they own. Regenerating invalidates existing share links.',
++        params: [
++          { name: 'email', in: 'path', type: 'string', desc: 'Current client email (unique identifier).' },
++          { name: 'email', in: 'body (json)', type: 'string', desc: 'New email to rename the client to (optional).', optional: true },
++          { name: 'enable', in: 'body (json)', type: 'boolean', desc: 'New enable state (optional).', optional: true },
++          { name: 'regenerate', in: 'body (json)', type: 'boolean', desc: 'When true, issue a fresh subId and protocol secrets.', optional: true },
++        ],
++        body: '{\n  "email": "alice-new",\n  "enable": true,\n  "regenerate": true\n}',
++        response: '{\n  "success": true\n}',
++      },
+       {
+         method: 'POST',
+         path: '/panel/api/clients/resetAllTraffics',
+diff --git a/frontend/src/pages/customers/CustomersPage.tsx b/frontend/src/pages/customers/CustomersPage.tsx
+new file mode 100644
+index 00000000..0c4519f0
+--- /dev/null
++++ b/frontend/src/pages/customers/CustomersPage.tsx
+@@ -0,0 +1,20 @@
++import { Card, Empty } from 'antd';
++import { useTranslation } from 'react-i18next';
++
++import PageShell from '@/layouts/PageShell';
++
++// CustomersPage is the moderator/reseller customer view. Access is gated by the
++// `customer.view` permission (PanelLayout + AppSidebar) and re-enforced on the
++// backend. The list endpoint is role-scoped (moderator: all customers;
++// reseller: own customers) and is wired in a follow-up — this page is the
++// navigable, permission-gated shell.
++export default function CustomersPage() {
++  const { t } = useTranslation();
++  return (
++    <PageShell name="customers-page">
++      <Card size="small" hoverable title={t('menu.customers')}>
++        <Empty description={t('pages.customers.pending')} />
++      </Card>
++    </PageShell>
++  );
++}
+diff --git a/frontend/src/pages/orders/OrdersPage.tsx b/frontend/src/pages/orders/OrdersPage.tsx
+new file mode 100644
+index 00000000..51208ebe
+--- /dev/null
++++ b/frontend/src/pages/orders/OrdersPage.tsx
+@@ -0,0 +1,115 @@
++import { useMemo } from 'react';
++import { useQuery } from '@tanstack/react-query';
++import { Card, Col, Row, Spin, Statistic, Table, Tag } from 'antd';
++import type { ColumnsType } from 'antd/es/table';
++import { CheckCircleOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
++import { useTranslation } from 'react-i18next';
++
++import { HttpUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import PageShell from '@/layouts/PageShell';
++
++interface Order {
++  id: number;
++  userId: number;
++  productId: number;
++  productName: string;
++  amount: number;
++  status: string;
++  createdAt: number;
++}
++
++const STATUS_COLOR: Record<string, string> = {
++  pending: 'gold',
++  paid: 'blue',
++  completed: 'green',
++  cancelled: 'red',
++};
++
++// OrdersPage lists orders. The backend scopes the result: admin/moderator see
++// every order (order.view_all); resellers/members see only their own
++// (order.view_own + user_id filter). The SPA does not need to filter.
++export default function OrdersPage() {
++  const { t } = useTranslation();
++  const { format, formatNumber, unit } = useCurrency();
++
++  const { data: orders, isLoading } = useQuery({
++    queryKey: ['orders'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/orders', undefined, { silent: true });
++      return (msg.obj as Order[] | null) ?? [];
++    },
++  });
++
++  const list = orders ?? [];
++  const stats = useMemo(() => {
++    const completed = list.filter((o) => o.status === 'completed' || o.status === 'paid');
++    const spent = completed.reduce((sum, o) => sum + (o.amount || 0), 0);
++    return { total: list.length, completed: completed.length, spent };
++  }, [list]);
++
++  const columns: ColumnsType<Order> = [
++    { title: '#', dataIndex: 'id', width: 80 },
++    {
++      title: t('pages.orders.product'),
++      dataIndex: 'productName',
++      render: (name: string, o) => name || `#${o.productId}`,
++    },
++    { title: t('pages.orders.amount'), dataIndex: 'amount', render: (v: number) => format(v) },
++    {
++      title: t('pages.orders.status'),
++      dataIndex: 'status',
++      render: (s: string) => <Tag color={STATUS_COLOR[s] ?? 'default'}>{s}</Tag>,
++    },
++    {
++      title: t('pages.orders.date'),
++      dataIndex: 'createdAt',
++      render: (v: number) => (v ? new Date(v).toLocaleString() : '-'),
++    },
++  ];
++
++  return (
++    <PageShell name="orders-page">
++      <Spin spinning={isLoading} delay={200} size="large">
++        <Row gutter={[16, 12]}>
++          <Col span={24}>
++            <Card size="small" hoverable className="summary-card">
++              <Row gutter={[16, 12]}>
++                <Col xs={8}>
++                  <Statistic title={t('pages.orders.total')} value={stats.total} prefix={<ShoppingCartOutlined />} />
++                </Col>
++                <Col xs={8}>
++                  <Statistic
++                    title={t('pages.orders.completed')}
++                    value={stats.completed}
++                    prefix={<CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />}
++                  />
++                </Col>
++                <Col xs={8}>
++                  <Statistic
++                    title={t('pages.orders.spent')}
++                    value={formatNumber(stats.spent)}
++                    prefix={<WalletOutlined />}
++                    suffix={unit}
++                  />
++                </Col>
++              </Row>
++            </Card>
++          </Col>
++
++          <Col span={24}>
++            <Card size="small" hoverable title={t('menu.orders')}>
++              <Table
++                rowKey="id"
++                size="small"
++                columns={columns}
++                dataSource={list}
++                pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
++              />
++            </Card>
++          </Col>
++        </Row>
++      </Spin>
++    </PageShell>
++  );
++}
+diff --git a/frontend/src/pages/products/ProductsPage.tsx b/frontend/src/pages/products/ProductsPage.tsx
+new file mode 100644
+index 00000000..c539371e
+--- /dev/null
++++ b/frontend/src/pages/products/ProductsPage.tsx
+@@ -0,0 +1,245 @@
++import { useMemo, useState } from 'react';
++import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
++import { Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Spin, Statistic, Switch, Table } from 'antd';
++import type { ColumnsType } from 'antd/es/table';
++import { AppstoreOutlined, CheckCircleOutlined, PlusOutlined, StopOutlined } from '@ant-design/icons';
++import { useTranslation } from 'react-i18next';
++
++import { HttpUtil } from '@/utils';
++import { getMessage } from '@/utils/messageBus';
++import PageShell from '@/layouts/PageShell';
++
++// The panel's axios defaults to form-urlencoded; backend product/order handlers
++// bind JSON, so these mutations must declare a JSON content-type (matches the
++// JSON_HEADERS convention used across the app, e.g. UsersPage/BillingPage).
++const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
++
++interface Product {
++  id: number;
++  name: string;
++  description: string;
++  trafficLimit: number;
++  durationDays: number;
++  price: number;
++  inboundId: number;
++  status: string;
++}
++
++interface InboundOption {
++  id: number;
++  remark: string;
++  protocol: string;
++  port: number;
++}
++
++type ProductForm = Omit<Product, 'id' | 'status'> & { status?: string };
++
++// ProductsPage is the catalog manager for admin + moderator (gated by
++// product.manage on the backend). Create/edit/delete/activate all hit
++// /panel/api/products/*; the backend re-checks the permission on every call.
++export default function ProductsPage() {
++  const { t } = useTranslation();
++  const qc = useQueryClient();
++  const [form] = Form.useForm<ProductForm>();
++  const [editing, setEditing] = useState<Product | null>(null);
++  const [open, setOpen] = useState(false);
++
++  const { data: products, isLoading } = useQuery({
++    queryKey: ['products', 'manage'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
++      return (msg.obj as Product[] | null) ?? [];
++    },
++  });
++
++  // Inbound options drive which inbound a purchased config is provisioned on.
++  const { data: inbounds } = useQuery({
++    queryKey: ['inbounds', 'options'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/inbounds/options', undefined, { silent: true });
++      return (msg.obj as InboundOption[] | null) ?? [];
++    },
++  });
++  const inboundLabel = (id: number) => {
++    const ib = inbounds?.find((i) => i.id === id);
++    if (!ib) return id ? `#${id}` : '—';
++    return `${ib.remark || `#${ib.id}`} · ${ib.protocol}:${ib.port}`;
++  };
++
++  const list = products ?? [];
++  const stats = useMemo(() => {
++    const active = list.filter((p) => p.status === 'active').length;
++    return { total: list.length, active, inactive: list.length - active };
++  }, [list]);
++
++  const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] });
++
++  const save = useMutation({
++    mutationFn: async (values: ProductForm) => {
++      const url = editing ? `/panel/api/products/${editing.id}` : '/panel/api/products';
++      return HttpUtil.post(url, values, { ...JSON_HEADERS, silent: true });
++    },
++    onSuccess: (msg) => {
++      if (msg.success) {
++        getMessage().success(t('pages.products.saved'));
++        setOpen(false);
++        setEditing(null);
++        form.resetFields();
++        invalidate();
++      } else {
++        getMessage().error(msg.msg || t('somethingWentWrong'));
++      }
++    },
++  });
++
++  const remove = async (id: number) => {
++    const msg = await HttpUtil.post(`/panel/api/products/${id}/del`, undefined, { silent: true });
++    if (msg.success) {
++      getMessage().success(t('pages.products.deleted'));
++      invalidate();
++    } else {
++      getMessage().error(msg.msg || t('somethingWentWrong'));
++    }
++  };
++
++  const toggle = async (p: Product) => {
++    const msg = await HttpUtil.post(`/panel/api/products/${p.id}/status`, { active: p.status !== 'active' }, { ...JSON_HEADERS, silent: true });
++    if (msg.success) {
++      getMessage().success(t('pages.products.statusChanged'));
++      invalidate();
++    } else {
++      getMessage().error(msg.msg || t('somethingWentWrong'));
++    }
++  };
++
++  const openCreate = () => {
++    setEditing(null);
++    form.resetFields();
++    form.setFieldsValue({ price: 0, trafficLimit: 0, durationDays: 0, status: 'active' });
++    setOpen(true);
++  };
++
++  const openEdit = (p: Product) => {
++    setEditing(p);
++    form.setFieldsValue(p);
++    setOpen(true);
++  };
++
++  const columns: ColumnsType<Product> = [
++    { title: t('pages.products.name'), dataIndex: 'name' },
++    { title: t('pages.products.price'), dataIndex: 'price' },
++    { title: t('pages.products.durationDays'), dataIndex: 'durationDays' },
++    { title: t('pages.products.inbound'), dataIndex: 'inboundId', render: (id: number) => inboundLabel(id) },
++    {
++      title: t('pages.products.status'),
++      dataIndex: 'status',
++      render: (s: string, p) => <Switch checked={s === 'active'} onChange={() => toggle(p)} />,
++    },
++    {
++      title: '',
++      key: 'actions',
++      width: 160,
++      render: (_, p) => (
++        <Space>
++          <Button size="small" onClick={() => openEdit(p)}>
++            {t('edit')}
++          </Button>
++          <Popconfirm title={t('pages.products.confirmDelete')} onConfirm={() => remove(p.id)}>
++            <Button size="small" danger>
++              {t('delete')}
++            </Button>
++          </Popconfirm>
++        </Space>
++      ),
++    },
++  ];
++
++  return (
++    <PageShell name="products-page">
++      <Spin spinning={isLoading} delay={200} size="large">
++        <Row gutter={[16, 12]}>
++          <Col span={24}>
++            <Card size="small" hoverable className="summary-card">
++              <Row gutter={[16, 12]}>
++                <Col xs={8}>
++                  <Statistic title={t('pages.products.total')} value={stats.total} prefix={<AppstoreOutlined />} />
++                </Col>
++                <Col xs={8}>
++                  <Statistic
++                    title={t('pages.products.activeCount')}
++                    value={stats.active}
++                    prefix={<CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />}
++                  />
++                </Col>
++                <Col xs={8}>
++                  <Statistic
++                    title={t('pages.products.inactiveCount')}
++                    value={stats.inactive}
++                    prefix={<StopOutlined style={{ color: 'var(--ant-color-error)' }} />}
++                  />
++                </Col>
++              </Row>
++            </Card>
++          </Col>
++
++          <Col span={24}>
++            <Card
++              size="small"
++              hoverable
++              title={
++                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
++                  {t('pages.products.create')}
++                </Button>
++              }
++            >
++              <Table
++                rowKey="id"
++                size="small"
++                columns={columns}
++                dataSource={list}
++                pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
++              />
++            </Card>
++          </Col>
++        </Row>
++      </Spin>
++
++      <Modal
++        open={open}
++        title={editing ? t('pages.products.edit') : t('pages.products.create')}
++        onCancel={() => setOpen(false)}
++        onOk={() => form.submit()}
++        confirmLoading={save.isPending}
++        destroyOnClose
++      >
++        <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
++          <Form.Item name="name" label={t('pages.products.name')} rules={[{ required: true }]}>
++            <Input />
++          </Form.Item>
++          <Form.Item name="description" label={t('pages.products.descLabel')}>
++            <Input.TextArea rows={2} />
++          </Form.Item>
++          <Form.Item name="price" label={t('pages.products.price')} rules={[{ required: true }]}>
++            <InputNumber min={0} style={{ width: '100%' }} />
++          </Form.Item>
++          <Form.Item name="trafficLimit" label={t('pages.products.trafficLimitBytes')}>
++            <InputNumber min={0} style={{ width: '100%' }} />
++          </Form.Item>
++          <Form.Item name="durationDays" label={t('pages.products.durationDays')}>
++            <InputNumber min={0} style={{ width: '100%' }} />
++          </Form.Item>
++          <Form.Item name="inboundId" label={t('pages.products.inbound')} tooltip={t('pages.products.inboundHint')}>
++            <Select
++              allowClear
++              placeholder={t('pages.products.inboundNone')}
++              options={(inbounds ?? []).map((i) => ({
++                value: i.id,
++                label: `${i.remark || `#${i.id}`} · ${i.protocol}:${i.port}`,
++              }))}
++            />
++          </Form.Item>
++        </Form>
++      </Modal>
++    </PageShell>
++  );
++}
+diff --git a/frontend/src/pages/register/RegisterPage.tsx b/frontend/src/pages/register/RegisterPage.tsx
+index c911be82..7b41f99c 100644
+--- a/frontend/src/pages/register/RegisterPage.tsx
++++ b/frontend/src/pages/register/RegisterPage.tsx
+@@ -8,7 +8,6 @@ import {
+   Layout,
+   Menu,
+   Popover,
+-  Progress,
+   Space,
+   message,
+ } from 'antd';
+@@ -33,7 +32,6 @@ import {
+   PasswordSchema,
+   PhoneSchema,
+   UsernameSchema,
+-  passwordScore,
+   type RegisterFormValues,
+ } from '@/schemas/register';
+ import '../login/LoginPage.css';
+@@ -42,8 +40,6 @@ import './RegisterPage.css';
+ const basePath = window.X_UI_BASE_PATH || '';
+ const REDIRECT_DELAY_MS = 1200;
+ 
+-const STRENGTH_COLORS = ['#ff4d4f', '#ff4d4f', '#faad14', '#3b82f6', '#389e0a'];
+-
+ export default function RegisterPage() {
+   const { t } = useTranslation();
+   const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
+@@ -57,19 +53,6 @@ export default function RegisterPage() {
+   const [submitting, setSubmitting] = useState(false);
+   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
+ 
+-  const passwordValue = Form.useWatch('password', form) || '';
+-  const score = useMemo(() => passwordScore(passwordValue), [passwordValue]);
+-  const strengthLabel = useMemo(() => {
+-    const labels = [
+-      'pages.register.strengthWeak',
+-      'pages.register.strengthWeak',
+-      'pages.register.strengthFair',
+-      'pages.register.strengthGood',
+-      'pages.register.strengthStrong',
+-    ];
+-    return t(labels[score]);
+-  }, [score, t]);
+-
+   // When registration is disabled the server never serves this page, but the
+   // Vite dev server serves it statically — guard here too so the dev flow and
+   // any cached page redirect to login.
+@@ -285,19 +268,6 @@ export default function RegisterPage() {
+                   />
+                 </Form.Item>
+ 
+-                {passwordValue ? (
+-                  <div className="password-strength" aria-live="polite">
+-                    <Progress
+-                      percent={(score / 4) * 100}
+-                      showInfo={false}
+-                      size="small"
+-                      strokeColor={STRENGTH_COLORS[score]}
+-                    />
+-                    <span className="password-strength-label">
+-                      {t('pages.register.passwordStrength')}: {strengthLabel}
+-                    </span>
+-                  </div>
+-                ) : null}
+ 
+                 <Form.Item
+                   label={t('confirmPassword')}
+diff --git a/frontend/src/pages/services/ServicesPage.tsx b/frontend/src/pages/services/ServicesPage.tsx
+new file mode 100644
+index 00000000..49ff3956
+--- /dev/null
++++ b/frontend/src/pages/services/ServicesPage.tsx
+@@ -0,0 +1,305 @@
++import { useMemo, useState } from 'react';
++import { useQuery, useQueryClient } from '@tanstack/react-query';
++import { Alert, Button, Card, Col, Empty, Form, Input, Modal, Row, Select, Space, Spin, Statistic, Switch, Table, Tag } from 'antd';
++import type { ColumnsType } from 'antd/es/table';
++import { CheckCircleOutlined, CloudServerOutlined, EditOutlined, QrcodeOutlined, ReloadOutlined, SyncOutlined } from '@ant-design/icons';
++import { useTranslation } from 'react-i18next';
++
++import { HttpUtil } from '@/utils';
++import { getMessage } from '@/utils/messageBus';
++import PageShell from '@/layouts/PageShell';
++import ClientQrModal from '@/pages/clients/ClientQrModal';
++import { ME_QUERY_KEY } from '@/hooks/useMe';
++import { useCurrency } from '@/hooks/useCurrency';
++import type { ClientRecord } from '@/hooks/useClients';
++
++interface ClientRow {
++  email: string;
++  subId: string;
++  enable: boolean;
++  totalGB: number;
++  expiryTime: number;
++  traffic?: { up: number; down: number };
++}
++
++interface Product {
++  id: number;
++  name: string;
++  price: number;
++  durationDays: number;
++  trafficLimit: number;
++}
++
++interface EditForm {
++  email: string;
++  enable: boolean;
++  regenerate: boolean;
++}
++
++const GB = 1024 * 1024 * 1024;
++const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
++
++function fmtBytes(n: number): string {
++  if (!n) return '0';
++  if (n >= GB) return `${(n / GB).toFixed(1)} GB`;
++  if (n >= 1024 * 1024) return `${(n / 1024 / 1024).toFixed(0)} MB`;
++  return `${n} B`;
++}
++
++function randomToken(len = 8): string {
++  return (crypto.randomUUID?.() ?? `${Math.random()}`).replace(/-/g, '').slice(0, len);
++}
++
++// ServicesPage shows a member their purchased configs (Xray clients they own,
++// provisioned by store purchases). Everything is owner-scoped on the backend.
++// Editing/regenerating goes through POST /clients/:email/rotate (server rebuilds
++// the protocol payload). Renew/change-plan goes through POST /orders/renew,
++// which charges the chosen product and re-sizes the existing config.
++export default function ServicesPage() {
++  const { t } = useTranslation();
++  const qc = useQueryClient();
++  const { format } = useCurrency();
++  const [form] = Form.useForm<EditForm>();
++  const [qrClient, setQrClient] = useState<ClientRow | null>(null);
++  const [editing, setEditing] = useState<ClientRow | null>(null);
++  const [renewing, setRenewing] = useState<ClientRow | null>(null);
++  const [renewProductId, setRenewProductId] = useState<number | undefined>(undefined);
++  const [busy, setBusy] = useState(false);
++
++  const { data: clients, isLoading } = useQuery({
++    queryKey: ['clients', 'mine'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/clients/list/paged?pageSize=200', undefined, { silent: true });
++      const obj = msg.obj as { items?: ClientRow[] } | null;
++      return obj?.items ?? [];
++    },
++  });
++
++  const { data: products } = useQuery({
++    queryKey: ['products', 'store'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
++      return (msg.obj as Product[] | null) ?? [];
++    },
++  });
++
++  const list = clients ?? [];
++  const activeCount = useMemo(() => list.filter((c) => c.enable).length, [list]);
++
++  const invalidate = () => {
++    qc.invalidateQueries({ queryKey: ['clients'] });
++    qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
++    qc.invalidateQueries({ queryKey: ['orders'] });
++  };
++
++  const openEdit = (c: ClientRow) => {
++    setEditing(c);
++    form.setFieldsValue({ email: c.email, enable: c.enable, regenerate: false });
++  };
++
++  const submitEdit = async () => {
++    if (!editing) return;
++    const values = await form.validateFields();
++    setBusy(true);
++    try {
++      const res = await HttpUtil.post(
++        `/panel/api/clients/${encodeURIComponent(editing.email)}/rotate`,
++        { email: values.email.trim(), enable: values.enable, regenerate: values.regenerate },
++        { ...JSON_HEADERS, silent: true },
++      );
++      if (res.success) {
++        getMessage().success(t('pages.services.saved'));
++        setEditing(null);
++        invalidate();
++      } else {
++        getMessage().error(res.msg || t('somethingWentWrong'));
++      }
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const openRenew = (c: ClientRow) => {
++    setRenewing(c);
++    setRenewProductId(undefined);
++  };
++
++  const submitRenew = async () => {
++    if (!renewing || !renewProductId) return;
++    setBusy(true);
++    try {
++      const res = await HttpUtil.post(
++        '/panel/api/orders/renew',
++        { productId: renewProductId, email: renewing.email },
++        { ...JSON_HEADERS, silent: true },
++      );
++      if (res.success) {
++        getMessage().success(t('pages.services.renewed'));
++        setRenewing(null);
++        invalidate();
++      } else {
++        getMessage().error(res.msg || t('somethingWentWrong'));
++      }
++    } finally {
++      setBusy(false);
++    }
++  };
++
++  const columns: ColumnsType<ClientRow> = [
++    { title: t('pages.services.config'), dataIndex: 'email' },
++    {
++      title: t('pages.services.statusCol'),
++      dataIndex: 'enable',
++      render: (on: boolean) => <Tag color={on ? 'green' : 'red'}>{on ? t('pages.services.active') : t('pages.services.disabled')}</Tag>,
++    },
++    {
++      title: t('pages.services.traffic'),
++      key: 'traffic',
++      render: (_, c) => {
++        const used = (c.traffic?.up ?? 0) + (c.traffic?.down ?? 0);
++        return `${fmtBytes(used)} / ${c.totalGB > 0 ? fmtBytes(c.totalGB) : '∞'}`;
++      },
++    },
++    {
++      title: t('pages.services.expiry'),
++      dataIndex: 'expiryTime',
++      render: (v: number) => (v > 0 ? new Date(v).toLocaleDateString() : '∞'),
++    },
++    {
++      title: '',
++      key: 'actions',
++      width: 320,
++      render: (_, c) => (
++        <Space wrap>
++          <Button size="small" icon={<QrcodeOutlined />} onClick={() => setQrClient(c)}>
++            {t('pages.services.showConfig')}
++          </Button>
++          <Button size="small" icon={<SyncOutlined />} onClick={() => openRenew(c)}>
++            {t('pages.services.renew')}
++          </Button>
++          <Button size="small" icon={<EditOutlined />} onClick={() => openEdit(c)}>
++            {t('edit')}
++          </Button>
++        </Space>
++      ),
++    },
++  ];
++
++  const renewProduct = products?.find((p) => p.id === renewProductId);
++
++  return (
++    <PageShell name="services-page">
++      <Spin spinning={isLoading} delay={200} size="large">
++        <Row gutter={[16, 12]}>
++          <Col span={24}>
++            <Card size="small" hoverable className="summary-card">
++              <Row gutter={[16, 12]}>
++                <Col xs={12}>
++                  <Statistic title={t('pages.services.totalConfigs')} value={list.length} prefix={<CloudServerOutlined />} />
++                </Col>
++                <Col xs={12}>
++                  <Statistic
++                    title={t('pages.services.active')}
++                    value={activeCount}
++                    prefix={<CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />}
++                  />
++                </Col>
++              </Row>
++            </Card>
++          </Col>
++
++          <Col span={24}>
++            <Card size="small" hoverable title={t('menu.services')}>
++              {!list.length ? (
++                <Empty description={t('pages.services.empty')} />
++              ) : (
++                <Table
++                  rowKey="email"
++                  size="small"
++                  columns={columns}
++                  dataSource={list}
++                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
++                />
++              )}
++            </Card>
++          </Col>
++        </Row>
++      </Spin>
++
++      {/* Same QR + per-link details modal as the Clients page. */}
++      <ClientQrModal
++        open={!!qrClient}
++        client={qrClient ? ({ email: qrClient.email, subId: qrClient.subId } as unknown as ClientRecord) : null}
++        onOpenChange={(o) => { if (!o) setQrClient(null); }}
++      />
++
++      {/* Edit / regenerate */}
++      <Modal
++        open={!!editing}
++        title={t('pages.services.editTitle')}
++        onCancel={() => setEditing(null)}
++        onOk={submitEdit}
++        confirmLoading={busy}
++        destroyOnClose
++      >
++        <Form form={form} layout="vertical">
++          <Form.Item
++            name="email"
++            label={t('pages.services.config')}
++            rules={[{ required: true }]}
++            extra={
++              <Button size="small" type="link" style={{ paddingLeft: 0 }} onClick={() => form.setFieldValue('email', `svc-${randomToken()}`)}>
++                {t('pages.services.randomize')}
++              </Button>
++            }
++          >
++            <Input />
++          </Form.Item>
++          <Form.Item name="enable" label={t('pages.services.enabled')} valuePropName="checked">
++            <Switch />
++          </Form.Item>
++          <Form.Item name="regenerate" valuePropName="checked" extra={t('pages.services.regenerateHint')}>
++            <Switch checkedChildren={<ReloadOutlined />} /> <span style={{ marginInlineStart: 8 }}>{t('pages.services.regenerate')}</span>
++          </Form.Item>
++          <Alert type="warning" showIcon message={t('pages.services.regenerateWarn')} />
++        </Form>
++      </Modal>
++
++      {/* Renew / change plan */}
++      <Modal
++        open={!!renewing}
++        title={t('pages.services.renewTitle')}
++        onCancel={() => setRenewing(null)}
++        onOk={submitRenew}
++        okText={t('pages.services.renew')}
++        okButtonProps={{ disabled: !renewProductId }}
++        confirmLoading={busy}
++        destroyOnClose
++      >
++        <p style={{ opacity: 0.75 }}>{t('pages.services.renewHint')}</p>
++        <Select
++          style={{ width: '100%' }}
++          placeholder={t('pages.services.selectPlan')}
++          value={renewProductId}
++          onChange={setRenewProductId}
++          options={(products ?? []).map((p) => ({
++            value: p.id,
++            label: `${p.name} — ${format(p.price)}${p.durationDays > 0 ? ` · ${p.durationDays} ${t('pages.store.days')}` : ''}`,
++          }))}
++        />
++        {renewProduct ? (
++          <Alert
++            style={{ marginTop: 12 }}
++            type="info"
++            showIcon
++            message={t('pages.services.renewSummary', {
++              price: format(renewProduct.price),
++              gb: renewProduct.trafficLimit > 0 ? `${Math.round(renewProduct.trafficLimit / GB)} GB` : '∞',
++              days: renewProduct.durationDays > 0 ? renewProduct.durationDays : '∞',
++            })}
++          />
++        ) : null}
++      </Modal>
++    </PageShell>
++  );
++}
+diff --git a/frontend/src/pages/store/StorePage.tsx b/frontend/src/pages/store/StorePage.tsx
+new file mode 100644
+index 00000000..cf7fceae
+--- /dev/null
++++ b/frontend/src/pages/store/StorePage.tsx
+@@ -0,0 +1,141 @@
++import { useQuery, useQueryClient } from '@tanstack/react-query';
++import { Button, Card, Col, Empty, Modal, Row, Spin, Statistic } from 'antd';
++import { AppstoreOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
++import { useTranslation } from 'react-i18next';
++
++import { HttpUtil } from '@/utils';
++import { getMessage } from '@/utils/messageBus';
++import { ME_QUERY_KEY, useMe } from '@/hooks/useMe';
++import { useCurrency } from '@/hooks/useCurrency';
++import PageShell from '@/layouts/PageShell';
++
++interface Product {
++  id: number;
++  name: string;
++  description: string;
++  trafficLimit: number;
++  durationDays: number;
++  price: number;
++  status: string;
++}
++
++const GB = 1024 * 1024 * 1024;
++const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
++
++// StorePage lets resellers and members browse the active catalog and purchase a
++// product with their wallet balance. Buying calls POST /panel/api/orders; the
++// backend debits the balance (writing a Transaction) and creates the order
++// atomically. All gating is enforced server-side — this is presentation only.
++export default function StorePage() {
++  const { t } = useTranslation();
++  const qc = useQueryClient();
++  const { balance } = useMe();
++  const { format, formatNumber, unit } = useCurrency();
++  const [modal, modalCtx] = Modal.useModal();
++
++  const { data: products, isLoading } = useQuery({
++    queryKey: ['products', 'store'],
++    queryFn: async () => {
++      const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
++      return (msg.obj as Product[] | null) ?? [];
++    },
++  });
++
++  const doBuy = async (p: Product) => {
++    const msg = await HttpUtil.post('/panel/api/orders', { productId: p.id }, { ...JSON_HEADERS, silent: true });
++    if (msg.success) {
++      getMessage().success(t('pages.store.purchased'));
++      qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
++      qc.invalidateQueries({ queryKey: ['orders'] });
++      qc.invalidateQueries({ queryKey: ['clients'] });
++    } else {
++      getMessage().error(msg.msg || t('somethingWentWrong'));
++    }
++  };
++
++  // Confirm before spending balance — shows what they're buying, the price, and
++  // the balance left afterwards, so a purchase is never a single misclick.
++  const confirmBuy = (p: Product) => {
++    modal.confirm({
++      title: t('pages.store.confirmTitle'),
++      okText: t('pages.store.buy'),
++      cancelText: t('cancel'),
++      content: (
++        <div>
++          <p style={{ marginBottom: 4 }}>
++            <strong>{p.name}</strong>
++          </p>
++          <p style={{ marginBottom: 4 }}>
++            {t('pages.store.price')}: <strong>{format(p.price)}</strong>
++          </p>
++          <p style={{ marginBottom: 0, opacity: 0.75 }}>
++            {t('pages.store.balanceAfter')}: {format(Math.max(0, balance - p.price))}
++          </p>
++        </div>
++      ),
++      onOk: () => doBuy(p),
++    });
++  };
++
++  const list = products ?? [];
++
++  return (
++    <PageShell name="store-page">
++      {modalCtx}
++      <Spin spinning={isLoading} delay={200} size="large">
++        <Row gutter={[16, 12]}>
++          <Col span={24}>
++            <Card size="small" hoverable className="summary-card">
++              <Row gutter={[16, 12]}>
++                <Col xs={12}>
++                  <Statistic
++                    title={t('pages.store.balance')}
++                    value={formatNumber(balance)}
++                    prefix={<WalletOutlined />}
++                    suffix={unit}
++                  />
++                </Col>
++                <Col xs={12}>
++                  <Statistic title={t('pages.store.available')} value={list.length} prefix={<AppstoreOutlined />} />
++                </Col>
++              </Row>
++            </Card>
++          </Col>
++
++          {!list.length ? (
++            <Col span={24}>
++              <Card size="small" hoverable>
++                <Empty description={t('pages.store.empty')} />
++              </Card>
++            </Col>
++          ) : (
++            list.map((p) => (
++              <Col key={p.id} xs={24} sm={12} md={8} xl={6}>
++                <Card size="small" hoverable title={p.name}>
++                  <p style={{ minHeight: 40, opacity: 0.75 }}>{p.description}</p>
++                  <p>
++                    {t('pages.store.traffic')}: {p.trafficLimit > 0 ? `${Math.round(p.trafficLimit / GB)} GB` : '∞'}
++                  </p>
++                  <p>
++                    {t('pages.store.duration')}: {p.durationDays > 0 ? `${p.durationDays} ${t('pages.store.days')}` : '∞'}
++                  </p>
++                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
++                    <strong>{format(p.price)}</strong>
++                    <Button
++                      type="primary"
++                      icon={<ShoppingCartOutlined />}
++                      disabled={balance < p.price}
++                      onClick={() => confirmBuy(p)}
++                    >
++                      {t('pages.store.buy')}
++                    </Button>
++                  </div>
++                </Card>
++              </Col>
++            ))
++          )}
++        </Row>
++      </Spin>
++    </PageShell>
++  );
++}
+diff --git a/frontend/src/routes.tsx b/frontend/src/routes.tsx
+index f31ba1b2..bfe7acd5 100644
+--- a/frontend/src/routes.tsx
++++ b/frontend/src/routes.tsx
+@@ -15,6 +15,11 @@ const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
+ const SettingsPage = lazy(() => import('@/pages/settings/SettingsPage'));
+ const XrayPage = lazy(() => import('@/pages/xray/XrayPage'));
+ const ApiDocsPage = lazy(() => import('@/pages/api-docs/ApiDocsPage'));
++const StorePage = lazy(() => import('@/pages/store/StorePage'));
++const OrdersPage = lazy(() => import('@/pages/orders/OrdersPage'));
++const ProductsPage = lazy(() => import('@/pages/products/ProductsPage'));
++const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
++const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
+ 
+ function withSuspense(node: React.ReactNode) {
+   return <Suspense fallback={null}>{node}</Suspense>;
+@@ -37,6 +42,11 @@ const routes: RouteObject[] = [
+       { path: 'settings', element: withSuspense(<SettingsPage />) },
+       { path: 'xray', element: withSuspense(<XrayPage />) },
+       { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
++      { path: 'store', element: withSuspense(<StorePage />) },
++      { path: 'orders', element: withSuspense(<OrdersPage />) },
++      { path: 'products', element: withSuspense(<ProductsPage />) },
++      { path: 'customers', element: withSuspense(<CustomersPage />) },
++      { path: 'services', element: withSuspense(<ServicesPage />) },
+     ],
+   },
+ ];
+diff --git a/frontend/src/schemas/register.ts b/frontend/src/schemas/register.ts
+index 6c386721..e03e37e9 100644
+--- a/frontend/src/schemas/register.ts
++++ b/frontend/src/schemas/register.ts
+@@ -26,13 +26,10 @@ export const UsernameSchema = z
+   .trim()
+   .regex(/^[A-Za-z0-9_]{3,32}$/, 'pages.register.errors.username');
+ 
+-export const PasswordSchema = z
+-  .string()
+-  .min(8, 'pages.register.errors.password')
+-  .refine(
+-    (pw) => /[a-z]/.test(pw) && /[A-Z]/.test(pw) && /[0-9]/.test(pw),
+-    'pages.register.errors.password',
+-  );
++// Simple password rule: a minimum length only (mirrors the backend's
++// minPasswordLen). The previous upper/lower/digit complexity requirement was
++// removed in favour of this simpler policy.
++export const PasswordSchema = z.string().min(6, 'pages.register.errors.password');
+ 
+ export interface RegisterFormValues {
+   fullName: string;
+@@ -42,20 +39,3 @@ export interface RegisterFormValues {
+   password: string;
+   confirmPassword: string;
+ }
+-
+-/**
+- * passwordScore returns a 0-4 strength score used by the strength meter. It
+- * rewards length and character-class diversity. Purely advisory — the binding
+- * acceptance rule is PasswordSchema (and the server) which require length 8 +
+- * mixed case + a digit.
+- */
+-export function passwordScore(pw: string): number {
+-  if (!pw) return 0;
+-  let score = 0;
+-  if (pw.length >= 8) score++;
+-  if (/[a-z]/.test(pw) && /[A-Z]/.test(pw)) score++;
+-  if (/[0-9]/.test(pw)) score++;
+-  if (/[^A-Za-z0-9]/.test(pw)) score++;
+-  if (pw.length >= 12 && score >= 3) score++;
+-  return Math.min(score, 4);
+-}
+diff --git a/frontend/src/styles/page-shell.css b/frontend/src/styles/page-shell.css
+index f0950bc7..343d1261 100644
+--- a/frontend/src/styles/page-shell.css
++++ b/frontend/src/styles/page-shell.css
+@@ -113,6 +113,93 @@
+   min-height: calc(100vh - 120px);
+ }
+ 
++/* Commerce / RBAC pages (store, orders, products, customers, services) reuse the
++   exact page-shell chrome as the built-in pages: page background, dark/ultra
++   theme vars, transparent inner layouts, and the standard 24px content padding
++   (8px on mobile). Enumerated here to match the existing per-page selectors. */
++.store-page,
++.orders-page,
++.products-page,
++.customers-page,
++.services-page {
++  --bg-page: #e6e8ec;
++  --bg-card: #ffffff;
++  min-height: 100vh;
++  background: var(--bg-page);
++}
++
++.store-page.is-dark,
++.orders-page.is-dark,
++.products-page.is-dark,
++.customers-page.is-dark,
++.services-page.is-dark {
++  --bg-page: #1a1b1f;
++  --bg-card: #23252b;
++}
++
++.store-page.is-dark.is-ultra,
++.orders-page.is-dark.is-ultra,
++.products-page.is-dark.is-ultra,
++.customers-page.is-dark.is-ultra,
++.services-page.is-dark.is-ultra {
++  --bg-page: #000;
++  --bg-card: #101013;
++}
++
++.store-page .ant-layout,
++.store-page .ant-layout-content,
++.orders-page .ant-layout,
++.orders-page .ant-layout-content,
++.products-page .ant-layout,
++.products-page .ant-layout-content,
++.customers-page .ant-layout,
++.customers-page .ant-layout-content,
++.services-page .ant-layout,
++.services-page .ant-layout-content,
++.store-page .content-shell,
++.orders-page .content-shell,
++.products-page .content-shell,
++.customers-page .content-shell,
++.services-page .content-shell {
++  background: transparent;
++}
++
++.store-page .content-area,
++.orders-page .content-area,
++.products-page .content-area,
++.customers-page .content-area,
++.services-page .content-area {
++  padding: 24px;
++}
++
++@media (max-width: 768px) {
++  .store-page .content-area,
++  .orders-page .content-area,
++  .products-page .content-area,
++  .customers-page .content-area,
++  .services-page .content-area {
++    padding: 8px;
++  }
++}
++
++.store-page .summary-card,
++.orders-page .summary-card,
++.products-page .summary-card,
++.customers-page .summary-card,
++.services-page .summary-card {
++  padding: 16px;
++}
++
++@media (max-width: 768px) {
++  .store-page .summary-card,
++  .orders-page .summary-card,
++  .products-page .summary-card,
++  .customers-page .summary-card,
++  .services-page .summary-card {
++    padding: 8px;
++  }
++}
++
+ .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover,
+ .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover .ant-dropdown-menu-title-content,
+ .ant-dropdown-menu-item:not(.ant-dropdown-menu-item-disabled):not(.ant-dropdown-menu-item-danger):hover > .anticon {
+diff --git a/web/controller/api.go b/web/controller/api.go
+index b842c40c..71b14331 100644
+--- a/web/controller/api.go
++++ b/web/controller/api.go
+@@ -94,6 +94,12 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
+ 	// RBAC + wallet administration (admin-only; gated inside the controller).
+ 	a.adminController = NewAdminController(api)
+ 
++	// Product catalog + orders. Per-route permission gating lives inside these
++	// controllers (RequirePermission), so a moderator can manage products and a
++	// reseller/member can browse + purchase, while infra stays admin-only.
++	NewProductController(api)
++	NewOrderController(api)
++
+ 	// Identity + wallet snapshot for the current session (any logged-in user).
+ 	api.GET("/me", a.me)
+ 	// Self-service profile editing (any logged-in user; never admin-gated).
+@@ -119,12 +125,20 @@ func (a *APIController) me(c *gin.Context) {
+ 	zarinpalEnable, _ := a.settingService.GetZarinpalEnable()
+ 	currency, _ := a.settingService.GetZarinpalCurrency()
+ 	jsonObj(c, gin.H{
+-		"id":              user.Id,
+-		"username":        user.Username,
+-		"email":           user.Email,
+-		"role":            user.Role,
+-		"isAdmin":         user.IsAdmin(),
+-		"balance":         balance,
++		"id":       user.Id,
++		"username": user.Username,
++		"email":    user.Email,
++		// Canonical role drives all frontend gating; permissions is the exact
++		// capability set the backend will enforce, so the SPA never has to
++		// hard-code role->menu logic. isAdmin/isModerator/isReseller/isMember
++		// are convenience flags. The backend enforces every one independently.
++		"role":        user.CanonicalRole(),
++		"permissions": user.Permissions(),
++		"isAdmin":     user.IsAdmin(),
++		"isModerator": user.IsModerator(),
++		"isReseller":  user.IsReseller(),
++		"isMember":    user.IsMember(),
++		"balance":     balance,
+ 		"clientCost":      cost,
+ 		"clientCostPerGB": costPerGB,
+ 		"zarinpalEnable":  zarinpalEnable,
+diff --git a/web/controller/api_docs_test.go b/web/controller/api_docs_test.go
+index d9af5bc8..638d736a 100644
+--- a/web/controller/api_docs_test.go
++++ b/web/controller/api_docs_test.go
+@@ -139,6 +139,9 @@ func TestAPIRoutesDocumented(t *testing.T) {
+ 			"GET /panel/billing": true, "GET /panel/nodes": true,
+ 			"GET /panel/settings": true, "GET /panel/xray": true,
+ 			"GET /panel/api-docs": true,
++			"GET /panel/store": true, "GET /panel/orders": true,
++			"GET /panel/products": true, "GET /panel/customers": true,
++			"GET /panel/services": true,
+ 		}
+ 		if spaPages[key] {
+ 			continue
+diff --git a/web/controller/client.go b/web/controller/client.go
+index 7b3986d5..d9bd9f26 100644
+--- a/web/controller/client.go
++++ b/web/controller/client.go
+@@ -72,6 +72,9 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
+ 	// so there's no cost implication.
+ 	g.POST("/:email/attach", a.attach)
+ 	g.POST("/:email/detach", a.detach)
++	// Owner self-service: rename / enable-toggle / regenerate the subscription
++	// ID + protocol secrets of their own config (ownership enforced in handler).
++	g.POST("/:email/rotate", a.rotate)
+ 
+ 	// Admin-only routes: full client list, bulk operations, traffic
+ 	// administration and online/diagnostic queries.
+@@ -266,6 +269,42 @@ func (a *ClientController) update(c *gin.Context) {
+ 	notifyClientsChanged()
+ }
+ 
++type rotateBody struct {
++	Email      string `json:"email"`
++	Enable     *bool  `json:"enable"`
++	Regenerate bool   `json:"regenerate"`
++}
++
++// rotate lets a config owner rename it, toggle enable, and/or regenerate its
++// subscription ID + protocol secrets. Ownership is enforced; the heavy lifting
++// (rebuilding the client and syncing inbounds) is done server-side so the
++// client never has to reconstruct the protocol payload.
++func (a *ClientController) rotate(c *gin.Context) {
++	email := c.Param("email")
++	if !a.requireOwnership(c, email) {
++		return
++	}
++	var body rotateBody
++	if err := c.ShouldBindJSON(&body); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	needRestart, err := a.clientService.Rotate(&a.inboundService, email, service.RotateOptions{
++		NewEmail:   body.Email,
++		Enable:     body.Enable,
++		Regenerate: body.Regenerate,
++	})
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), nil)
++	if needRestart {
++		a.xrayService.SetToNeedRestart()
++	}
++	notifyClientsChanged()
++}
++
+ func (a *ClientController) delete(c *gin.Context) {
+ 	email := c.Param("email")
+ 	if !a.requireOwnership(c, email) {
+diff --git a/web/controller/order.go b/web/controller/order.go
+new file mode 100644
+index 00000000..00b54635
+--- /dev/null
++++ b/web/controller/order.go
+@@ -0,0 +1,163 @@
++package controller
++
++import (
++	"errors"
++	"net/http"
++	"strconv"
++
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++	"github.com/mhsanaei/3x-ui/v3/web/middleware"
++	"github.com/mhsanaei/3x-ui/v3/web/service"
++	"github.com/mhsanaei/3x-ui/v3/web/session"
++
++	"github.com/gin-gonic/gin"
++)
++
++// OrderController exposes order history and the product purchase endpoint.
++// Listing requires order.view_own; callers with order.view_all (admin,
++// moderator) see every order, everyone else is scoped to their own. Purchasing
++// requires product.purchase (reseller, member; admin too).
++type OrderController struct {
++	BaseController
++	orderService service.OrderService
++}
++
++// NewOrderController registers the order routes on the given group.
++func NewOrderController(g *gin.RouterGroup) *OrderController {
++	a := &OrderController{}
++	a.initRouter(g)
++	return a
++}
++
++func (a *OrderController) initRouter(g *gin.RouterGroup) {
++	orders := g.Group("/orders")
++	orders.Use(middleware.RequirePermission(model.PermOrderViewOwn))
++	orders.GET("", a.list)
++	orders.GET("/:id", a.get)
++	orders.POST("", middleware.RequirePermission(model.PermProductPurchase), a.purchase)
++	// Renew / change the plan of an existing owned service.
++	orders.POST("/renew", middleware.RequirePermission(model.PermProductPurchase), a.renew)
++}
++
++// list returns orders. Callers with order.view_all see everything; everyone
++// else is scoped to their own orders (ownership filter on user_id).
++func (a *OrderController) list(c *gin.Context) {
++	user := session.GetLoginUser(c)
++	if user == nil {
++		c.AbortWithStatus(http.StatusUnauthorized)
++		return
++	}
++	var userFilter *int
++	if !user.Can(model.PermOrderViewAll) {
++		id := user.Id
++		userFilter = &id
++	}
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	offset, _ := strconv.Atoi(c.Query("offset"))
++	orders, err := a.orderService.ListOrders(userFilter, limit, offset)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, orders, nil)
++}
++
++func (a *OrderController) get(c *gin.Context) {
++	id, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	user := session.GetLoginUser(c)
++	if user == nil {
++		c.AbortWithStatus(http.StatusUnauthorized)
++		return
++	}
++	owner, err := a.orderService.GetOrderOwner(id)
++	if err != nil {
++		// Don't reveal existence to non-owners.
++		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
++		return
++	}
++	if !user.Can(model.PermOrderViewAll) && owner != user.Id {
++		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
++		return
++	}
++	order, err := a.orderService.Get(id)
++	if err != nil {
++		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
++		return
++	}
++	jsonObj(c, order, nil)
++}
++
++type purchaseForm struct {
++	ProductId int `json:"productId"`
++}
++
++// purchase buys a product for the CURRENT user. The buyer id is taken from the
++// session (never from the request body), so a caller can never purchase as
++// someone else. The wallet debit + order creation are sequenced atomically by
++// the service (refund-on-failure), and the debit writes a Transaction record.
++func (a *OrderController) purchase(c *gin.Context) {
++	var form purchaseForm
++	if err := c.ShouldBindJSON(&form); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	user := session.GetLoginUser(c)
++	if user == nil {
++		c.AbortWithStatus(http.StatusUnauthorized)
++		return
++	}
++	order, err := a.orderService.Purchase(user, form.ProductId)
++	if err != nil {
++		switch {
++		case errors.Is(err, service.ErrInsufficientBalance):
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
++		case errors.Is(err, service.ErrProductUnavailable):
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
++		default:
++			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		}
++		return
++	}
++	jsonObj(c, order, nil)
++}
++
++type renewForm struct {
++	ProductId int    `json:"productId"`
++	Email     string `json:"email"`
++}
++
++// renew applies a product to one of the CURRENT user's existing services —
++// either the same product (renew) or a different one (change plan). The buyer
++// is the session user and ownership of the target service is enforced in the
++// service layer.
++func (a *OrderController) renew(c *gin.Context) {
++	var form renewForm
++	if err := c.ShouldBindJSON(&form); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	user := session.GetLoginUser(c)
++	if user == nil {
++		c.AbortWithStatus(http.StatusUnauthorized)
++		return
++	}
++	order, err := a.orderService.Renew(user, form.ProductId, form.Email)
++	if err != nil {
++		switch {
++		case errors.Is(err, service.ErrInsufficientBalance):
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
++		case errors.Is(err, service.ErrServiceForbidden), errors.Is(err, service.ErrServiceNotFound):
++			pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
++		case errors.Is(err, service.ErrProductUnavailable):
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
++		default:
++			jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		}
++		return
++	}
++	jsonObj(c, order, nil)
++}
+diff --git a/web/controller/product.go b/web/controller/product.go
+new file mode 100644
+index 00000000..4571c6d9
+--- /dev/null
++++ b/web/controller/product.go
+@@ -0,0 +1,163 @@
++package controller
++
++import (
++	"errors"
++	"net/http"
++	"strconv"
++
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++	"github.com/mhsanaei/3x-ui/v3/web/middleware"
++	"github.com/mhsanaei/3x-ui/v3/web/service"
++	"github.com/mhsanaei/3x-ui/v3/web/session"
++
++	"github.com/gin-gonic/gin"
++)
++
++// ProductController exposes the product catalog. Browsing requires product.view
++// (every role); mutating requires product.manage (admin + moderator). All
++// gating is enforced here on the backend regardless of what the SPA shows.
++type ProductController struct {
++	BaseController
++	productService service.ProductService
++}
++
++// NewProductController registers the product routes on the given group.
++func NewProductController(g *gin.RouterGroup) *ProductController {
++	a := &ProductController{}
++	a.initRouter(g)
++	return a
++}
++
++func (a *ProductController) initRouter(g *gin.RouterGroup) {
++	products := g.Group("/products")
++	products.Use(middleware.RequirePermission(model.PermProductView))
++	products.GET("", a.list)
++	products.GET("/:id", a.get)
++
++	manage := products.Group("")
++	manage.Use(middleware.RequirePermission(model.PermProductManage))
++	manage.POST("", a.create)
++	manage.POST("/:id", a.update)
++	manage.POST("/:id/del", a.delete)
++	manage.POST("/:id/status", a.setStatus)
++}
++
++// list returns the catalog. Catalog managers (admin/moderator) get every
++// product; buyers (reseller/member) get only active products — the store view.
++func (a *ProductController) list(c *gin.Context) {
++	user := session.GetLoginUser(c)
++	activeOnly := user == nil || !user.Can(model.PermProductManage)
++	products, err := a.productService.List(activeOnly)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, products, nil)
++}
++
++func (a *ProductController) get(c *gin.Context) {
++	id, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	p, err := a.productService.Get(id)
++	if err != nil {
++		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
++		return
++	}
++	// Buyers may only fetch active products by id; managers may fetch any.
++	if user := session.GetLoginUser(c); (user == nil || !user.Can(model.PermProductManage)) && p.Status != model.ProductActive {
++		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
++		return
++	}
++	jsonObj(c, p, nil)
++}
++
++func (a *ProductController) create(c *gin.Context) {
++	var in service.ProductInput
++	if err := c.ShouldBindJSON(&in); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	createdBy := 0
++	if user := session.GetLoginUser(c); user != nil {
++		createdBy = user.Id
++	}
++	p, err := a.productService.Create(in, createdBy)
++	if err != nil {
++		if errors.Is(err, service.ErrInvalidProduct) {
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "somethingWentWrong"))
++			return
++		}
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	jsonObj(c, p, nil)
++}
++
++func (a *ProductController) update(c *gin.Context) {
++	id, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	var in service.ProductInput
++	if err := c.ShouldBindJSON(&in); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	p, err := a.productService.Update(id, in)
++	if err != nil {
++		if errors.Is(err, service.ErrProductNotFound) || errors.Is(err, service.ErrInvalidProduct) {
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "somethingWentWrong"))
++			return
++		}
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	jsonObj(c, p, nil)
++}
++
++func (a *ProductController) delete(c *gin.Context) {
++	id, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	if err := a.productService.Delete(id); err != nil {
++		if errors.Is(err, service.ErrProductNotFound) {
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
++			return
++		}
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	jsonMsg(c, I18nWeb(c, "success"), nil)
++}
++
++type productStatusForm struct {
++	Active bool `json:"active"`
++}
++
++func (a *ProductController) setStatus(c *gin.Context) {
++	id, err := strconv.Atoi(c.Param("id"))
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	var form productStatusForm
++	if err := c.ShouldBindJSON(&form); err != nil {
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	if err := a.productService.SetStatus(id, form.Active); err != nil {
++		if errors.Is(err, service.ErrProductNotFound) {
++			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
++			return
++		}
++		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
++		return
++	}
++	jsonMsg(c, I18nWeb(c, "success"), nil)
++}
+diff --git a/web/controller/xui.go b/web/controller/xui.go
+index baca8f41..77c4d632 100644
+--- a/web/controller/xui.go
++++ b/web/controller/xui.go
+@@ -48,6 +48,14 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
+ 	g.GET("/settings", a.panelSPA)
+ 	g.GET("/xray", a.panelSPA)
+ 	g.GET("/api-docs", a.panelSPA)
++	// Commerce / RBAC pages (admin/moderator/reseller/member). Each needs its own
++	// GET route so a direct load or refresh of the URL serves the SPA shell;
++	// without this the server 404s and only client-side navigation works.
++	g.GET("/store", a.panelSPA)
++	g.GET("/orders", a.panelSPA)
++	g.GET("/products", a.panelSPA)
++	g.GET("/customers", a.panelSPA)
++	g.GET("/services", a.panelSPA)
+ 
+ 	// SPA pages built by Vite don't have a server-rendered <meta name="csrf-token">,
+ 	// so they fetch the session token via this endpoint at startup and replay it
+diff --git a/web/middleware/rbac.go b/web/middleware/rbac.go
+index d0bde893..e9bf8eac 100644
+--- a/web/middleware/rbac.go
++++ b/web/middleware/rbac.go
+@@ -3,15 +3,26 @@ package middleware
+ import (
+ 	"net/http"
+ 
++	"github.com/mhsanaei/3x-ui/v3/database/model"
+ 	"github.com/mhsanaei/3x-ui/v3/web/session"
+ 
+ 	"github.com/gin-gonic/gin"
+ )
+ 
+-// RequireAdmin aborts the request unless the authenticated user has the admin
+-// role. It is the server-side enforcement point for every admin-only route and
+-// API — the frontend hides admin UI, but this is what actually prevents a
+-// non-admin from reaching admin functionality by calling the API directly.
++// forbid aborts the request with a 403, JSON for XHR/API callers and a bare
++// status for full-page navigations.
++func forbid(c *gin.Context, msg string) {
++	if c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
++		c.AbortWithStatusJSON(http.StatusForbidden, gin.H{"success": false, "msg": msg})
++	} else {
++		c.AbortWithStatus(http.StatusForbidden)
++	}
++}
++
++// RequireAdmin aborts the request unless the authenticated user is the admin.
++// It is the server-side enforcement point for every admin-only route and API —
++// the frontend hides admin UI, but this is what actually prevents a non-admin
++// from reaching admin functionality by calling the API directly.
+ //
+ // Bearer-token API callers are resolved to the first (admin) user by
+ // APIController.checkAPIAuth, so they pass. Session callers are checked against
+@@ -20,16 +31,48 @@ func RequireAdmin() gin.HandlerFunc {
+ 	return func(c *gin.Context) {
+ 		user := session.GetLoginUser(c)
+ 		if user == nil || !user.IsAdmin() {
+-			if c.GetHeader("X-Requested-With") == "XMLHttpRequest" {
+-				c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+-					"success": false,
+-					"msg":     "forbidden: admin role required",
+-				})
+-			} else {
+-				c.AbortWithStatus(http.StatusForbidden)
+-			}
++			forbid(c, "forbidden: admin role required")
+ 			return
+ 		}
+ 		c.Next()
+ 	}
+ }
++
++// RequireRole aborts the request unless the authenticated user's canonical role
++// is one of the allowed roles. Admin is always allowed (it is the superset
++// role) even when not listed explicitly.
++func RequireRole(roles ...string) gin.HandlerFunc {
++	allowed := make(map[string]bool, len(roles)+1)
++	allowed[model.RoleAdmin] = true
++	for _, r := range roles {
++		allowed[model.NormalizeRole(r)] = true
++	}
++	return func(c *gin.Context) {
++		user := session.GetLoginUser(c)
++		if user == nil || !allowed[user.CanonicalRole()] {
++			forbid(c, "forbidden: insufficient role")
++			return
++		}
++		c.Next()
++	}
++}
++
++// RequirePermission aborts the request unless the authenticated user holds ALL
++// of the given permissions. Admin holds every permission. This is the primary
++// capability gate; resource-level ownership is enforced separately in services.
++func RequirePermission(perms ...model.Permission) gin.HandlerFunc {
++	return func(c *gin.Context) {
++		user := session.GetLoginUser(c)
++		if user == nil {
++			forbid(c, "forbidden")
++			return
++		}
++		for _, p := range perms {
++			if !user.Can(p) {
++				forbid(c, "forbidden: missing permission")
++				return
++			}
++		}
++		c.Next()
++	}
++}
+diff --git a/web/service/client.go b/web/service/client.go
+index 187a3aff..c1f0a53e 100644
+--- a/web/service/client.go
++++ b/web/service/client.go
+@@ -900,6 +900,74 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
+ 	return needRestart, nil
+ }
+ 
++// recordToClient projects a stored ClientRecord into the in-settings
++// model.Client shape that Create/Update operate on. Notably it maps the
++// record's UUID column onto Client.ID (the protocol identifier) and parses the
++// reverse JSON. Use this whenever you need to feed an existing client back
++// through the update path — never reconstruct the payload by hand (the record
++// and the settings client have different field names, e.g. id vs uuid).
++func recordToClient(rec *model.ClientRecord) model.Client {
++	c := model.Client{
++		ID:         rec.UUID,
++		Security:   rec.Security,
++		Password:   rec.Password,
++		Flow:       rec.Flow,
++		Auth:       rec.Auth,
++		Email:      rec.Email,
++		LimitIP:    rec.LimitIP,
++		TotalGB:    rec.TotalGB,
++		ExpiryTime: rec.ExpiryTime,
++		Enable:     rec.Enable,
++		TgID:       rec.TgID,
++		SubID:      rec.SubID,
++		Group:      rec.Group,
++		Comment:    rec.Comment,
++		Reset:      rec.Reset,
++		CreatedAt:  rec.CreatedAt,
++		UpdatedAt:  rec.UpdatedAt,
++	}
++	if strings.TrimSpace(rec.Reverse) != "" {
++		var rev model.ClientReverse
++		if json.Unmarshal([]byte(rec.Reverse), &rev) == nil {
++			c.Reverse = &rev
++		}
++	}
++	return c
++}
++
++// RotateOptions controls what Rotate changes on a client.
++type RotateOptions struct {
++	NewEmail   string // rename the config when non-empty
++	Enable     *bool  // toggle enable when non-nil
++	Regenerate bool   // issue a fresh subscription ID + protocol secrets
++}
++
++// Rotate edits a client's email/enable and optionally regenerates its
++// subscription ID and protocol secrets (UUID / password / Hysteria auth). The
++// stored record is rebuilt into a model.Client server-side so callers never
++// reconstruct the protocol-specific payload, and the change is applied through
++// the normal update path (which syncs every owning inbound and restarts xray).
++func (s *ClientService) Rotate(inboundSvc *InboundService, email string, opts RotateOptions) (bool, error) {
++	rec, err := s.GetRecordByEmail(nil, email)
++	if err != nil {
++		return false, err
++	}
++	updated := recordToClient(rec)
++	if strings.TrimSpace(opts.NewEmail) != "" {
++		updated.Email = strings.TrimSpace(opts.NewEmail)
++	}
++	if opts.Enable != nil {
++		updated.Enable = *opts.Enable
++	}
++	if opts.Regenerate {
++		updated.SubID = uuid.NewString()
++		updated.ID = ""       // regenerated per-protocol by Update -> fillProtocolDefaults
++		updated.Password = "" // trojan / shadowsocks
++		updated.Auth = ""     // hysteria
++	}
++	return s.UpdateByEmail(inboundSvc, email, updated)
++}
++
+ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic bool) (bool, error) {
+ 	existing, err := s.GetByID(id)
+ 	if err != nil {
+diff --git a/web/service/order.go b/web/service/order.go
+new file mode 100644
+index 00000000..b3ccc44d
+--- /dev/null
++++ b/web/service/order.go
+@@ -0,0 +1,277 @@
++package service
++
++import (
++	"errors"
++	"fmt"
++	"strings"
++	"time"
++
++	"github.com/google/uuid"
++
++	"github.com/mhsanaei/3x-ui/v3/database"
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++	"github.com/mhsanaei/3x-ui/v3/logger"
++)
++
++// Errors returned by OrderService.
++var (
++	ErrOrderNotFound      = errors.New("order not found")
++	ErrProductUnavailable = errors.New("product is not available for purchase")
++	ErrBuyerRequired      = errors.New("buyer is required")
++	ErrServiceNotFound    = errors.New("service not found")
++	ErrServiceForbidden   = errors.New("you do not own this service")
++)
++
++// OrderService handles product purchases, provisioning and order history.
++//
++// Purchasing a product:
++//  1. debits the buyer's wallet for the price (atomic, writes a Transaction),
++//  2. records an Order,
++//  3. when the product targets an inbound, PROVISIONS a real Xray config
++//     (a client owned by the buyer) on that inbound — the same mechanism the
++//     Clients page uses — so the buyer immediately has a usable subscription,
++//  4. on any failure refunds the debit and cancels the order so the buyer is
++//     never charged for a service they did not receive.
++type OrderService struct {
++	walletService  WalletService
++	productService ProductService
++	clientService  ClientService
++	inboundService InboundService
++	xrayService    XrayService
++}
++
++// Purchase buys a product for the given buyer (taken from the session, never
++// from request input, so a caller cannot purchase as someone else).
++func (s *OrderService) Purchase(buyer *model.User, productId int) (*model.Order, error) {
++	if buyer == nil {
++		return nil, ErrBuyerRequired
++	}
++	product, err := s.productService.Get(productId)
++	if err != nil || product.Status != model.ProductActive {
++		return nil, ErrProductUnavailable
++	}
++
++	var charged int64
++	if product.Price > 0 {
++		if _, err := s.walletService.Debit(buyer.Id, product.Price,
++			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id)); err != nil {
++			return nil, err // ErrInsufficientBalance bubbles up to the controller
++		}
++		charged = product.Price
++	}
++
++	order := &model.Order{
++		UserId:      buyer.Id,
++		ProductId:   product.Id,
++		ProductName: product.Name,
++		Amount:      product.Price,
++		Status:      model.OrderPending,
++	}
++	if err := database.GetDB().Create(order).Error; err != nil {
++		s.refund(buyer.Id, charged, product)
++		return nil, err
++	}
++
++	// Provision a real Xray config when the product targets an inbound.
++	if product.InboundId > 0 {
++		email, provErr := s.provision(buyer, product, order.Id)
++		if provErr != nil {
++			s.refund(buyer.Id, charged, product)
++			_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
++				Update("status", model.OrderCancelled).Error
++			return nil, provErr
++		}
++		order.ClientEmail = email
++	}
++
++	order.Status = model.OrderCompleted
++	if err := database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
++		Updates(map[string]any{"status": order.Status, "client_email": order.ClientEmail}).Error; err != nil {
++		logger.Warningf("order %d provisioned but final status update failed: %v", order.Id, err)
++	}
++	return order, nil
++}
++
++// Renew applies a product to an EXISTING service (a client the buyer owns):
++// it charges the product price, records an order, then extends the config's
++// expiry by the product's duration, sets its quota to the product's, resets
++// usage counters and re-enables it. Used for both "renew" (same product) and
++// "change plan" (a different product). Refunds and cancels on failure.
++//
++// Ownership: the buyer must own the target service (admins may act on any).
++func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*model.Order, error) {
++	if buyer == nil {
++		return nil, ErrBuyerRequired
++	}
++	product, err := s.productService.Get(productId)
++	if err != nil || product.Status != model.ProductActive {
++		return nil, ErrProductUnavailable
++	}
++	owner, err := s.clientService.GetOwnerByEmail(email)
++	if err != nil {
++		return nil, ErrServiceNotFound
++	}
++	if !buyer.IsAdmin() && owner != buyer.Id {
++		return nil, ErrServiceForbidden
++	}
++
++	var charged int64
++	if product.Price > 0 {
++		if _, err := s.walletService.Debit(buyer.Id, product.Price,
++			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id)); err != nil {
++			return nil, err
++		}
++		charged = product.Price
++	}
++
++	order := &model.Order{
++		UserId:      buyer.Id,
++		ProductId:   product.Id,
++		ProductName: product.Name,
++		Amount:      product.Price,
++		Status:      model.OrderPending,
++		ClientEmail: email,
++	}
++	if err := database.GetDB().Create(order).Error; err != nil {
++		s.refund(buyer.Id, charged, product)
++		return nil, err
++	}
++
++	if err := s.applyPlan(email, product); err != nil {
++		s.refund(buyer.Id, charged, product)
++		_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
++			Update("status", model.OrderCancelled).Error
++		return nil, err
++	}
++	order.Status = model.OrderCompleted
++	_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
++		Update("status", model.OrderCompleted).Error
++	return order, nil
++}
++
++// applyPlan re-sizes an existing client to a product: new expiry (extended from
++// the later of now / current expiry), new quota, usage reset, re-enabled.
++func (s *OrderService) applyPlan(email string, product *model.Product) error {
++	rec, err := s.clientService.GetRecordByEmail(nil, email)
++	if err != nil {
++		return ErrServiceNotFound
++	}
++	updated := recordToClient(rec)
++	if product.DurationDays > 0 {
++		base := max(time.Now().UnixMilli(), updated.ExpiryTime)
++		updated.ExpiryTime = time.UnixMilli(base).AddDate(0, 0, product.DurationDays).UnixMilli()
++	} else {
++		updated.ExpiryTime = 0
++	}
++	updated.TotalGB = product.TrafficLimit
++	updated.Enable = true
++
++	needRestart, err := s.clientService.UpdateByEmail(&s.inboundService, email, updated)
++	if err != nil {
++		return err
++	}
++	// Reset usage counters so the renewed quota starts fresh.
++	if nr, rErr := s.clientService.ResetTrafficByEmail(&s.inboundService, email); rErr != nil {
++		logger.Warningf("renew: reset traffic for %s failed: %v", email, rErr)
++	} else if nr {
++		needRestart = true
++	}
++	if needRestart {
++		s.xrayService.SetToNeedRestart()
++	}
++	return nil
++}
++
++func (s *OrderService) refund(userId int, amount int64, product *model.Product) {
++	if amount <= 0 {
++		return
++	}
++	if _, err := s.walletService.Credit(userId, amount,
++		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id)); err != nil {
++		logger.Errorf("order: refund of %d to user %d failed (manual reconciliation needed): %v", amount, userId, err)
++	}
++}
++
++// provision creates a buyer-owned Xray client on the product's inbound, sized
++// by the product's traffic limit and duration. Returns the client's email.
++func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int) (string, error) {
++	var expiry int64
++	if product.DurationDays > 0 {
++		expiry = time.Now().AddDate(0, 0, product.DurationDays).UnixMilli()
++	}
++	payload := &ClientCreatePayload{
++		Client: model.Client{
++			Email:      buildClientEmail(buyer.Username, orderId),
++			TotalGB:    product.TrafficLimit,
++			ExpiryTime: expiry,
++			Enable:     true,
++		},
++		InboundIds: []int{product.InboundId},
++		OwnerId:    buyer.Id,
++	}
++	needRestart, err := s.clientService.Create(&s.inboundService, payload)
++	if err != nil {
++		return "", err
++	}
++	if needRestart {
++		s.xrayService.SetToNeedRestart()
++	}
++	return payload.Client.Email, nil
++}
++
++// buildClientEmail derives a unique, valid client email from the buyer's
++// username and the order id. Usernames are already restricted to [A-Za-z0-9_]
++// but we defensively replace any forbidden character, and append a short random
++// token so retries never collide.
++func buildClientEmail(username string, orderId int) string {
++	u := strings.Map(func(r rune) rune {
++		if r == '/' || r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
++			return '-'
++		}
++		return r
++	}, strings.TrimSpace(username))
++	if u == "" {
++		u = "user"
++	}
++	token := strings.ReplaceAll(uuid.NewString(), "-", "")[:6]
++	return fmt.Sprintf("%s-o%d-%s", u, orderId, token)
++}
++
++// ListOrders returns orders newest-first. When userId is non-nil results are
++// scoped to that user (the ownership filter for resellers/members); nil returns
++// every order (admin / moderator view).
++func (s *OrderService) ListOrders(userId *int, limit, offset int) ([]model.Order, error) {
++	if limit <= 0 || limit > 500 {
++		limit = 100
++	}
++	if offset < 0 {
++		offset = 0
++	}
++	q := database.GetDB().Model(&model.Order{}).Order("id DESC").Limit(limit).Offset(offset)
++	if userId != nil {
++		q = q.Where("user_id = ?", *userId)
++	}
++	var orders []model.Order
++	if err := q.Find(&orders).Error; err != nil {
++		return nil, err
++	}
++	return orders, nil
++}
++
++// Get loads a single order by id.
++func (s *OrderService) Get(id int) (*model.Order, error) {
++	var o model.Order
++	if err := database.GetDB().Where("id = ?", id).First(&o).Error; err != nil {
++		return nil, ErrOrderNotFound
++	}
++	return &o, nil
++}
++
++// GetOrderOwner returns the user_id that owns an order, for ownership checks.
++func (s *OrderService) GetOrderOwner(id int) (int, error) {
++	var o model.Order
++	if err := database.GetDB().Select("user_id").Where("id = ?", id).First(&o).Error; err != nil {
++		return 0, ErrOrderNotFound
++	}
++	return o.UserId, nil
++}
+diff --git a/web/service/product.go b/web/service/product.go
+new file mode 100644
+index 00000000..a0215333
+--- /dev/null
++++ b/web/service/product.go
+@@ -0,0 +1,146 @@
++package service
++
++import (
++	"errors"
++	"strings"
++
++	"github.com/mhsanaei/3x-ui/v3/database"
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++)
++
++// Errors returned by ProductService.
++var (
++	ErrProductNotFound = errors.New("product not found")
++	ErrInvalidProduct  = errors.New("invalid product")
++)
++
++// ProductService manages the sellable product catalog. Catalog mutation is an
++// admin/moderator capability (enforced by the controller via RequirePermission);
++// this layer only validates and persists.
++type ProductService struct{}
++
++// ProductInput is the create/update payload for a product.
++type ProductInput struct {
++	Name         string `json:"name"`
++	Description  string `json:"description"`
++	TrafficLimit int64  `json:"trafficLimit"`
++	DurationDays int    `json:"durationDays"`
++	Price        int64  `json:"price"`
++	InboundId    int    `json:"inboundId"`
++	Status       string `json:"status"`
++}
++
++func normalizeProductStatus(s string) string {
++	if strings.ToLower(strings.TrimSpace(s)) == model.ProductInactive {
++		return model.ProductInactive
++	}
++	return model.ProductActive
++}
++
++func validateProductInput(in ProductInput) error {
++	if n := len(strings.TrimSpace(in.Name)); n < 1 || n > 200 {
++		return ErrInvalidProduct
++	}
++	if in.Price < 0 || in.TrafficLimit < 0 || in.DurationDays < 0 {
++		return ErrInvalidProduct
++	}
++	return nil
++}
++
++// List returns the catalog. When activeOnly is true only active products are
++// returned (the store view for buyers); otherwise every product is returned
++// (the management view for admin/moderator).
++func (s *ProductService) List(activeOnly bool) ([]model.Product, error) {
++	var products []model.Product
++	q := database.GetDB().Model(&model.Product{}).Order("id DESC")
++	if activeOnly {
++		q = q.Where("status = ?", model.ProductActive)
++	}
++	if err := q.Find(&products).Error; err != nil {
++		return nil, err
++	}
++	return products, nil
++}
++
++// Get loads a single product by id.
++func (s *ProductService) Get(id int) (*model.Product, error) {
++	var p model.Product
++	if err := database.GetDB().Where("id = ?", id).First(&p).Error; err != nil {
++		return nil, ErrProductNotFound
++	}
++	return &p, nil
++}
++
++// Create validates and persists a new product, stamping the creator id.
++func (s *ProductService) Create(in ProductInput, createdBy int) (*model.Product, error) {
++	if err := validateProductInput(in); err != nil {
++		return nil, err
++	}
++	p := &model.Product{
++		Name:         strings.TrimSpace(in.Name),
++		Description:  in.Description,
++		TrafficLimit: in.TrafficLimit,
++		DurationDays: in.DurationDays,
++		Price:        in.Price,
++		InboundId:    in.InboundId,
++		Status:       normalizeProductStatus(in.Status),
++		CreatedBy:    createdBy,
++	}
++	if err := database.GetDB().Create(p).Error; err != nil {
++		return nil, err
++	}
++	return p, nil
++}
++
++// Update replaces a product's mutable fields.
++func (s *ProductService) Update(id int, in ProductInput) (*model.Product, error) {
++	if err := validateProductInput(in); err != nil {
++		return nil, err
++	}
++	p, err := s.Get(id)
++	if err != nil {
++		return nil, err
++	}
++	updates := map[string]any{
++		"name":          strings.TrimSpace(in.Name),
++		"description":   in.Description,
++		"traffic_limit": in.TrafficLimit,
++		"duration_days": in.DurationDays,
++		"price":         in.Price,
++		"inbound_id":    in.InboundId,
++		"status":        normalizeProductStatus(in.Status),
++	}
++	if err := database.GetDB().Model(&model.Product{}).Where("id = ?", p.Id).Updates(updates).Error; err != nil {
++		return nil, err
++	}
++	return s.Get(id)
++}
++
++// SetStatus activates or deactivates a product without touching other fields.
++func (s *ProductService) SetStatus(id int, active bool) error {
++	status := model.ProductInactive
++	if active {
++		status = model.ProductActive
++	}
++	res := database.GetDB().Model(&model.Product{}).Where("id = ?", id).Update("status", status)
++	if res.Error != nil {
++		return res.Error
++	}
++	if res.RowsAffected == 0 {
++		return ErrProductNotFound
++	}
++	return nil
++}
++
++// Delete removes a product from the catalog. Existing orders keep their
++// captured amount/snapshot, so deleting a product never rewrites order history.
++func (s *ProductService) Delete(id int) error {
++	res := database.GetDB().Where("id = ?", id).Delete(&model.Product{})
++	if res.Error != nil {
++		return res.Error
++	}
++	if res.RowsAffected == 0 {
++		return ErrProductNotFound
++	}
++	return nil
++}
+diff --git a/web/service/user.go b/web/service/user.go
+index 711d377e..4988754c 100644
+--- a/web/service/user.go
++++ b/web/service/user.go
+@@ -5,7 +5,6 @@ import (
+ 	"net/mail"
+ 	"regexp"
+ 	"strings"
+-	"unicode"
+ 
+ 	"github.com/mhsanaei/3x-ui/v3/database"
+ 	"github.com/mhsanaei/3x-ui/v3/database/model"
+@@ -47,25 +46,16 @@ type RegisterInput struct {
+ 	Password string
+ }
+ 
+-// ValidatePasswordStrength enforces the shared password policy: at least 8
+-// characters with a mix of upper-case, lower-case and digit. Mirrored in the
+-// frontend zod schema so client and server agree.
++// minPasswordLen is the only password requirement: a basic minimum length. The
++// previous policy also required a mix of upper/lower/digit; that was dropped in
++// favour of a simpler rule for registration and password changes.
++const minPasswordLen = 6
++
++// ValidatePasswordStrength enforces a simple password policy: at least
++// minPasswordLen characters. Mirrored in the frontend zod schema so client and
++// server agree.
+ func ValidatePasswordStrength(password string) error {
+-	if len([]rune(password)) < 8 {
+-		return ErrWeakPassword
+-	}
+-	var hasUpper, hasLower, hasDigit bool
+-	for _, r := range password {
+-		switch {
+-		case unicode.IsUpper(r):
+-			hasUpper = true
+-		case unicode.IsLower(r):
+-			hasLower = true
+-		case unicode.IsDigit(r):
+-			hasDigit = true
+-		}
+-	}
+-	if !hasUpper || !hasLower || !hasDigit {
++	if len([]rune(password)) < minPasswordLen {
+ 		return ErrWeakPassword
+ 	}
+ 	return nil
+@@ -121,7 +111,7 @@ func (s *UserService) Register(input RegisterInput) (*model.User, error) {
+ 		FullName: in.FullName,
+ 		Phone:    in.Phone,
+ 		Email:    in.Email,
+-		Role:     model.RoleUser, // self-registered accounts are always limited users
++		Role:     model.RoleMember, // self-registered accounts are end customers (members)
+ 	}
+ 
+ 	db := database.GetDB()
+@@ -316,11 +306,12 @@ type AdminUserInput struct {
+ 	Balance  int64
+ }
+ 
++// normalizeRole canonicalizes an admin-supplied role into one of the four
++// roles (admin, moderator, reseller, member). Unknown/blank values fall back to
++// the least-privileged role (member); the legacy "user" alias folds into
++// reseller. See model.NormalizeRole.
+ func normalizeRole(role string) string {
+-	if strings.ToLower(strings.TrimSpace(role)) == model.RoleAdmin {
+-		return model.RoleAdmin
+-	}
+-	return model.RoleUser
++	return model.NormalizeRole(role)
+ }
+ 
+ // optionalEmail validates and lower-cases an email when present; empty is allowed.
+diff --git a/web/service/user_register_test.go b/web/service/user_register_test.go
+index e26e562e..e6abc911 100644
+--- a/web/service/user_register_test.go
++++ b/web/service/user_register_test.go
+@@ -101,8 +101,8 @@ func TestRegisterValidatesFields(t *testing.T) {
+ 		{"bad email", func(in *RegisterInput) { in.Email = "not-an-email" }, ErrInvalidEmail},
+ 		{"bad phone", func(in *RegisterInput) { in.Phone = "abc" }, ErrInvalidPhone},
+ 		{"short full name", func(in *RegisterInput) { in.FullName = "J" }, ErrInvalidFullName},
+-		{"weak password no digit", func(in *RegisterInput) { in.Password = "Password" }, ErrWeakPassword},
+-		{"weak password too short", func(in *RegisterInput) { in.Password = "Ab1" }, ErrWeakPassword},
++		{"password too short", func(in *RegisterInput) { in.Password = "Ab1" }, ErrWeakPassword},
++		{"password just under min", func(in *RegisterInput) { in.Password = "12345" }, ErrWeakPassword},
+ 	}
+ 	for _, tc := range cases {
+ 		t.Run(tc.name, func(t *testing.T) {
+@@ -116,16 +116,18 @@ func TestRegisterValidatesFields(t *testing.T) {
+ }
+ 
+ func TestValidatePasswordStrength(t *testing.T) {
+-	good := []string{"Sup3rSecret", "aB3aaaaa", "LongerPass1"}
++	// Policy is now simply a minimum length (minPasswordLen = 6); the previous
++	// upper/lower/digit complexity requirement was removed.
++	good := []string{"abcdef", "password", "Sup3rSecret", "این یک رمز است"}
+ 	for _, pw := range good {
+ 		if err := ValidatePasswordStrength(pw); err != nil {
+-			t.Errorf("expected %q to be strong enough, got %v", pw, err)
++			t.Errorf("expected %q to be accepted, got %v", pw, err)
+ 		}
+ 	}
+-	bad := []string{"", "short1A", "alllowercase1", "ALLUPPERCASE1", "NoDigitsHere"}
++	bad := []string{"", "a", "ab", "abc", "12345"}
+ 	for _, pw := range bad {
+ 		if err := ValidatePasswordStrength(pw); !errors.Is(err, ErrWeakPassword) {
+-			t.Errorf("expected %q to be rejected as weak, got %v", pw, err)
++			t.Errorf("expected %q to be rejected as too short, got %v", pw, err)
+ 		}
+ 	}
+ }
+diff --git a/web/translation/en-US.json b/web/translation/en-US.json
+index 15168dea..07c17f20 100644
+--- a/web/translation/en-US.json
++++ b/web/translation/en-US.json
+@@ -123,12 +123,91 @@
+     "settings": "Panel Settings",
+     "xray": "Xray Configs",
+     "apiDocs": "API Docs",
++    "store": "Store",
++    "orders": "Orders",
++    "products": "Products",
++    "customers": "Customers",
++    "services": "My Services",
+     "logout": "Log Out",
+     "link": "Manage",
+     "donate": "Donate",
+     "reports": "Reports"
+   },
+   "pages": {
++    "store": {
++      "empty": "No products are available right now.",
++      "traffic": "Traffic",
++      "duration": "Duration",
++      "days": "days",
++      "buy": "Buy",
++      "purchased": "Purchase complete",
++      "balance": "Your Balance",
++      "available": "Available Products",
++      "confirmTitle": "Confirm purchase",
++      "price": "Price",
++      "balanceAfter": "Balance after purchase"
++    },
++    "orders": {
++      "product": "Product",
++      "amount": "Amount",
++      "status": "Status",
++      "date": "Date",
++      "total": "Total Orders",
++      "completed": "Completed",
++      "spent": "Total Spent"
++    },
++    "products": {
++      "name": "Name",
++      "descLabel": "Description",
++      "category": "Category",
++      "price": "Price",
++      "trafficLimitBytes": "Traffic limit (bytes, 0 = unlimited)",
++      "durationDays": "Duration (days, 0 = no expiry)",
++      "status": "Status",
++      "create": "New Product",
++      "edit": "Edit Product",
++      "confirmDelete": "Delete this product?",
++      "total": "Total Products",
++      "activeCount": "Active",
++      "inactiveCount": "Inactive",
++      "inbound": "Inbound",
++      "inboundHint": "The inbound a purchased config is created on. Leave empty for products that don't provision a config (e.g. balance top-ups).",
++      "inboundNone": "None (no config)",
++      "saved": "Product saved",
++      "deleted": "Product deleted",
++      "statusChanged": "Product status updated"
++    },
++    "customers": {
++      "pending": "Customer management is enabled for your role; the customer list view is coming soon."
++    },
++    "services": {
++      "empty": "You have no active services yet.",
++      "service": "Service",
++      "active": "Active",
++      "spent": "Total Spent",
++      "config": "Config",
++      "statusCol": "Status",
++      "disabled": "Disabled",
++      "traffic": "Traffic",
++      "expiry": "Expiry",
++      "showConfig": "Show Config",
++      "totalConfigs": "Total Configs",
++      "configFor": "Config for {email}",
++      "noLinks": "No share links are available for this config.",
++      "editTitle": "Edit Service",
++      "enabled": "Enabled",
++      "randomize": "Randomize name",
++      "regenerate": "Regenerate subscription & key",
++      "regenerateHint": "Issues a new subscription ID and connection secret.",
++      "regenerateWarn": "Regenerating invalidates the current links — existing devices must re-import the config.",
++      "renew": "Renew",
++      "renewTitle": "Renew or change plan",
++      "renewHint": "Pick a plan to apply to this service. Renewing extends the expiry, refreshes the traffic quota, and charges your balance.",
++      "selectPlan": "Select a plan",
++      "renewSummary": "This applies {gb} for {days} days and charges {price}.",
++      "saved": "Service updated",
++      "renewed": "Service renewed"
++    },
+     "login": {
+       "hello": "Hello",
+       "title": "Welcome",
+diff --git a/web/translation/fa-IR.json b/web/translation/fa-IR.json
+index 21c54749..04b0dbe6 100644
+--- a/web/translation/fa-IR.json
++++ b/web/translation/fa-IR.json
+@@ -115,9 +115,88 @@
+     "users": "کاربران",
+     "profile": "پروفایل",
+     "billing": "افزایش موجودی",
+-    "reports": "گزارش‌ها"
++    "reports": "گزارش‌ها",
++    "store": "فروشگاه",
++    "orders": "سفارش‌ها",
++    "products": "محصولات",
++    "customers": "مشتریان",
++    "services": "سرویس‌های من"
+   },
+   "pages": {
++    "store": {
++      "empty": "در حال حاضر محصولی موجود نیست.",
++      "traffic": "ترافیک",
++      "duration": "مدت",
++      "days": "روز",
++      "buy": "خرید",
++      "purchased": "خرید با موفقیت انجام شد",
++      "balance": "موجودی شما",
++      "available": "محصولات موجود",
++      "confirmTitle": "تأیید خرید",
++      "price": "قیمت",
++      "balanceAfter": "موجودی پس از خرید"
++    },
++    "orders": {
++      "product": "محصول",
++      "amount": "مبلغ",
++      "status": "وضعیت",
++      "date": "تاریخ",
++      "total": "کل سفارش‌ها",
++      "completed": "تکمیل‌شده",
++      "spent": "مجموع هزینه"
++    },
++    "products": {
++      "name": "نام",
++      "descLabel": "توضیحات",
++      "category": "دسته‌بندی",
++      "price": "قیمت",
++      "trafficLimitBytes": "محدودیت ترافیک (بایت، ۰ = نامحدود)",
++      "durationDays": "مدت (روز، ۰ = بدون انقضا)",
++      "status": "وضعیت",
++      "create": "محصول جدید",
++      "edit": "ویرایش محصول",
++      "confirmDelete": "این محصول حذف شود؟",
++      "total": "کل محصولات",
++      "activeCount": "فعال",
++      "inactiveCount": "غیرفعال",
++      "inbound": "ورودی",
++      "inboundHint": "ورودی‌ای که کانفیگ خریداری‌شده روی آن ساخته می‌شود. برای محصولاتی که کانفیگ نمی‌سازند (مثل افزایش موجودی) خالی بگذارید.",
++      "inboundNone": "هیچ‌کدام (بدون کانفیگ)",
++      "saved": "محصول ذخیره شد",
++      "deleted": "محصول حذف شد",
++      "statusChanged": "وضعیت محصول به‌روزرسانی شد"
++    },
++    "customers": {
++      "pending": "مدیریت مشتریان برای نقش شما فعال است؛ نمای فهرست مشتریان به‌زودی اضافه می‌شود."
++    },
++    "services": {
++      "empty": "هنوز سرویس فعالی ندارید.",
++      "service": "سرویس",
++      "active": "فعال",
++      "spent": "مجموع هزینه",
++      "config": "کانفیگ",
++      "statusCol": "وضعیت",
++      "disabled": "غیرفعال",
++      "traffic": "ترافیک",
++      "expiry": "انقضا",
++      "showConfig": "نمایش کانفیگ",
++      "totalConfigs": "کل کانفیگ‌ها",
++      "configFor": "کانفیگ برای {email}",
++      "noLinks": "لینکی برای این کانفیگ موجود نیست.",
++      "editTitle": "ویرایش سرویس",
++      "enabled": "فعال",
++      "randomize": "نام تصادفی",
++      "regenerate": "تولید مجدد اشتراک و کلید",
++      "regenerateHint": "یک شناسه اشتراک و کلید اتصال جدید صادر می‌کند.",
++      "regenerateWarn": "تولید مجدد لینک‌های فعلی را باطل می‌کند — دستگاه‌های موجود باید کانفیگ را دوباره وارد کنند.",
++      "renew": "تمدید",
++      "renewTitle": "تمدید یا تغییر پلن",
++      "renewHint": "یک پلن برای اعمال روی این سرویس انتخاب کنید. تمدید، تاریخ انقضا را تمدید کرده، سهمیه ترافیک را تازه می‌کند و از موجودی شما کسر می‌شود.",
++      "selectPlan": "انتخاب پلن",
++      "renewSummary": "این مورد {gb} برای {days} روز اعمال می‌شود و {price} کسر می‌گردد.",
++      "saved": "سرویس به‌روزرسانی شد",
++      "renewed": "سرویس تمدید شد"
++    },
+     "login": {
+       "hello": "سلام",
+       "title": "خوش‌آمدید",

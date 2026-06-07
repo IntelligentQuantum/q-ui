@@ -15,6 +15,11 @@ const TITLE_KEYS: Record<string, string> = {
   '/settings': 'menu.settings',
   '/xray': 'menu.xray',
   '/api-docs': 'menu.apiDocs',
+  '/store': 'menu.store',
+  '/orders': 'menu.orders',
+  '/products': 'menu.products',
+  '/customers': 'menu.customers',
+  '/services': 'menu.services',
 };
 
 export function usePageTitle() {

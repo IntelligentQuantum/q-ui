@@ -5,7 +5,6 @@ import (
 	"net/mail"
 	"regexp"
 	"strings"
-	"unicode"
 
 	"github.com/mhsanaei/3x-ui/v3/database"
 	"github.com/mhsanaei/3x-ui/v3/database/model"
@@ -47,25 +46,16 @@ type RegisterInput struct {
 	Password string
 }
 
-// ValidatePasswordStrength enforces the shared password policy: at least 8
-// characters with a mix of upper-case, lower-case and digit. Mirrored in the
-// frontend zod schema so client and server agree.
+// minPasswordLen is the only password requirement: a basic minimum length. The
+// previous policy also required a mix of upper/lower/digit; that was dropped in
+// favour of a simpler rule for registration and password changes.
+const minPasswordLen = 6
+
+// ValidatePasswordStrength enforces a simple password policy: at least
+// minPasswordLen characters. Mirrored in the frontend zod schema so client and
+// server agree.
 func ValidatePasswordStrength(password string) error {
-	if len([]rune(password)) < 8 {
-		return ErrWeakPassword
-	}
-	var hasUpper, hasLower, hasDigit bool
-	for _, r := range password {
-		switch {
-		case unicode.IsUpper(r):
-			hasUpper = true
-		case unicode.IsLower(r):
-			hasLower = true
-		case unicode.IsDigit(r):
-			hasDigit = true
-		}
-	}
-	if !hasUpper || !hasLower || !hasDigit {
+	if len([]rune(password)) < minPasswordLen {
 		return ErrWeakPassword
 	}
 	return nil
@@ -121,7 +111,7 @@ func (s *UserService) Register(input RegisterInput) (*model.User, error) {
 		FullName: in.FullName,
 		Phone:    in.Phone,
 		Email:    in.Email,
-		Role:     model.RoleUser, // self-registered accounts are always limited users
+		Role:     model.RoleMember, // self-registered accounts are end customers (members)
 	}
 
 	db := database.GetDB()
@@ -316,11 +306,12 @@ type AdminUserInput struct {
 	Balance  int64
 }
 
+// normalizeRole canonicalizes an admin-supplied role into one of the four
+// roles (admin, moderator, reseller, member). Unknown/blank values fall back to
+// the least-privileged role (member); the legacy "user" alias folds into
+// reseller. See model.NormalizeRole.
 func normalizeRole(role string) string {
-	if strings.ToLower(strings.TrimSpace(role)) == model.RoleAdmin {
-		return model.RoleAdmin
-	}
-	return model.RoleUser
+	return model.NormalizeRole(role)
 }
 
 // optionalEmail validates and lower-cases an email when present; empty is allowed.

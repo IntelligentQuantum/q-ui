@@ -588,6 +588,19 @@ export const sections: readonly Section[] = [
       },
       {
         method: 'POST',
+        path: '/panel/api/clients/:email/rotate',
+        summary: 'Owner self-service: rename a client, toggle its enable flag, and/or regenerate its subscription ID + protocol secrets (UUID / password / Hysteria auth). Ownership is enforced — a non-admin may only rotate a client they own. Regenerating invalidates existing share links.',
+        params: [
+          { name: 'email', in: 'path', type: 'string', desc: 'Current client email (unique identifier).' },
+          { name: 'email', in: 'body (json)', type: 'string', desc: 'New email to rename the client to (optional).', optional: true },
+          { name: 'enable', in: 'body (json)', type: 'boolean', desc: 'New enable state (optional).', optional: true },
+          { name: 'regenerate', in: 'body (json)', type: 'boolean', desc: 'When true, issue a fresh subId and protocol secrets.', optional: true },
+        ],
+        body: '{\n  "email": "alice-new",\n  "enable": true,\n  "regenerate": true\n}',
+        response: '{\n  "success": true\n}',
+      },
+      {
+        method: 'POST',
         path: '/panel/api/clients/resetAllTraffics',
         summary: 'Reset the up/down counters for every client globally. Quotas and expiry are not affected. Triggers an Xray restart if any counter actually moved.',
         response: '{\n  "success": true\n}',

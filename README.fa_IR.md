@@ -8,10 +8,10 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/3x-ui" alt="Release"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/3x-ui/release.yml.svg" alt="Build"></a>
-  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/3x-ui.svg" alt="GO Version"></a>
-  <a href="https://github.com/IntelligentQuantum/3x-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/3x-ui/total.svg" alt="Downloads"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases"><img src="https://img.shields.io/github/v/release/IntelligentQuantum/q-ui" alt="Release"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/actions"><img src="https://img.shields.io/github/actions/workflow/status/IntelligentQuantum/q-ui/release.yml.svg" alt="Build"></a>
+  <a href="#"><img src="https://img.shields.io/github/go-mod/go-version/IntelligentQuantum/q-ui.svg" alt="GO Version"></a>
+  <a href="https://github.com/IntelligentQuantum/q-ui/releases/latest"><img src="https://img.shields.io/github/downloads/IntelligentQuantum/q-ui/total.svg" alt="Downloads"></a>
   <a href="https://www.gnu.org/licenses/gpl-3.0.en.html"><img src="https://img.shields.io/badge/license-GPL%20V3-blue.svg?longCache=true" alt="License"></a>
   <a href="https://pkg.go.dev/github.com/mhsanaei/3x-ui/v3"><img src="https://pkg.go.dev/badge/github.com/mhsanaei/3x-ui/v3.svg" alt="Go Reference"></a>
   <a href="https://goreportcard.com/report/github.com/mhsanaei/3x-ui/v3"><img src="https://goreportcard.com/badge/github.com/mhsanaei/3x-ui/v3" alt="Go Report Card"></a>
@@ -39,6 +39,11 @@
 - **ذخیره‌سازی منعطف** — SQLite (پیش‌فرض) یا PostgreSQL.
 - **‏۱۳ زبان رابط کاربری** با تم‌های تیره و روشن.
 - **یکپارچگی با Fail2ban** برای اعمال محدودیت IP به‌ازای هر کلاینت.
+- **‏RBAC چندنقشی** — چهار نقش (مدیر، ناظر، نماینده، کاربر) با ماتریس دسترسی که کاملاً در سمت سرور اعمال می‌شود، محدودسازی مالکیت (بدون IDOR)، و نوار کناری پویا و محافظ‌های مسیر مبتنی بر نقش.
+- **کیف پول و تراکنش‌ها** — موجودی اعتبار به‌ازای هر کاربر با دفترِ تراکنشِ اتمی و قابل‌حسابرسی؛ مدیران موجودی را افزایش/کاهش/تنظیم می‌کنند و کاربران با زرین‌پال شارژ می‌کنند.
+- **کاتالوگ محصول و فروشگاه** — مدیران/ناظران پلن‌های قابل‌فروش (ترافیک، مدت، قیمت، اینباند مقصد) را مدیریت می‌کنند؛ نمایندگان/کاربران فروشگاه را مرور کرده و با موجودی خود خرید می‌کنند.
+- **سرویس‌های خودخدمت** — خرید محصول یک کانفیگ واقعی Xray برای خریدار می‌سازد؛ کاربران کانفیگ‌های خود را می‌بینند (کد QR + لینک اشتراک‌گذاری)، شناسه سابسکریپشن و کلیدها را ویرایش/بازتولید می‌کنند و پلن را تمدید یا تغییر می‌دهند.
+- **سفارش‌ها** — هر خرید/تمدید به‌عنوان یک سفارش ثبت می‌شود و بر اساس نقش محدود می‌گردد (مدیران/ناظران همه را می‌بینند، نمایندگان/کاربران فقط سفارش‌های خود را).
 
 ## اسکرین‌شات‌ها
 
@@ -70,12 +75,12 @@
 ## شروع سریع
 
 ```bash
-bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/3x-ui/master/install.sh)
+bash <(curl -Ls https://raw.githubusercontent.com/IntelligentQuantum/q-ui/master/install.sh)
 ```
 
 در حین نصب، یک نام کاربری، رمز عبور و مسیر دسترسی تصادفی تولید می‌شود. پس از نصب، دستور `q-ui` را اجرا کنید تا منوی مدیریت باز شود؛ در آنجا می‌توانید سرویس را شروع/متوقف کنید، اطلاعات ورود خود را ببینید یا بازنشانی کنید، گواهی‌های SSL را مدیریت کنید و کارهای دیگری انجام دهید.
 
-برای مستندات کامل، لطفاً به [ویکی پروژه](https://github.com/IntelligentQuantum/3x-ui/wiki) مراجعه کنید.
+برای مستندات کامل، لطفاً به [ویکی پروژه](https://github.com/IntelligentQuantum/q-ui/wiki) مراجعه کنید.
 
 ## پلتفرم‌های پشتیبانی‌شده
 
@@ -118,7 +123,7 @@ docker compose --profile postgres up -d
 این ایمیج، Fail2ban را (که به‌صورت پیش‌فرض فعال است) برای اعمال **محدودیت‌های IP** به‌ازای هر کلاینت همراه دارد. ‏Fail2ban متخلفان را با `iptables` مسدود می‌کند که به مجوز `NET_ADMIN` نیاز دارد. فایل `docker-compose.yml` این مجوز را از قبل از طریق `cap_add` می‌دهد؛ اگر به‌جای آن کانتینر را با `docker run` اجرا می‌کنید، خودتان مجوزها را اضافه کنید، در غیر این صورت مسدودسازی‌ها فقط ثبت می‌شوند اما هرگز اعمال نمی‌شوند:
 
 ```bash
-docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/3x-ui
+docker run -d --cap-add=NET_ADMIN --cap-add=NET_RAW ... ghcr.io/IntelligentQuantum/q-ui
 ```
 
 ## متغیرهای محیطی
@@ -159,19 +164,6 @@ English · فارسی · العربية · 中文（简体） · 中文（繁體
 
 - [terraform-provider-3x-ui](https://github.com/batonogov/terraform-provider-threexui) (مجوز: **MIT**): _مدیریت اینباندها، کلاینت‌ها، تنظیمات پنل و پیکربندی Xray به‌صورت کد با Terraform / OpenTofu._
 
-## پشتیبانی از پروژه
-
-**اگر این پروژه برای شما مفید است، می‌توانید به آن یک**:star2: بدهید
-
-<a href="https://www.buymeacoffee.com/MHSanaei" target="_blank">
-<img src="./media/default-yellow.png" alt="Buy Me A Coffee" style="height: 70px !important;width: 277px !important;" >
-</a>
-
-</br>
-<a href="https://nowpayments.io/donation/hsanaei" target="_blank" rel="noreferrer noopener">
-   <img src="./media/donation-button-black.svg" alt="Crypto donation button by NOWPayments">
-</a>
-
 ## ستاره‌ها در طول زمان
 
-[![Stargazers over time](https://starchart.cc/IntelligentQuantum/3x-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/3x-ui)
+[![Stargazers over time](https://starchart.cc/IntelligentQuantum/q-ui.svg?variant=adaptive)](https://starchart.cc/IntelligentQuantum/q-ui)

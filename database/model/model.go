@@ -51,19 +51,61 @@ type User struct {
 	LoginEpoch int64 `json:"-" gorm:"default:0"`
 }
 
-// Role constants for the RBAC system.
+// Role constants for the RBAC system. Four roles, in descending privilege:
+//
+//	admin     - full, unrestricted control; bypasses all ownership checks.
+//	moderator - sales/product/support/marketing; NO infrastructure access.
+//	reseller  - business partner; owns and resells to their own clients/customers.
+//	member    - end customer; buys products and manages their own services.
+//
+// RoleUser is the pre-redesign role name. The old "user" already owned clients
+// and held a balance (i.e. reseller semantics), so it is normalized to
+// RoleReseller everywhere. It is kept only for backward compatibility.
 const (
-	RoleAdmin = "admin"
-	RoleUser  = "user"
+	RoleAdmin     = "admin"
+	RoleModerator = "moderator"
+	RoleReseller  = "reseller"
+	RoleMember    = "member"
+
+	RoleUser = "user" // legacy alias -> reseller
 )
 
-// IsAdmin reports whether the user has the unrestricted admin role. Any role
-// other than the explicit "user" role is treated as admin so a blank/unknown
-// legacy value never silently downgrades an operator mid-migration; the
-// backfill seeder normalizes pre-existing rows to "admin" regardless.
-func (u *User) IsAdmin() bool {
-	return u != nil && u.Role != RoleUser
+// NormalizeRole maps any stored or user-supplied role string to a canonical
+// role. Unknown/blank values fall back to the LEAST-privileged role (member) so
+// a bad or missing value can never silently grant elevated access.
+func NormalizeRole(role string) string {
+	switch strings.ToLower(strings.TrimSpace(role)) {
+	case RoleAdmin:
+		return RoleAdmin
+	case RoleModerator:
+		return RoleModerator
+	case RoleReseller, RoleUser:
+		return RoleReseller
+	case RoleMember:
+		return RoleMember
+	default:
+		return RoleMember
+	}
 }
+
+// CanonicalRole returns the user's normalized role (member for a nil user).
+func (u *User) CanonicalRole() string {
+	if u == nil {
+		return RoleMember
+	}
+	return NormalizeRole(u.Role)
+}
+
+// IsAdmin reports whether the user is the unrestricted system administrator.
+//
+// SECURITY: this is a STRICT equality check. The previous implementation
+// (Role != "user") treated every non-"user" role as admin, which would have
+// granted full admin rights to moderator/reseller/member the instant those
+// roles were introduced. Do not loosen this.
+func (u *User) IsAdmin() bool     { return u.CanonicalRole() == RoleAdmin }
+func (u *User) IsModerator() bool { return u.CanonicalRole() == RoleModerator }
+func (u *User) IsReseller() bool  { return u.CanonicalRole() == RoleReseller }
+func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
 
 // Transaction records a single credit or debit against a user's balance,
 // capturing the before/after snapshot for an auditable wallet history.

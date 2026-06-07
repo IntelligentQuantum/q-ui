@@ -1,5 +1,5 @@
 import { useTranslation } from 'react-i18next';
-import { Input, InputNumber, Select, Switch } from 'antd';
+import { Input, InputNumber, Select, Space, Switch } from 'antd';
 
 import type { AllSetting } from '@/models/setting';
 import { SettingListItem } from '@/components/ui';
@@ -9,36 +9,91 @@ interface ResellerTabProps {
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
 
-// ResellerTab groups the reseller economy controls — what creating a client
-// costs a non-admin user, and the ZarinPal gateway used to top up balances.
+// Numeric AllSetting keys that hold a per-role credit amount.
+type CostKey = {
+  [K in keyof AllSetting]: AllSetting[K] extends number ? K : never;
+}[keyof AllSetting];
+
+interface RoleCostRowProps {
+  title: string;
+  description: string;
+  resellerKey: CostKey;
+  memberKey: CostKey;
+  allSetting: AllSetting;
+  updateSetting: (patch: Partial<AllSetting>) => void;
+}
+
+// RoleCostRow renders one cost with a separate input per chargeable role
+// (reseller / member). Admins are always free, so they have no input.
+function RoleCostRow({ title, description, resellerKey, memberKey, allSetting, updateSetting }: RoleCostRowProps) {
+  const { t } = useTranslation();
+  return (
+    <SettingListItem paddings="small" title={title} description={description}>
+      <Space size="large" wrap>
+        <Space>
+          <span style={{ opacity: 0.7 }}>{t('pages.settings.security.roleReseller')}</span>
+          <InputNumber
+            min={0}
+            value={allSetting[resellerKey] as number}
+            onChange={(value) => updateSetting({ [resellerKey]: Number(value) || 0 } as Partial<AllSetting>)}
+          />
+        </Space>
+        <Space>
+          <span style={{ opacity: 0.7 }}>{t('pages.settings.security.roleMember')}</span>
+          <InputNumber
+            min={0}
+            value={allSetting[memberKey] as number}
+            onChange={(value) => updateSetting({ [memberKey]: Number(value) || 0 } as Partial<AllSetting>)}
+          />
+        </Space>
+      </Space>
+    </SettingListItem>
+  );
+}
+
+// ResellerTab groups the reseller economy controls — what creating a client and
+// resetting its traffic costs, priced per role (admins are always free), and the
+// ZarinPal gateway used to top up balances.
 export default function ResellerTab({ allSetting, updateSetting }: ResellerTabProps) {
   const { t } = useTranslation();
 
   return (
     <>
-      <SettingListItem
-        paddings="small"
+      <RoleCostRow
         title={t('pages.settings.security.clientCost')}
         description={t('pages.settings.security.clientCostDesc')}
-      >
-        <InputNumber
-          min={0}
-          value={allSetting.clientCost}
-          onChange={(value) => updateSetting({ clientCost: Number(value) || 0 })}
-        />
-      </SettingListItem>
+        resellerKey="clientCostReseller"
+        memberKey="clientCostMember"
+        allSetting={allSetting}
+        updateSetting={updateSetting}
+      />
 
-      <SettingListItem
-        paddings="small"
+      <RoleCostRow
         title={t('pages.settings.security.clientCostPerGB')}
         description={t('pages.settings.security.clientCostPerGBDesc')}
-      >
-        <InputNumber
-          min={0}
-          value={allSetting.clientCostPerGB}
-          onChange={(value) => updateSetting({ clientCostPerGB: Number(value) || 0 })}
-        />
-      </SettingListItem>
+        resellerKey="clientCostPerGBReseller"
+        memberKey="clientCostPerGBMember"
+        allSetting={allSetting}
+        updateSetting={updateSetting}
+      />
+
+      <RoleCostRow
+        title={t('pages.settings.security.resetTrafficCost')}
+        description={t('pages.settings.security.resetTrafficCostDesc')}
+        resellerKey="resetTrafficCostReseller"
+        memberKey="resetTrafficCostMember"
+        allSetting={allSetting}
+        updateSetting={updateSetting}
+      />
+
+      <RoleCostRow
+        title={t('pages.settings.security.resetTrafficCostPerGB')}
+        description={t('pages.settings.security.resetTrafficCostPerGBDesc')}
+        resellerKey="resetTrafficCostPerGBReseller"
+        memberKey="resetTrafficCostPerGBMember"
+        allSetting={allSetting}
+        updateSetting={updateSetting}
+      />
 
       <SettingListItem
         paddings="small"

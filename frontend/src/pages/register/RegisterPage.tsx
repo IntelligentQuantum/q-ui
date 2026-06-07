@@ -8,7 +8,6 @@ import {
   Layout,
   Menu,
   Popover,
-  Progress,
   Space,
   message,
 } from 'antd';
@@ -33,7 +32,6 @@ import {
   PasswordSchema,
   PhoneSchema,
   UsernameSchema,
-  passwordScore,
   type RegisterFormValues,
 } from '@/schemas/register';
 import '../login/LoginPage.css';
@@ -41,8 +39,6 @@ import './RegisterPage.css';
 
 const basePath = window.X_UI_BASE_PATH || '';
 const REDIRECT_DELAY_MS = 1200;
-
-const STRENGTH_COLORS = ['#ff4d4f', '#ff4d4f', '#faad14', '#3b82f6', '#389e0a'];
 
 export default function RegisterPage() {
   const { t } = useTranslation();
@@ -56,19 +52,6 @@ export default function RegisterPage() {
 
   const [submitting, setSubmitting] = useState(false);
   const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
-
-  const passwordValue = Form.useWatch('password', form) || '';
-  const score = useMemo(() => passwordScore(passwordValue), [passwordValue]);
-  const strengthLabel = useMemo(() => {
-    const labels = [
-      'pages.register.strengthWeak',
-      'pages.register.strengthWeak',
-      'pages.register.strengthFair',
-      'pages.register.strengthGood',
-      'pages.register.strengthStrong',
-    ];
-    return t(labels[score]);
-  }, [score, t]);
 
   // When registration is disabled the server never serves this page, but the
   // Vite dev server serves it statically — guard here too so the dev flow and
@@ -285,19 +268,6 @@ export default function RegisterPage() {
                   />
                 </Form.Item>
 
-                {passwordValue ? (
-                  <div className="password-strength" aria-live="polite">
-                    <Progress
-                      percent={(score / 4) * 100}
-                      showInfo={false}
-                      size="small"
-                      strokeColor={STRENGTH_COLORS[score]}
-                    />
-                    <span className="password-strength-label">
-                      {t('pages.register.passwordStrength')}: {strengthLabel}
-                    </span>
-                  </div>
-                ) : null}
 
                 <Form.Item
                   label={t('confirmPassword')}

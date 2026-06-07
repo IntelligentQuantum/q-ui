@@ -51,12 +51,21 @@ type AllSetting struct {
 	TgLang           string `json:"tgLang" form:"tgLang"`                        // Telegram bot language
 
 	// Security settings
-	TimeLocation       string `json:"timeLocation" form:"timeLocation"`                        // Time zone location
-	TwoFactorEnable    bool   `json:"twoFactorEnable" form:"twoFactorEnable"`                  // Enable two-factor authentication
-	TwoFactorToken     string `json:"twoFactorToken" form:"twoFactorToken"`                    // Two-factor authentication token
-	RegistrationEnable bool   `json:"registrationEnable" form:"registrationEnable"`            // Allow public self-registration of new panel users
-	ClientCost         int    `json:"clientCost" form:"clientCost" validate:"gte=0"`           // Flat wallet credits charged to a non-admin user per client created
-	ClientCostPerGB    int    `json:"clientCostPerGB" form:"clientCostPerGB" validate:"gte=0"` // Wallet credits charged per GB of a client's traffic quota
+	TimeLocation       string `json:"timeLocation" form:"timeLocation"`             // Time zone location
+	TwoFactorEnable    bool   `json:"twoFactorEnable" form:"twoFactorEnable"`       // Enable two-factor authentication
+	TwoFactorToken     string `json:"twoFactorToken" form:"twoFactorToken"`         // Two-factor authentication token
+	RegistrationEnable bool   `json:"registrationEnable" form:"registrationEnable"` // Allow public self-registration of new panel users
+	// Per-role pricing. The charge depends on the acting (buyer) user's role:
+	// admins are always free (no field), resellers and members each have their
+	// own rate. Total = base + perGB × quotaGB, computed per role.
+	ClientCostReseller            int `json:"clientCostReseller" form:"clientCostReseller" validate:"gte=0"`                       // Flat credits charged to a reseller per client created
+	ClientCostMember              int `json:"clientCostMember" form:"clientCostMember" validate:"gte=0"`                           // Flat credits charged to a member per client created
+	ClientCostPerGBReseller       int `json:"clientCostPerGBReseller" form:"clientCostPerGBReseller" validate:"gte=0"`             // Credits/GB charged to a reseller on client create
+	ClientCostPerGBMember         int `json:"clientCostPerGBMember" form:"clientCostPerGBMember" validate:"gte=0"`                 // Credits/GB charged to a member on client create
+	ResetTrafficCostReseller      int `json:"resetTrafficCostReseller" form:"resetTrafficCostReseller" validate:"gte=0"`           // Flat credits charged to a reseller per traffic reset
+	ResetTrafficCostMember        int `json:"resetTrafficCostMember" form:"resetTrafficCostMember" validate:"gte=0"`               // Flat credits charged to a member per traffic reset
+	ResetTrafficCostPerGBReseller int `json:"resetTrafficCostPerGBReseller" form:"resetTrafficCostPerGBReseller" validate:"gte=0"` // Credits/GB charged to a reseller on traffic reset
+	ResetTrafficCostPerGBMember   int `json:"resetTrafficCostPerGBMember" form:"resetTrafficCostPerGBMember" validate:"gte=0"`     // Credits/GB charged to a member on traffic reset
 
 	// Reseller / billing (ZarinPal balance top-up)
 	ZarinpalEnable     bool   `json:"zarinpalEnable" form:"zarinpalEnable"`         // Enable ZarinPal balance top-up

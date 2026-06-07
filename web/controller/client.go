@@ -72,6 +72,14 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	// so there's no cost implication.
 	g.POST("/:email/attach", a.attach)
 	g.POST("/:email/detach", a.detach)
+	// Owner self-service: rename / enable-toggle / regenerate the subscription
+	// ID + protocol secrets of their own config (ownership enforced in handler).
+	g.POST("/:email/rotate", a.rotate)
+	// Owner-accessible traffic reset. Ownership is enforced in the handler and,
+	// for non-admins, the configured reset-traffic cost is charged to their
+	// wallet (refunded on failure). Admins reset for free. The bulk/all-traffic
+	// reset routes below remain admin-only.
+	g.POST("/resetTraffic/:email", a.resetTrafficByEmail)
 
 	// Admin-only routes: full client list, bulk operations, traffic
 	// administration and online/diagnostic queries.
@@ -84,7 +92,6 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.POST("/bulkAttach", admin, a.bulkAttach)
 	g.POST("/bulkDetach", admin, a.bulkDetach)
 	g.POST("/bulkResetTraffic", admin, a.bulkResetTraffic)
-	g.POST("/resetTraffic/:email", admin, a.resetTrafficByEmail)
 	g.POST("/updateTraffic/:email", admin, a.updateTrafficByEmail)
 	g.POST("/onlines", admin, a.onlines)
 	g.POST("/onlinesByGuid", admin, a.onlinesByGuid)
@@ -209,8 +216,8 @@ func (a *ClientController) create(c *gin.Context) {
 	// is never created.
 	var charged int64
 	if !user.IsAdmin() {
-		base, _ := a.settingService.GetClientCost()
-		perGB, _ := a.settingService.GetClientCostPerGB()
+		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
+		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
 		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
 		if cost > 0 {
 			if _, err := a.walletService.Debit(user.Id, cost, "client create: "+payload.Client.Email); err != nil {
@@ -260,6 +267,42 @@ func (a *ClientController) update(c *gin.Context) {
 		return
 	}
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), pendingNodeObj(a.clientService.HasPendingNode(&a.inboundService, email)), nil)
+	if needRestart {
+		a.xrayService.SetToNeedRestart()
+	}
+	notifyClientsChanged()
+}
+
+type rotateBody struct {
+	Email      string `json:"email"`
+	Enable     *bool  `json:"enable"`
+	Regenerate bool   `json:"regenerate"`
+}
+
+// rotate lets a config owner rename it, toggle enable, and/or regenerate its
+// subscription ID + protocol secrets. Ownership is enforced; the heavy lifting
+// (rebuilding the client and syncing inbounds) is done server-side so the
+// client never has to reconstruct the protocol payload.
+func (a *ClientController) rotate(c *gin.Context) {
+	email := c.Param("email")
+	if !a.requireOwnership(c, email) {
+		return
+	}
+	var body rotateBody
+	if err := c.ShouldBindJSON(&body); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	needRestart, err := a.clientService.Rotate(&a.inboundService, email, service.RotateOptions{
+		NewEmail:   body.Email,
+		Enable:     body.Enable,
+		Regenerate: body.Regenerate,
+	})
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientUpdateSuccess"), nil)
 	if needRestart {
 		a.xrayService.SetToNeedRestart()
 	}
@@ -449,8 +492,44 @@ func (a *ClientController) delDepleted(c *gin.Context) {
 
 func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	email := c.Param("email")
+	if !a.requireOwnership(c, email) {
+		return
+	}
+	user := session.GetLoginUser(c)
+
+	// Cost system: resetting a client's traffic re-grants its quota, so it is a
+	// billable action for non-admins (configured separately from client
+	// creation). Sequenced as debit -> reset -> refund-on-failure so a failed
+	// reset never leaves the owner out of pocket. Admins reset for free.
+	var charged int64
+	if user != nil && !user.IsAdmin() {
+		base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
+		perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
+		var quota int64
+		if ct, terr := a.inboundService.GetClientTrafficByEmail(email); terr == nil && ct != nil {
+			quota = ct.Total
+		}
+		cost := service.ComputeClientCost(base, perGB, quota)
+		if cost > 0 {
+			if _, err := a.walletService.Debit(user.Id, cost, "reset traffic: "+email); err != nil {
+				if errors.Is(err, service.ErrInsufficientBalance) {
+					pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
+					return
+				}
+				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+				return
+			}
+			charged = cost
+		}
+	}
+
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
 	if err != nil {
+		if charged > 0 {
+			if _, refundErr := a.walletService.Credit(user.Id, charged, "refund (reset failed): "+email); refundErr != nil {
+				logger.Warning("failed to refund reset-traffic charge:", refundErr)
+			}
+		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}

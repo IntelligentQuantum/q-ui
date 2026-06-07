@@ -75,6 +75,8 @@ func initModels() error {
 		&model.NodeClientTraffic{},
 		&model.Transaction{},
 		&model.Payment{},
+		&model.Product{},
+		&model.Order{},
 	}
 	for _, mdl := range models {
 		if err := db.AutoMigrate(mdl); err != nil {
@@ -276,7 +278,31 @@ func runSeeders(isUsersEmpty bool) error {
 			return err
 		}
 	}
+
+	if !slices.Contains(seedersHistory, "LegacyUserToReseller") {
+		if err := migrateLegacyUserRole(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// migrateLegacyUserRole canonicalizes pre-redesign "user" rows to the new
+// "reseller" role. The old "user" role already owned clients and held a balance
+// (i.e. reseller semantics), so this preserves every capability while moving
+// stored values onto the four-role vocabulary. It runs AFTER RoleBalanceBackfill
+// so genuine legacy operators (which that seeder promotes to admin) are never
+// touched — only explicitly-created limited accounts from the two-role era are
+// remapped to reseller.
+func migrateLegacyUserRole() error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).
+			Where("role = ?", model.RoleUser).
+			Update("role", model.RoleReseller).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyUserToReseller"}).Error
+	})
 }
 
 // backfillUserRoles runs once on installs that predate the RBAC role column.
