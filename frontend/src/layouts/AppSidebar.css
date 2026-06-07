@@ -49,6 +49,7 @@
 }
 
 .sidebar-donate {
+  display: hidden;
   background: transparent;
   border: none;
   width: 30px;
@@ -195,7 +196,7 @@
 }
 
 .sider-version {
-  display: flex;
+  display: hidden;
   align-items: center;
   justify-content: flex-start;
   gap: 10px;
