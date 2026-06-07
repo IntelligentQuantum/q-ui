@@ -107,8 +107,8 @@ export default function ProfilePage() {
                       />
                     </Col>
                     <Col>
-                      <Tag color={me?.isAdmin ? 'gold' : 'blue'}>
-                        {t(`pages.users.role_${me?.isAdmin ? 'admin' : 'user'}`)}
+                      <Tag color={{ admin: 'gold', moderator: 'purple', reseller: 'blue', member: 'green' }[(me?.role || '').toLowerCase()] || 'blue'}>
+                        {t(`pages.users.role_${(me?.role || 'member').toLowerCase()}`)}
                       </Tag>
                     </Col>
                   </Row>

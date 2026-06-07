@@ -168,8 +168,9 @@ export default function UsersPage() {
       fullName: row.fullName,
       phone: row.phone,
       email: row.email,
-      // Legacy "user" maps to reseller (the role Select has no "user" option).
-      role: row.role === 'user' ? 'reseller' : row.role,
+      // Normalize casing + legacy "user" alias so the Select pre-selects the
+      // right option regardless of how the role was stored.
+      role: (() => { const r = (row.role || '').toLowerCase(); return r === 'user' ? 'reseller' : (r || 'member'); })(),
     });
     setUserModalOpen(true);
   }
@@ -263,8 +264,10 @@ export default function UsersPage() {
       dataIndex: 'role',
       key: 'role',
       render: (role: string) => {
-        // Normalize the legacy "user" alias to reseller for display.
-        const r = role === 'user' ? 'reseller' : role;
+        // Normalize casing + the legacy "user" alias so the label/colour resolve
+        // no matter how the role was stored (e.g. "Admin", "ADMIN", "user").
+        const raw = (role || '').toLowerCase();
+        const r = raw === 'user' ? 'reseller' : (raw || 'member');
         const colors: Record<string, string> = { admin: 'gold', moderator: 'purple', reseller: 'blue', member: 'green' };
         return <Tag color={colors[r] || 'default'}>{t(`pages.users.role_${r}`)}</Tag>;
       },
