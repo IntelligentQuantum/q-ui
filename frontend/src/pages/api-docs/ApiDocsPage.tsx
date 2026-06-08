@@ -1,32 +1,34 @@
 import { useMemo } from 'react';
-import { ConfigProvider, Layout } from 'antd';
 import SwaggerUI from 'swagger-ui-react';
 import 'swagger-ui-react/swagger-ui.css';
 
 import { useTheme } from '@/hooks/useTheme';
-import AppSidebar from '@/layouts/AppSidebar';
+import PageShell from '@/layouts/PageShell';
 import './ApiDocsPage.css';
 
 const basePath = window.Q_UI_BASE_PATH || '';
-const openApiUrl = `${basePath}panel/api/openapi.json`;
+const openApiUrl = `${ basePath }panel/api/openapi.json`;
 
-export default function ApiDocsPage() {
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
+export default function ApiDocsPage()
+{
+    const { isDark, isUltra } = useTheme();
 
-  const pageClass = useMemo(() => {
-    const classes = ['api-docs-page'];
-    if (isDark) classes.push('is-dark');
-    if (isUltra) classes.push('is-ultra');
-    return classes.join(' ');
-  }, [isDark, isUltra]);
+    const pageClass = useMemo(() =>
+    {
+        const classes = ['api-docs-page'];
+        if (isDark)
+        {
+            classes.push('is-dark');
+        }
+        if (isUltra)
+        {
+            classes.push('is-ultra');
+        }
+        return classes.join(' ');
+    }, [isDark, isUltra]);
 
-  return (
-    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
-      <Layout className={pageClass}>
-        <AppSidebar />
-
-        <Layout className="content-shell">
-          <Layout.Content className="content-area">
+    return (
+    <PageShell name={pageClass}>
             <div className="docs-wrapper">
               <SwaggerUI
                 url={openApiUrl}
@@ -35,9 +37,6 @@ export default function ApiDocsPage() {
                 tryItOutEnabled
               />
             </div>
-          </Layout.Content>
-        </Layout>
-      </Layout>
-    </ConfigProvider>
-  );
+    </PageShell>
+    );
 }

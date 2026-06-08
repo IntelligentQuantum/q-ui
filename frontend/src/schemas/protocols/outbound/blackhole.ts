@@ -8,6 +8,6 @@ export type BlackholeResponseType = z.infer<typeof BlackholeResponseTypeSchema>;
 // silently drops. The panel stores it as { response: { type } } or omits the
 // whole `response` key when type is empty.
 export const BlackholeOutboundSettingsSchema = z.object({
-  response: z.object({ type: BlackholeResponseTypeSchema }).optional(),
+    response: z.object({ type: BlackholeResponseTypeSchema }).optional()
 });
 export type BlackholeOutboundSettings = z.infer<typeof BlackholeOutboundSettingsSchema>;

@@ -1,142 +1,111 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Select, Space, Switch, type FormInstance } from 'antd';
-import { DeleteOutlined, MinusOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { RefreshCw, Plus, Trash2 } from 'lucide-react';
 
 import { Wireguard } from '@/utils';
-import { InputAddon } from '@/components/ui';
+import { Button, Input, Label } from '@/components/ui';
 import { WireguardDomainStrategy } from '@/schemas/primitives';
-import type { OutboundFormValues } from '@/schemas/forms/outbound-form';
+import {
+    RHFText,
+    RHFNumber,
+    RHFSelect,
+    RHFSwitch,
+    RHFTags,
+    Field,
+    useFieldArray,
+    useFormContext
+} from '@/components/form/rhf';
 
-export default function WireguardFields({ form }: { form: FormInstance<OutboundFormValues> }) {
-  const { t } = useTranslation();
-  return (
+// `form` prop is accepted (host still passes it) but unused — context drives everything.
+export default function WireguardFields()
+{
+    const { t } = useTranslation();
+    const { control, register, setValue } = useFormContext();
+    const { fields, append, remove } = useFieldArray({ control, name: 'settings.peers' });
+
+    return (
     <>
-      <Form.Item label={t('pages.inbounds.address')} name={['settings', 'address']}>
-        <Input placeholder="comma-separated, e.g. 10.0.0.1,fd00::1" />
-      </Form.Item>
-      <Form.Item label={t('pages.inbounds.privatekey')}>
-        <Space.Compact block>
-          <Form.Item name={['settings', 'secretKey']} noStyle>
-            <Input style={{ width: 'calc(100% - 32px)' }} />
-          </Form.Item>
-          <Button aria-label={t('regenerate')}
-            icon={<ReloadOutlined />}
-            onClick={() => {
-              const pair = Wireguard.generateKeypair();
-              form.setFieldValue(['settings', 'secretKey'], pair.privateKey);
-              form.setFieldValue(['settings', 'pubKey'], pair.publicKey);
+      <RHFText
+        name="settings.address"
+        label={t('pages.inbounds.address')}
+        placeholder="comma-separated, e.g. 10.0.0.1,fd00::1"
+      />
+      <Field name="settings.secretKey" label={t('pages.inbounds.privatekey')}>
+        <div className="flex gap-2">
+          <Input className="flex-1" {...register('settings.secretKey')} />
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label={t('regenerate')}
+            onClick={() =>
+            {
+                const pair = Wireguard.generateKeypair();
+                setValue('settings.secretKey', pair.privateKey);
+                setValue('settings.pubKey', pair.publicKey);
             }}
-          />
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item label={t('pages.inbounds.publicKey')} name={['settings', 'pubKey']}>
-        <Input disabled />
-      </Form.Item>
-      <Form.Item label={t('pages.xray.wireguard.domainStrategy')} name={['settings', 'domainStrategy']}>
-        <Select
-          options={[
-            { value: '', label: `(${t('none')})` },
-            ...WireguardDomainStrategy.map((s) => ({ value: s, label: s })),
-          ]}
-        />
-      </Form.Item>
-      <Form.Item label="MTU" name={['settings', 'mtu']}>
-        <InputNumber min={0} />
-      </Form.Item>
-      <Form.Item label={t('pages.xray.outboundForm.workers')} name={['settings', 'workers']}>
-        <InputNumber min={0} />
-      </Form.Item>
-      <Form.Item
-        label={t('pages.inbounds.info.noKernelTun')}
-        name={['settings', 'noKernelTun']}
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-      <Form.Item label={t('pages.xray.outboundForm.reserved')} name={['settings', 'reserved']}>
-        <Input placeholder="comma-separated bytes, e.g. 1,2,3" />
-      </Form.Item>
-      <Form.List name={['settings', 'peers']}>
-        {(fields, { add, remove }) => (
-          <>
-            <Form.Item label={t('pages.inbounds.form.peers')}>
-              <Button aria-label={t('add')}
-                size="small"
-                type="primary"
-                icon={<PlusOutlined />}
-                onClick={() =>
-                  add({
-                    publicKey: '',
-                    psk: '',
-                    allowedIPs: ['0.0.0.0/0', '::/0'],
-                    endpoint: '',
-                    keepAlive: 0,
-                  })
-                }
-              />
-            </Form.Item>
-            {fields.map((field, index) => (
-              <div key={field.key}>
-                <Form.Item wrapperCol={{ md: { span: 14, offset: 8 } }}>
-                  <div className="item-heading">
-                    <span>{t('pages.inbounds.info.peerNumber', { n: index + 1 })}</span>
-                    {fields.length > 1 && (
-                      <DeleteOutlined
-                        className="danger-icon"
-                        onClick={() => remove(field.name)}
-                      />
-                    )}
-                  </div>
-                </Form.Item>
-                <Form.Item label={t('pages.xray.wireguard.endpoint')} name={[field.name, 'endpoint']}>
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  label={t('pages.inbounds.publicKey')}
-                  name={[field.name, 'publicKey']}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+      </Field>
+      <RHFText name="settings.pubKey" label={t('pages.inbounds.publicKey')} disabled />
+      <RHFSelect
+        name="settings.domainStrategy"
+        label={t('pages.xray.wireguard.domainStrategy')}
+        options={[
+            { value: '', label: `(${ t('none') })` },
+            ...WireguardDomainStrategy.map((s) => ({ value: s, label: s }))
+        ]}
+      />
+      <RHFNumber name="settings.mtu" label="MTU" min={0} />
+      <RHFNumber name="settings.workers" label={t('pages.xray.outboundForm.workers')} min={0} />
+      <RHFSwitch name="settings.noKernelTun" label={t('pages.inbounds.info.noKernelTun')} />
+      <RHFText
+        name="settings.reserved"
+        label={t('pages.xray.outboundForm.reserved')}
+        placeholder="comma-separated bytes, e.g. 1,2,3"
+      />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <Label>{t('pages.inbounds.form.peers')}</Label>
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={t('add')}
+            onClick={() =>
+                append({ publicKey: '', psk: '', allowedIPs: ['0.0.0.0/0', '::/0'], endpoint: '', keepAlive: 0 })
+            }
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        </div>
+        {fields.map((field, index) => (
+          <div key={field.id} className="flex flex-col gap-3 rounded-lg border border-border p-3">
+            <div className="flex items-center justify-between">
+              <span className="text-sm font-medium">{t('pages.inbounds.info.peerNumber', { n: index + 1 })}</span>
+              {fields.length > 1 && (
+                <button
+                  type="button"
+                  aria-label={t('delete')}
+                  onClick={() => remove(index)}
+                  className="text-muted-foreground transition-colors hover:text-danger"
                 >
-                  <Input />
-                </Form.Item>
-                <Form.Item label="PSK" name={[field.name, 'psk']}>
-                  <Input />
-                </Form.Item>
-                <Form.Item label={t('pages.xray.wireguard.allowedIPs')}>
-                  <Form.List name={[field.name, 'allowedIPs']}>
-                    {(ipFields, { add: addIp, remove: removeIp }) => (
-                      <>
-                        {ipFields.map((ipField, ipIdx) => (
-                          <Space.Compact
-                            key={ipField.key}
-                            block
-                            style={{ marginBottom: 4 }}
-                          >
-                            <Form.Item noStyle name={ipField.name}>
-                              <Input />
-                            </Form.Item>
-                            {ipFields.length > 1 && (
-                              <InputAddon onClick={() => removeIp(ipIdx)}>
-                                <MinusOutlined />
-                              </InputAddon>
-                            )}
-                          </Space.Compact>
-                        ))}
-                        <Button aria-label={t('add')}
-                          size="small"
-                          icon={<PlusOutlined />}
-                          onClick={() => addIp('')}
-                        />
-                      </>
-                    )}
-                  </Form.List>
-                </Form.Item>
-                <Form.Item label={t('pages.inbounds.info.keepAlive')} name={[field.name, 'keepAlive']}>
-                  <InputNumber min={0} />
-                </Form.Item>
-              </div>
-            ))}
-          </>
-        )}
-      </Form.List>
+                  <Trash2 className="h-4 w-4" />
+                </button>
+              )}
+            </div>
+            <RHFText name={`settings.peers.${ index }.endpoint`} label={t('pages.xray.wireguard.endpoint')} />
+            <RHFText name={`settings.peers.${ index }.publicKey`} label={t('pages.inbounds.publicKey')} />
+            <RHFText name={`settings.peers.${ index }.psk`} label="PSK" />
+            <RHFTags
+              name={`settings.peers.${ index }.allowedIPs`}
+              label={t('pages.xray.wireguard.allowedIPs')}
+              placeholder="0.0.0.0/0"
+            />
+            <RHFNumber name={`settings.peers.${ index }.keepAlive`} label={t('pages.inbounds.info.keepAlive')} min={0} />
+          </div>
+        ))}
+      </div>
     </>
-  );
+    );
 }

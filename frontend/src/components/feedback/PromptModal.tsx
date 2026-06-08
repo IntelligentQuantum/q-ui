@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Input, Modal } from 'antd';
-import type { InputRef } from 'antd';
 import { useTranslation } from 'react-i18next';
+
+import { Button, Input, Modal, Textarea } from '@/components/ui';
 
 interface PromptModalProps {
   open: boolean;
@@ -15,70 +15,80 @@ interface PromptModalProps {
 }
 
 export default function PromptModal({
-  open,
-  onClose,
-  title,
-  okText,
-  type = 'input',
-  initialValue = '',
-  loading = false,
-  onConfirm,
-}: PromptModalProps) {
-  const { t } = useTranslation();
-  const [value, setValue] = useState('');
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
-  const inputRef = useRef<InputRef | null>(null);
+    open,
+    onClose,
+    title,
+    okText,
+    type = 'input',
+    initialValue = '',
+    loading = false,
+    onConfirm
+}: PromptModalProps)
+{
+    const { t } = useTranslation();
+    const [value, setValue] = useState('');
+    const textareaRef = useRef<HTMLTextAreaElement | null>(null);
+    const inputRef = useRef<HTMLInputElement | null>(null);
 
-  useEffect(() => {
-    if (open) {
-      setValue(initialValue);
-      setTimeout(() => {
-        if (type === 'textarea') textareaRef.current?.focus();
-        else inputRef.current?.focus();
-      }, 50);
-    }
-  }, [open, initialValue, type]);
+    useEffect(() =>
+    {
+        if (open)
+        {
+            setValue(initialValue);
+            setTimeout(() =>
+            {
+                if (type === 'textarea')
+                {
+                    textareaRef.current?.focus();
+                }
+                else
+                {
+                    inputRef.current?.focus();
+                }
+            }, 50);
+        }
+    }, [open, initialValue, type]);
 
-  function onKeydown(e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>) {
-    if (type !== 'textarea' && e.key === 'Enter') {
-      e.preventDefault();
-      onConfirm(value);
-      return;
+    function onKeydown(e: React.KeyboardEvent<HTMLTextAreaElement | HTMLInputElement>)
+    {
+        if (type !== 'textarea' && e.key === 'Enter')
+        {
+            e.preventDefault();
+            onConfirm(value);
+            return;
+        }
+        if (type === 'textarea' && e.ctrlKey && e.key.toLowerCase() === 's')
+        {
+            e.preventDefault();
+            onConfirm(value);
+        }
     }
-    if (type === 'textarea' && e.ctrlKey && e.key.toLowerCase() === 's') {
-      e.preventDefault();
-      onConfirm(value);
-    }
-  }
 
-  return (
+    return (
     <Modal
       open={open}
+      onClose={onClose}
       title={title}
-      okText={okText ?? t('confirm')}
-      cancelText={t('cancel')}
-      mask={{ closable: false }}
-      confirmLoading={loading}
-      onOk={() => onConfirm(value)}
-      onCancel={onClose}
-      destroyOnHidden
+      closeOnOverlay={false}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>{t('cancel')}</Button>
+          <Button loading={loading} onClick={() => onConfirm(value)}>{okText ?? t('confirm')}</Button>
+        </>
+      }
     >
       {type === 'textarea' ? (
-        <Input.TextArea
-          ref={(el) => { textareaRef.current = (el as unknown as { resizableTextArea?: { textArea: HTMLTextAreaElement } })?.resizableTextArea?.textArea ?? null; }}
+        <Textarea
+          ref={textareaRef}
           value={value}
           onChange={(e) => setValue(e.target.value)}
-          autoSize={{ minRows: 10, maxRows: 20 }}
+          rows={12}
+          className="resize-y font-mono text-[13px]"
           onKeyDown={onKeydown}
         />
       ) : (
-        <Input
-          ref={inputRef}
-          value={value}
-          onChange={(e) => setValue(e.target.value)}
-          onKeyDown={onKeydown}
-        />
+        <Input ref={inputRef} value={value} onChange={(e) => setValue(e.target.value)} onKeyDown={onKeydown} />
       )}
     </Modal>
-  );
+    );
 }

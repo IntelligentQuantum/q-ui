@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, Modal, Space, Table, Tag, Typography, message } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
 
+import { Badge, Button, Input, Modal, Table } from '@/components/ui';
+import type { Column } from '@/components/ui';
+import { message } from '@/components/ui/message';
 import type { ClientRecord } from '@/hooks/useClients';
 
 interface GroupRemoveClientsModalProps {
@@ -20,126 +21,138 @@ interface ClientRow {
 }
 
 export default function GroupRemoveClientsModal({
-  open,
-  groupName,
-  members,
-  onClose,
-  onSubmit,
-}: GroupRemoveClientsModalProps) {
-  const { t } = useTranslation();
-  const [messageApi, messageContextHolder] = message.useMessage();
-  const [saving, setSaving] = useState(false);
-  const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
-  const [search, setSearch] = useState('');
+    open,
+    groupName,
+    members,
+    onClose,
+    onSubmit
+}: GroupRemoveClientsModalProps)
+{
+    const { t } = useTranslation();
+    const [messageApi] = message.useMessage();
+    const [saving, setSaving] = useState(false);
+    const [selectedEmails, setSelectedEmails] = useState<string[]>([]);
+    const [search, setSearch] = useState('');
 
-  const rows = useMemo<ClientRow[]>(
-    () =>
-      (members || [])
-        .map((c) => ({
-          email: (c.email || '').trim(),
-          comment: (c.comment || '').trim(),
-          enable: c.enable !== false,
-        }))
-        .filter((r) => r.email),
-    [members],
-  );
-
-  useEffect(() => {
-    if (!open) return;
-    setSelectedEmails([]);
-    setSearch('');
-  }, [open, rows]);
-
-  const filteredRows = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter(
-      (r) => r.email.toLowerCase().includes(q) || r.comment.toLowerCase().includes(q),
+    const rows = useMemo<ClientRow[]>(
+        () =>
+            (members || [])
+                .map((c) => ({
+                    email: (c.email || '').trim(),
+                    comment: (c.comment || '').trim(),
+                    enable: c.enable !== false
+                }))
+                .filter((r) => r.email),
+        [members]
     );
-  }, [rows, search]);
 
-  const columns: ColumnsType<ClientRow> = useMemo(
-    () => [
-      { title: t('pages.inbounds.email'), dataIndex: 'email', key: 'email', ellipsis: true },
-      { title: t('comment'), dataIndex: 'comment', key: 'comment', ellipsis: true },
-      {
-        title: t('enable'),
-        dataIndex: 'enable',
-        key: 'enable',
-        width: 90,
-        render: (enabled: boolean) =>
-          enabled ? (
-            <Tag color="success">{t('enable')}</Tag>
-          ) : (
-            <Tag>{t('pages.inbounds.attachClientsStatusDisabled')}</Tag>
-          ),
-      },
-    ],
-    [t],
-  );
+    useEffect(() =>
+    {
+        if (!open)
+        {
+            return;
+        }
+        setSelectedEmails([]);
+        setSearch('');
+    }, [open, rows]);
 
-  async function submit() {
-    if (!groupName || selectedEmails.length === 0) return;
-    setSaving(true);
-    try {
-      const result = await onSubmit(selectedEmails);
-      if (!result) return;
-      const affected = result.affected ?? selectedEmails.length;
-      messageApi.success(
-        t('pages.groups.removeFromGroupResult', { count: affected, name: groupName }),
-      );
-      onClose();
-    } finally {
-      setSaving(false);
+    const filteredRows = useMemo(() =>
+    {
+        const q = search.trim().toLowerCase();
+        if (!q)
+        {
+            return rows;
+        }
+        return rows.filter(
+            (r) => r.email.toLowerCase().includes(q) || r.comment.toLowerCase().includes(q)
+        );
+    }, [rows, search]);
+
+    const columns: Column<ClientRow>[] = useMemo(
+        () => [
+            { key: 'email', header: t('pages.inbounds.email'), cell: (r) => <span className="truncate">{r.email}</span> },
+            { key: 'comment', header: t('comment'), cell: (r) => <span className="truncate text-muted-foreground">{r.comment}</span> },
+            {
+                key: 'enable',
+                header: t('enable'),
+                width: 90,
+                cell: (r) =>
+                    r.enable ? (
+            <Badge variant="success">{t('enable')}</Badge>
+                    ) : (
+            <Badge variant="neutral">{t('pages.inbounds.attachClientsStatusDisabled')}</Badge>
+                    )
+            }
+        ],
+        [t]
+    );
+
+    async function submit()
+    {
+        if (!groupName || selectedEmails.length === 0)
+        {
+            return;
+        }
+        setSaving(true);
+        try
+        {
+            const result = await onSubmit(selectedEmails);
+            if (!result)
+            {
+                return;
+            }
+            const affected = result.affected ?? selectedEmails.length;
+            messageApi.success(
+                t('pages.groups.removeFromGroupResult', { count: affected, name: groupName })
+            );
+            onClose();
+        }
+        finally
+        {
+            setSaving(false);
+        }
     }
-  }
 
-  return (
+    return (
     <Modal
       open={open}
-      onCancel={onClose}
-      onOk={submit}
-      okButtonProps={{ danger: true, disabled: selectedEmails.length === 0, loading: saving }}
-      okText={t('remove')}
-      cancelText={t('cancel')}
+      onClose={onClose}
+      size="lg"
       title={t('pages.groups.removeFromGroupTitle', { name: groupName ?? '' })}
-      width={680}
+      footer={
+        <>
+          <Button variant="secondary" onClick={onClose}>{t('cancel')}</Button>
+          <Button variant="danger" disabled={selectedEmails.length === 0} loading={saving} onClick={submit}>
+            {t('remove')}
+          </Button>
+        </>
+      }
     >
-      {messageContextHolder}
-      <Typography.Paragraph type="secondary">
-        {t('pages.groups.removeFromGroupDesc')}
-      </Typography.Paragraph>
+      <p className="mb-3 text-sm text-muted-foreground">{t('pages.groups.removeFromGroupDesc')}</p>
 
-      <Space direction="vertical" size="small" style={{ width: '100%' }}>
-        <Space style={{ width: '100%', justifyContent: 'space-between' }} wrap>
-          <Input.Search
-            allowClear
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <Input
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder={t('pages.inbounds.attachClientsSearchPlaceholder')}
-            style={{ maxWidth: 320 }}
+            className="max-w-xs"
           />
-          <Typography.Text type="secondary">
+          <span className="text-sm text-muted-foreground">
             {t('pages.inbounds.attachClientsSelectedCount', {
-              selected: selectedEmails.length,
-              total: rows.length,
+                selected: selectedEmails.length,
+                total: rows.length
             })}
-          </Typography.Text>
-        </Space>
+          </span>
+        </div>
         <Table<ClientRow>
-          size="small"
-          rowKey="email"
           columns={columns}
-          dataSource={filteredRows}
-          pagination={false}
-          scroll={{ y: 280 }}
-          rowSelection={{
-            selectedRowKeys: selectedEmails,
-            onChange: (keys) => setSelectedEmails(keys as string[]),
-            preserveSelectedRowKeys: true,
-          }}
+          data={filteredRows}
+          rowKey={(r) => r.email}
+          pageSize={0}
+          rowSelection={{ selectedKeys: selectedEmails, onChange: setSelectedEmails }}
         />
-      </Space>
+      </div>
     </Modal>
-  );
+    );
 }

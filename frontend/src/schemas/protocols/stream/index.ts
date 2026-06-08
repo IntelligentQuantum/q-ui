@@ -23,7 +23,7 @@ export * from './ws';
 export * from './xhttp';
 
 export const NetworkSchema = z.enum([
-  'tcp', 'kcp', 'ws', 'grpc', 'httpupgrade', 'xhttp', 'hysteria',
+    'tcp', 'kcp', 'ws', 'grpc', 'httpupgrade', 'xhttp', 'hysteria'
 ]);
 export type Network = z.infer<typeof NetworkSchema>;
 
@@ -37,13 +37,13 @@ export type Network = z.infer<typeof NetworkSchema>;
 // network selector hides it for other protocols. xray-core enforces
 // the constraint server-side too.
 export const NetworkSettingsSchema = z.discriminatedUnion('network', [
-  z.object({ network: z.literal('tcp'),         tcpSettings:         TcpStreamSettingsSchema }),
-  z.object({ network: z.literal('kcp'),         kcpSettings:         KcpStreamSettingsSchema }),
-  z.object({ network: z.literal('ws'),          wsSettings:          WsStreamSettingsSchema }),
-  z.object({ network: z.literal('grpc'),        grpcSettings:        GrpcStreamSettingsSchema }),
-  z.object({ network: z.literal('httpupgrade'), httpupgradeSettings: HttpUpgradeStreamSettingsSchema }),
-  z.object({ network: z.literal('xhttp'),       xhttpSettings:       XHttpStreamSettingsSchema }),
-  z.object({ network: z.literal('hysteria'),    hysteriaSettings:    HysteriaStreamSettingsSchema }),
+    z.object({ network: z.literal('tcp'),         tcpSettings: TcpStreamSettingsSchema }),
+    z.object({ network: z.literal('kcp'),         kcpSettings: KcpStreamSettingsSchema }),
+    z.object({ network: z.literal('ws'),          wsSettings: WsStreamSettingsSchema }),
+    z.object({ network: z.literal('grpc'),        grpcSettings: GrpcStreamSettingsSchema }),
+    z.object({ network: z.literal('httpupgrade'), httpupgradeSettings: HttpUpgradeStreamSettingsSchema }),
+    z.object({ network: z.literal('xhttp'),       xhttpSettings: XHttpStreamSettingsSchema }),
+    z.object({ network: z.literal('hysteria'),    hysteriaSettings: HysteriaStreamSettingsSchema })
 ]);
 export type NetworkSettings = z.infer<typeof NetworkSettingsSchema>;
 
@@ -52,8 +52,8 @@ export type NetworkSettings = z.infer<typeof NetworkSettingsSchema>;
 // is empty. The shadow harness treats absent and empty-array as the same
 // canonical state.
 export const StreamExtrasSchema = z.object({
-  externalProxy: z.array(ExternalProxyEntrySchema).optional(),
-  finalmask: FinalMaskStreamSettingsSchema.optional(),
-  sockopt: SockoptStreamSettingsSchema.optional(),
+    externalProxy: z.array(ExternalProxyEntrySchema).optional(),
+    finalmask: FinalMaskStreamSettingsSchema.optional(),
+    sockopt: SockoptStreamSettingsSchema.optional()
 });
 export type StreamExtras = z.infer<typeof StreamExtrasSchema>;

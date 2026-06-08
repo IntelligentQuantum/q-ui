@@ -1,17 +1,16 @@
 import { useTranslation } from 'react-i18next';
-import { Modal, Tag } from 'antd';
 
 import { SizeFormatter, IntlUtil, ColorUtils } from '@/utils';
-import { InfinityIcon } from '@/components/ui';
+import { InfinityIcon, Modal, Badge, type BadgeVariant } from '@/components/ui';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
 import {
-  readStreamHints,
-  networkLabel,
-  networkL4,
-  shadowsocksNetworkLabel,
-  tunnelNetworkLabel,
-  mixedNetworkLabel,
+    readStreamHints,
+    networkLabel,
+    networkL4,
+    shadowsocksNetworkLabel,
+    tunnelNetworkLabel,
+    mixedNetworkLabel
 } from './helpers';
 import type { ClientCountEntry, DBInboundRecord } from './types';
 
@@ -26,116 +25,143 @@ interface InboundStatsModalProps {
   onClose: () => void;
 }
 
+function usageVariant(color: string): BadgeVariant
+{
+    switch (color)
+    {
+        case 'green':
+        case 'success':
+            return 'success';
+        case 'red':
+        case 'error':
+            return 'danger';
+        case 'orange':
+        case 'warning':
+        case 'gold':
+            return 'warning';
+        case 'blue':
+        case 'purple':
+            return 'primary';
+        default:
+            return 'neutral';
+    }
+}
+
+function StatRow({ label, children }: { label: string; children: React.ReactNode })
+{
+    return (
+    <div className="flex flex-wrap items-center gap-1.5">
+      <span className="min-w-[96px] shrink-0 text-[10px] uppercase tracking-wide text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+    );
+}
+
 export default function InboundStatsModal({
-  open,
-  record,
-  hasActiveNode,
-  nodesById,
-  clientCount,
-  trafficDiff,
-  expireDiff,
-  onClose,
-}: InboundStatsModalProps) {
-  const { t } = useTranslation();
-  return (
+    open,
+    record,
+    hasActiveNode,
+    nodesById,
+    clientCount,
+    trafficDiff,
+    expireDiff,
+    onClose
+}: InboundStatsModalProps)
+{
+    const { t } = useTranslation();
+    return (
     <Modal
       open={open}
-      footer={null}
-      width={360}
-      centered
-      title={record ? `#${record.id} ${record.remark || ''}`.trim() : ''}
-      onCancel={onClose}
-      destroyOnHidden
+      onClose={onClose}
+      size="sm"
+      title={record ? `#${ record.id } ${ record.remark || '' }`.trim() : ''}
     >
       {record && (
-        <div className="card-stats">
-          <div className="stat-row">
-            <span className="stat-label">{t('pages.inbounds.protocol')}</span>
-            <Tag color="purple">{record.protocol}</Tag>
-            {(record.isWireguard || record.isHysteria) && (
-              <Tag color="green">UDP</Tag>
-            )}
-            {record.isSS && (() => {
-              const stream = readStreamHints(record.streamSettings);
-              return (
+        <div className="flex flex-col gap-2.5">
+          <StatRow label={t('pages.inbounds.protocol')}>
+            <Badge variant="primary">{record.protocol}</Badge>
+            {(record.isWireguard || record.isHysteria) && <Badge variant="success">UDP</Badge>}
+            {record.isSS && (() =>
+            {
+                const stream = readStreamHints(record.streamSettings);
+                return (
                 <>
-                  <Tag color="green">{shadowsocksNetworkLabel(record.settings)}</Tag>
-                  {stream.isTls && <Tag color="blue">TLS</Tag>}
+                  <Badge variant="success">{shadowsocksNetworkLabel(record.settings)}</Badge>
+                  {stream.isTls && <Badge variant="primary">TLS</Badge>}
                 </>
-              );
+                );
             })()}
-            {record.isTunnel && (
-              <Tag color="green">{tunnelNetworkLabel(record.settings)}</Tag>
-            )}
-            {record.isMixed && (
-              <Tag color="green">{mixedNetworkLabel(record.settings)}</Tag>
-            )}
-            {(record.isVMess || record.isVLess || record.isTrojan) && (() => {
-              const stream = readStreamHints(record.streamSettings);
-              const l4 = networkL4(stream.network);
-              return (
+            {record.isTunnel && <Badge variant="success">{tunnelNetworkLabel(record.settings)}</Badge>}
+            {record.isMixed && <Badge variant="success">{mixedNetworkLabel(record.settings)}</Badge>}
+            {(record.isVMess || record.isVLess || record.isTrojan) && (() =>
+            {
+                const stream = readStreamHints(record.streamSettings);
+                const l4 = networkL4(stream.network);
+                return (
                 <>
-                  <Tag color="green">{networkLabel(stream.network)}</Tag>
-                  {l4 && <Tag color="green">{l4}</Tag>}
-                  {stream.isTls && <Tag color="blue">TLS</Tag>}
-                  {stream.isReality && <Tag color="blue">Reality</Tag>}
+                  <Badge variant="success">{networkLabel(stream.network)}</Badge>
+                  {l4 && <Badge variant="success">{l4}</Badge>}
+                  {stream.isTls && <Badge variant="primary">TLS</Badge>}
+                  {stream.isReality && <Badge variant="primary">Reality</Badge>}
                 </>
-              );
+                );
             })()}
-          </div>
-          <div className="stat-row">
-            <span className="stat-label">{t('pages.inbounds.port')}</span>
-            <Tag>{record.port}</Tag>
-          </div>
+          </StatRow>
+
+          <StatRow label={t('pages.inbounds.port')}>
+            <Badge variant="neutral" className="tabular-nums">{record.port}</Badge>
+          </StatRow>
+
           {hasActiveNode && (
-            <div className="stat-row">
-              <span className="stat-label">{t('pages.inbounds.node')}</span>
+            <StatRow label={t('pages.inbounds.node')}>
               {record.nodeId == null ? (
-                <Tag color="default">{t('pages.inbounds.localPanel')}</Tag>
+                <Badge variant="neutral">{t('pages.inbounds.localPanel')}</Badge>
               ) : nodesById.get(record.nodeId) ? (
-                <Tag color={nodesById.get(record.nodeId)!.status === 'online' ? 'blue' : 'red'}>
+                <Badge variant={nodesById.get(record.nodeId)!.status === 'online' ? 'primary' : 'danger'}>
                   {nodesById.get(record.nodeId)!.name}
-                </Tag>
+                </Badge>
               ) : (
-                <Tag color="orange">#{record.nodeId}</Tag>
+                <Badge variant="warning">#{record.nodeId}</Badge>
               )}
-            </div>
+            </StatRow>
           )}
-          <div className="stat-row">
-            <span className="stat-label">{t('pages.inbounds.traffic')}</span>
-            <Tag color={ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total)}>
+
+          <StatRow label={t('pages.inbounds.traffic')}>
+            <Badge variant={usageVariant(ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total))}>
               {SizeFormatter.sizeFormat(record.up + record.down)} /
               {' '}
               {record.total > 0 ? SizeFormatter.sizeFormat(record.total) : <InfinityIcon />}
-            </Tag>
-          </div>
+            </Badge>
+          </StatRow>
+
           {clientCount[record.id] && (
-            <div className="stat-row">
-              <span className="stat-label">{t('clients')}</span>
-              <Tag color="green" className="client-count-tag">{clientCount[record.id].clients}</Tag>
+            <StatRow label={t('clients')}>
+              <Badge variant="success" className="tabular-nums">{clientCount[record.id].clients}</Badge>
               {clientCount[record.id].online.length > 0 && (
-                <Tag color="blue">{clientCount[record.id].online.length} {t('online')}</Tag>
+                <Badge variant="primary">{clientCount[record.id].online.length} {t('online')}</Badge>
               )}
               {clientCount[record.id].depleted.length > 0 && (
-                <Tag color="red">{clientCount[record.id].depleted.length} {t('depleted')}</Tag>
+                <Badge variant="danger">{clientCount[record.id].depleted.length} {t('depleted')}</Badge>
               )}
               {clientCount[record.id].expiring.length > 0 && (
-                <Tag color="orange">{clientCount[record.id].expiring.length} {t('depletingSoon')}</Tag>
+                <Badge variant="warning">{clientCount[record.id].expiring.length} {t('depletingSoon')}</Badge>
               )}
-            </div>
+            </StatRow>
           )}
-          <div className="stat-row">
-            <span className="stat-label">{t('pages.inbounds.expireDate')}</span>
+
+          <StatRow label={t('pages.inbounds.expireDate')}>
             {record.expiryTime > 0 ? (
-              <Tag color={ColorUtils.usageColor(Date.now(), expireDiff, record._expiryTime)}>
+              <Badge variant={usageVariant(ColorUtils.usageColor(Date.now(), expireDiff, record._expiryTime))}>
                 {IntlUtil.formatRelativeTime(record.expiryTime)}
-              </Tag>
+              </Badge>
             ) : (
-              <Tag color="purple"><InfinityIcon /></Tag>
+              <Badge variant="primary"><InfinityIcon /></Badge>
             )}
-          </div>
+          </StatRow>
         </div>
       )}
     </Modal>
-  );
+    );
 }

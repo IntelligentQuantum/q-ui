@@ -1,52 +1,59 @@
 import { useTranslation } from 'react-i18next';
-import { Form, Input, Select } from 'antd';
+
+import { Checkbox } from '@/components/ui';
+import { RHFText, RHFSelect, RHFField } from '@/components/form/rhf';
 
 import { ALPN_OPTIONS, UTLS_OPTIONS } from '../outbound-form-constants';
 
-export default function TlsForm() {
-  const { t } = useTranslation();
-  return (
+export default function TlsForm()
+{
+    const { t } = useTranslation();
+    return (
     <>
-      <Form.Item
+      <RHFText
+        name="streamSettings.tlsSettings.serverName"
         label="SNI"
-        name={['streamSettings', 'tlsSettings', 'serverName']}
-      >
-        <Input placeholder={t('pages.xray.outboundForm.serverNamePlaceholder')} />
-      </Form.Item>
-      <Form.Item
+        placeholder={t('pages.xray.outboundForm.serverNamePlaceholder')}
+      />
+      <RHFSelect
+        name="streamSettings.tlsSettings.fingerprint"
         label="uTLS"
-        name={['streamSettings', 'tlsSettings', 'fingerprint']}
-      >
-        <Select
-          allowClear
-          placeholder={t('none')}
-          options={[{ value: '', label: t('none') }, ...UTLS_OPTIONS]}
-        />
-      </Form.Item>
-      <Form.Item
+        placeholder={t('none')}
+        options={[{ value: '', label: t('none') }, ...UTLS_OPTIONS]}
+      />
+      <RHFField
+        name="streamSettings.tlsSettings.alpn"
         label="ALPN"
-        name={['streamSettings', 'tlsSettings', 'alpn']}
-      >
-        <Select mode="multiple" options={ALPN_OPTIONS} />
-      </Form.Item>
-      <Form.Item
-        label="ECH"
-        name={['streamSettings', 'tlsSettings', 'echConfigList']}
-      >
-        <Input />
-      </Form.Item>
-      <Form.Item
+        render={({ value, onChange }) =>
+        {
+            const arr = Array.isArray(value) ? (value as string[]) : [];
+            const toggle = (v: string) => onChange(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+            return (
+            <div className="flex flex-wrap gap-4">
+              {ALPN_OPTIONS.map((o) => (
+                <Checkbox
+                  key={String(o.value)}
+                  checked={arr.includes(String(o.value))}
+                  onChange={() => toggle(String(o.value))}
+                >
+                  {o.label}
+                </Checkbox>
+              ))}
+            </div>
+            );
+        }}
+      />
+      <RHFText name="streamSettings.tlsSettings.echConfigList" label="ECH" />
+      <RHFText
+        name="streamSettings.tlsSettings.verifyPeerCertByName"
         label={t('pages.xray.outboundForm.verifyPeerName')}
-        name={['streamSettings', 'tlsSettings', 'verifyPeerCertByName']}
-      >
-        <Input placeholder="cloudflare-dns.com" />
-      </Form.Item>
-      <Form.Item
+        placeholder="cloudflare-dns.com"
+      />
+      <RHFText
+        name="streamSettings.tlsSettings.pinnedPeerCertSha256"
         label={t('pages.xray.outboundForm.pinnedSha256')}
-        name={['streamSettings', 'tlsSettings', 'pinnedPeerCertSha256']}
-      >
-        <Input placeholder="base64 SHA256" />
-      </Form.Item>
+        placeholder="base64 SHA256"
+      />
     </>
-  );
+    );
 }

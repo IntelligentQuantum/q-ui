@@ -19,31 +19,31 @@ import { NetworkSettingsSchema, StreamExtrasSchema } from '@/schemas/protocols/s
 // counters by stringifying them at the API edge. Not modeled here.
 
 export const StreamSettingsSchema = NetworkSettingsSchema
-  .and(SecuritySettingsSchema)
-  .and(StreamExtrasSchema);
+    .and(SecuritySettingsSchema)
+    .and(StreamExtrasSchema);
 export type StreamSettings = z.infer<typeof StreamSettingsSchema>;
 
 export const InboundCoreSchema = z.object({
-  id: z.number().int().optional(),
-  up: z.number().int().min(0).default(0),
-  down: z.number().int().min(0).default(0),
-  total: z.number().int().min(0).default(0),
-  remark: z.string().default(''),
-  enable: z.boolean().default(true),
-  expiryTime: z.number().int().default(0),
-  listen: z.string().default(''),
-  port: InboundPortSchema,
-  tag: z.string().default(''),
-  sniffing: SniffingSchema.default({
-    enabled: false,
-    destOverride: ['http', 'tls', 'quic', 'fakedns'],
-    metadataOnly: false,
-    routeOnly: false,
-    ipsExcluded: [],
-    domainsExcluded: [],
-  }),
-  streamSettings: StreamSettingsSchema.optional(),
-  clientStats: z.string().optional(),
+    id: z.number().int().optional(),
+    up: z.number().int().min(0).default(0),
+    down: z.number().int().min(0).default(0),
+    total: z.number().int().min(0).default(0),
+    remark: z.string().default(''),
+    enable: z.boolean().default(true),
+    expiryTime: z.number().int().default(0),
+    listen: z.string().default(''),
+    port: InboundPortSchema,
+    tag: z.string().default(''),
+    sniffing: SniffingSchema.default({
+        enabled: false,
+        destOverride: ['http', 'tls', 'quic', 'fakedns'],
+        metadataOnly: false,
+        routeOnly: false,
+        ipsExcluded: [],
+        domainsExcluded: []
+    }),
+    streamSettings: StreamSettingsSchema.optional(),
+    clientStats: z.string().optional()
 });
 export type InboundCore = z.infer<typeof InboundCoreSchema>;
 
@@ -57,8 +57,8 @@ export type Inbound = z.infer<typeof InboundSchema>;
 // and streamSettings (the list endpoint omits both to keep payload
 // small). Used by InboundsPage list rendering.
 export const SlimInboundSchema = InboundCoreSchema.omit({
-  streamSettings: true,
+    streamSettings: true
 }).extend({
-  protocol: z.string(),
+    protocol: z.string()
 });
 export type SlimInbound = z.infer<typeof SlimInboundSchema>;

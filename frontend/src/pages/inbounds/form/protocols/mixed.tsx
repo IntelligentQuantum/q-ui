@@ -1,33 +1,24 @@
 import { useTranslation } from 'react-i18next';
-import { Form, Input, Select, Switch } from 'antd';
 
+import { RHFText, RHFSelect, RHFSwitch } from '@/components/form/rhf';
 import AccountsList from './accounts-list';
 
-export default function MixedFields({ mixedUdpOn }: { mixedUdpOn: boolean }) {
-  const { t } = useTranslation();
-  return (
+export default function MixedFields({ mixedUdpOn }: { mixedUdpOn: boolean })
+{
+    const { t } = useTranslation();
+    return (
     <>
       <AccountsList />
-      <Form.Item name={['settings', 'auth']} label={t('pages.inbounds.info.auth')}>
-        <Select
-          options={[
+      <RHFSelect
+        name="settings.auth"
+        label={t('pages.inbounds.info.auth')}
+        options={[
             { value: 'noauth', label: 'noauth' },
-            { value: 'password', label: 'password' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item
-        name={['settings', 'udp']}
-        label="UDP"
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-      {mixedUdpOn && (
-        <Form.Item name={['settings', 'ip']} label="UDP IP">
-          <Input />
-        </Form.Item>
-      )}
+            { value: 'password', label: 'password' }
+        ]}
+      />
+      <RHFSwitch name="settings.udp" label="UDP" />
+      {mixedUdpOn && <RHFText name="settings.ip" label="UDP IP" />}
     </>
-  );
+    );
 }

@@ -28,47 +28,75 @@ export interface CapabilityShadowsocksSlice {
   settings?: { method?: string };
 }
 
-export function canEnableTls(values: CapabilityProtocolSlice): boolean {
-  if (values.protocol === 'hysteria') return true;
-  if (!TLS_ELIGIBLE_PROTOCOLS.includes(values.protocol)) return false;
-  return TLS_NETWORKS.includes(values.streamSettings?.network ?? '');
+export function canEnableTls(values: CapabilityProtocolSlice): boolean
+{
+    if (values.protocol === 'hysteria')
+    {
+        return true;
+    }
+    if (!TLS_ELIGIBLE_PROTOCOLS.includes(values.protocol))
+    {
+        return false;
+    }
+    return TLS_NETWORKS.includes(values.streamSettings?.network ?? '');
 }
 
-export function canEnableReality(values: CapabilityProtocolSlice): boolean {
-  if (!REALITY_ELIGIBLE_PROTOCOLS.includes(values.protocol)) return false;
-  return REALITY_NETWORKS.includes(values.streamSettings?.network ?? '');
+export function canEnableReality(values: CapabilityProtocolSlice): boolean
+{
+    if (!REALITY_ELIGIBLE_PROTOCOLS.includes(values.protocol))
+    {
+        return false;
+    }
+    return REALITY_NETWORKS.includes(values.streamSettings?.network ?? '');
 }
 
-export function canEnableTlsFlow(values: CapabilityProtocolSlice): boolean {
-  const security = values.streamSettings?.security;
-  if (security !== 'tls' && security !== 'reality') return false;
-  if (values.streamSettings?.network !== 'tcp') return false;
-  return values.protocol === 'vless';
+export function canEnableTlsFlow(values: CapabilityProtocolSlice): boolean
+{
+    const security = values.streamSettings?.security;
+    if (security !== 'tls' && security !== 'reality')
+    {
+        return false;
+    }
+    if (values.streamSettings?.network !== 'tcp')
+    {
+        return false;
+    }
+    return values.protocol === 'vless';
 }
 
-export function canEnableStream(values: { protocol: string }): boolean {
-  return STREAM_PROTOCOLS.includes(values.protocol);
+export function canEnableStream(values: { protocol: string }): boolean
+{
+    return STREAM_PROTOCOLS.includes(values.protocol);
 }
 
 // Vision seed applies only when XTLS Vision (TCP/TLS) flow is selected
 // AND at least one VLESS client uses the vision flow. Excludes UDP variant.
-export function canEnableVisionSeed(values: CapabilityVlessSlice): boolean {
-  if (!canEnableTlsFlow(values)) return false;
-  const clients = values.settings?.clients;
-  if (!Array.isArray(clients)) return false;
-  return clients.some((c) => c?.flow === VISION_FLOW);
+export function canEnableVisionSeed(values: CapabilityVlessSlice): boolean
+{
+    if (!canEnableTlsFlow(values))
+    {
+        return false;
+    }
+    const clients = values.settings?.clients;
+    if (!Array.isArray(clients))
+    {
+        return false;
+    }
+    return clients.some((c) => c?.flow === VISION_FLOW);
 }
 
 // Why: legacy returns true on non-SS protocols too (the method getter
 // resolves to "" and "" !== blake3-chacha20-poly1305). Preserved for
 // parity with the legacy class; in practice the callers all narrow on
 // protocol === shadowsocks before checking.
-export function isSSMultiUser(values: CapabilityShadowsocksSlice): boolean {
-  const method = values.protocol === 'shadowsocks' ? (values.settings?.method ?? '') : '';
-  return method !== SS_BLAKE3_CHACHA20;
+export function isSSMultiUser(values: CapabilityShadowsocksSlice): boolean
+{
+    const method = values.protocol === 'shadowsocks' ? (values.settings?.method ?? '') : '';
+    return method !== SS_BLAKE3_CHACHA20;
 }
 
-export function isSS2022(values: CapabilityShadowsocksSlice): boolean {
-  const method = values.protocol === 'shadowsocks' ? (values.settings?.method ?? '') : '';
-  return method.substring(0, 4) === SS_2022_PREFIX;
+export function isSS2022(values: CapabilityShadowsocksSlice): boolean
+{
+    const method = values.protocol === 'shadowsocks' ? (values.settings?.method ?? '') : '';
+    return method.substring(0, 4) === SS_2022_PREFIX;
 }

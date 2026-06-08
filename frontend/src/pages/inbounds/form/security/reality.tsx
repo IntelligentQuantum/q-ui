@@ -1,9 +1,12 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { RefreshCw } from 'lucide-react';
 
 import { UTLS_FINGERPRINT } from '@/schemas/primitives';
 import { validateRealityTarget } from '@/lib/xray/stream-wire-normalize';
+import { Button, Input, Label } from '@/components/ui';
+import { RHFText, RHFNumber, RHFTextarea, RHFSelect, RHFSwitch, RHFTags, Field, useFormContext } from '@/components/form/rhf';
+
+const R = 'streamSettings.realitySettings';
 
 interface RealityFormProps {
   saving: boolean;
@@ -16,143 +19,86 @@ interface RealityFormProps {
 }
 
 export default function RealityForm({
-  saving,
-  randomizeRealityTarget,
-  randomizeShortIds,
-  genRealityKeypair,
-  clearRealityKeypair,
-  genMldsa65,
-  clearMldsa65,
-}: RealityFormProps) {
-  const { t } = useTranslation();
-  return (
+    saving,
+    randomizeRealityTarget,
+    randomizeShortIds,
+    genRealityKeypair,
+    clearRealityKeypair,
+    genMldsa65,
+    clearMldsa65
+}: RealityFormProps)
+{
+    const { t } = useTranslation();
+    const { register } = useFormContext();
+    return (
     <>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'show']}
-        label={t('pages.inbounds.form.show')}
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-      <Form.Item name={['streamSettings', 'realitySettings', 'xver']} label={t('pages.inbounds.form.xver')}>
-        <InputNumber min={0} />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'settings', 'fingerprint']}
+      <RHFSwitch name={`${ R }.show`} label={t('pages.inbounds.form.show')} />
+      <RHFNumber name={`${ R }.xver`} label={t('pages.inbounds.form.xver')} min={0} />
+      <RHFSelect
+        name={`${ R }.settings.fingerprint`}
         label="uTLS"
-      >
-        <Select
-          options={Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))}
-        />
-      </Form.Item>
-      <Form.Item
-        label={t('pages.inbounds.form.target')}
-        extra={t('pages.inbounds.form.realityTargetHint')}
-      >
-        <Space.Compact block>
-          <Form.Item
-            name={['streamSettings', 'realitySettings', 'target']}
-            noStyle
-            rules={[
-              {
-                validator: async (_, value) => {
-                  const errKey = validateRealityTarget(typeof value === 'string' ? value : '');
-                  if (errKey) throw new Error(t(errKey));
-                },
-              },
-            ]}
-          >
-            <Input style={{ width: 'calc(100% - 32px)' }} placeholder="example.com:443" />
-          </Form.Item>
-          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item label="SNI">
-        <Space.Compact block style={{ display: 'flex' }}>
-          <Form.Item
-            name={['streamSettings', 'realitySettings', 'serverNames']}
-            noStyle
-          >
-            <Select mode="tags" tokenSeparators={[',']} style={{ flex: 1 }} />
-          </Form.Item>
-          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeRealityTarget} />
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'maxTimediff']}
-        label={t('pages.inbounds.form.maxTimeDiff')}
-      >
-        <InputNumber min={0} />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'minClientVer']}
-        label={t('pages.inbounds.form.minClientVer')}
-      >
-        <Input placeholder="25.9.11" />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'maxClientVer']}
-        label={t('pages.inbounds.form.maxClientVer')}
-      >
-        <Input placeholder="25.9.11" />
-      </Form.Item>
-      <Form.Item label={t('pages.inbounds.form.shortIds')}>
-        <Space.Compact block style={{ display: 'flex' }}>
-          <Form.Item
-            name={['streamSettings', 'realitySettings', 'shortIds']}
-            noStyle
-          >
-            <Select mode="tags" tokenSeparators={[',']} style={{ flex: 1 }} />
-          </Form.Item>
-          <Button aria-label={t('regenerate')} icon={<ReloadOutlined />} onClick={randomizeShortIds} />
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'settings', 'spiderX']}
-        label={t('pages.inbounds.form.spiderX')}
-      >
-        <Input />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'settings', 'publicKey']}
-        label={t('pages.inbounds.publicKey')}
-      >
-        <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'privateKey']}
-        label={t('pages.inbounds.privatekey')}
-      >
-        <Input.TextArea autoSize={{ minRows: 1, maxRows: 4 }} />
-      </Form.Item>
-      <Form.Item label=" ">
-        <Space>
-          <Button type="primary" loading={saving} onClick={genRealityKeypair}>
-            {t('pages.inbounds.form.getNewCert')}
+        options={Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))}
+      />
+      <Field name={`${ R }.target`} label={t('pages.inbounds.form.target')} hint={t('pages.inbounds.form.realityTargetHint')}>
+        <div className="flex gap-2">
+          <Input
+            className="flex-1"
+            placeholder="example.com:443"
+            {...register(`${ R }.target`, {
+                validate: (v) =>
+                {
+                    const errKey = validateRealityTarget(typeof v === 'string' ? v : '');
+                    return errKey ? t(errKey) : true;
+                }
+            })}
+          />
+          <Button variant="secondary" size="icon" aria-label={t('regenerate')} onClick={randomizeRealityTarget}>
+            <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button danger onClick={clearRealityKeypair}>{t('clear')}</Button>
-        </Space>
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'mldsa65Seed']}
-        label={t('pages.inbounds.form.mldsa65Seed')}
-      >
-        <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'realitySettings', 'settings', 'mldsa65Verify']}
-        label={t('pages.inbounds.form.mldsa65Verify')}
-      >
-        <Input.TextArea autoSize={{ minRows: 2, maxRows: 6 }} />
-      </Form.Item>
-      <Form.Item label=" ">
-        <Space>
-          <Button type="primary" loading={saving} onClick={genMldsa65}>
-            {t('pages.inbounds.form.getNewSeed')}
+        </div>
+      </Field>
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label>SNI</Label>
+          <Button variant="secondary" size="icon" aria-label={t('regenerate')} onClick={randomizeRealityTarget}>
+            <RefreshCw className="h-4 w-4" />
           </Button>
-          <Button danger onClick={clearMldsa65}>{t('clear')}</Button>
-        </Space>
-      </Form.Item>
+        </div>
+        <RHFTags name={`${ R }.serverNames`} />
+      </div>
+      <RHFNumber name={`${ R }.maxTimediff`} label={t('pages.inbounds.form.maxTimeDiff')} min={0} />
+      <RHFText name={`${ R }.minClientVer`} label={t('pages.inbounds.form.minClientVer')} placeholder="25.9.11" />
+      <RHFText name={`${ R }.maxClientVer`} label={t('pages.inbounds.form.maxClientVer')} placeholder="25.9.11" />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label>{t('pages.inbounds.form.shortIds')}</Label>
+          <Button variant="secondary" size="icon" aria-label={t('regenerate')} onClick={randomizeShortIds}>
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+        <RHFTags name={`${ R }.shortIds`} />
+      </div>
+      <RHFText name={`${ R }.settings.spiderX`} label={t('pages.inbounds.form.spiderX')} />
+      <RHFTextarea name={`${ R }.settings.publicKey`} label={t('pages.inbounds.publicKey')} rows={2} />
+      <RHFTextarea name={`${ R }.privateKey`} label={t('pages.inbounds.privatekey')} rows={2} />
+      <div className="flex gap-2">
+        <Button loading={saving} onClick={genRealityKeypair}>
+          {t('pages.inbounds.form.getNewCert')}
+        </Button>
+        <Button variant="danger" onClick={clearRealityKeypair}>
+          {t('clear')}
+        </Button>
+      </div>
+      <RHFTextarea name={`${ R }.mldsa65Seed`} label={t('pages.inbounds.form.mldsa65Seed')} rows={3} />
+      <RHFTextarea name={`${ R }.settings.mldsa65Verify`} label={t('pages.inbounds.form.mldsa65Verify')} rows={3} />
+      <div className="flex gap-2">
+        <Button loading={saving} onClick={genMldsa65}>
+          {t('pages.inbounds.form.getNewSeed')}
+        </Button>
+        <Button variant="danger" onClick={clearMldsa65}>
+          {t('clear')}
+        </Button>
+      </div>
     </>
-  );
+    );
 }

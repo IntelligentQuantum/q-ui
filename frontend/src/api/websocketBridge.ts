@@ -15,65 +15,96 @@ interface SharedClient {
 
 let sharedClient: SharedClient | null = null;
 
-function getSharedClient(): SharedClient {
-  if (sharedClient) return sharedClient;
-  const basePath = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '';
-  sharedClient = new WebSocketClient(basePath) as SharedClient;
-  return sharedClient;
+function getSharedClient(): SharedClient
+{
+    if (sharedClient)
+    {
+        return sharedClient;
+    }
+    const basePath = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '';
+    sharedClient = new WebSocketClient(basePath) as SharedClient;
+    return sharedClient;
 }
 
 let invalidateTimer: number | null = null;
 
-export function useWebSocketBridge() {
-  const queryClient = useQueryClient();
+export function useWebSocketBridge()
+{
+    const queryClient = useQueryClient();
 
-  useEffect(() => {
-    const client = getSharedClient();
+    useEffect(() =>
+    {
+        const client = getSharedClient();
 
-    const onInvalidate: Handler = (payload) => {
-      const p = payload as { type?: string } | undefined;
-      if (!p || (p.type !== 'inbounds' && p.type !== 'clients')) return;
-      if (invalidateTimer != null) clearTimeout(invalidateTimer);
-      invalidateTimer = window.setTimeout(() => {
-        invalidateTimer = null;
-        if (isRecentLocalInvalidate()) return;
-        if (p.type === 'inbounds') {
-          queryClient.invalidateQueries({ queryKey: ['inbounds'] });
-        } else {
-          queryClient.invalidateQueries({ queryKey: ['clients'] });
-        }
-      }, 200);
-    };
+        const onInvalidate: Handler = (payload) =>
+        {
+            const p = payload as { type?: string } | undefined;
+            if (!p || (p.type !== 'inbounds' && p.type !== 'clients'))
+            {
+                return;
+            }
+            if (invalidateTimer != null)
+            {
+                clearTimeout(invalidateTimer);
+            }
+            invalidateTimer = window.setTimeout(() =>
+            {
+                invalidateTimer = null;
+                if (isRecentLocalInvalidate())
+                {
+                    return;
+                }
+                if (p.type === 'inbounds')
+                {
+                    queryClient.invalidateQueries({ queryKey: ['inbounds'] });
+                }
+                else
+                {
+                    queryClient.invalidateQueries({ queryKey: ['clients'] });
+                }
+            }, 200);
+        };
 
-    const onOutbounds: Handler = (payload) => {
-      queryClient.setQueryData(keys.xray.outboundsTraffic(), payload);
-    };
+        const onOutbounds: Handler = (payload) =>
+        {
+            queryClient.setQueryData(keys.xray.outboundsTraffic(), payload);
+        };
 
-    const onNodes: Handler = (payload) => {
-      if (!Array.isArray(payload)) return;
-      queryClient.setQueryData(keys.nodes.list(), payload);
-    };
+        const onNodes: Handler = (payload) =>
+        {
+            if (!Array.isArray(payload))
+            {
+                return;
+            }
+            queryClient.setQueryData(keys.nodes.list(), payload);
+        };
 
-    const onInbounds: Handler = (payload) => {
-      if (!Array.isArray(payload)) return;
-      queryClient.setQueryData(keys.inbounds.slim(), payload);
-    };
+        const onInbounds: Handler = (payload) =>
+        {
+            if (!Array.isArray(payload))
+            {
+                return;
+            }
+            queryClient.setQueryData(keys.inbounds.slim(), payload);
+        };
 
-    client.on('invalidate', onInvalidate);
-    client.on('outbounds', onOutbounds);
-    client.on('nodes', onNodes);
-    client.on('inbounds', onInbounds);
-    client.connect();
+        client.on('invalidate', onInvalidate);
+        client.on('outbounds', onOutbounds);
+        client.on('nodes', onNodes);
+        client.on('inbounds', onInbounds);
+        client.connect();
 
-    return () => {
-      client.off('invalidate', onInvalidate);
-      client.off('outbounds', onOutbounds);
-      client.off('nodes', onNodes);
-      client.off('inbounds', onInbounds);
-      if (invalidateTimer != null) {
-        clearTimeout(invalidateTimer);
-        invalidateTimer = null;
-      }
-    };
-  }, [queryClient]);
+        return () =>
+        {
+            client.off('invalidate', onInvalidate);
+            client.off('outbounds', onOutbounds);
+            client.off('nodes', onNodes);
+            client.off('inbounds', onInbounds);
+            if (invalidateTimer != null)
+            {
+                clearTimeout(invalidateTimer);
+                invalidateTimer = null;
+            }
+        };
+    }, [queryClient]);
 }

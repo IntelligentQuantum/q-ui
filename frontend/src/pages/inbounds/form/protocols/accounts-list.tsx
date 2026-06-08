@@ -1,47 +1,42 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, Space } from 'antd';
-import { MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import { Plus, Minus } from 'lucide-react';
 
 import { RandomUtil } from '@/utils';
-import { InputAddon } from '@/components/ui';
+import { Button, Input, Label } from '@/components/ui';
+import { useFieldArray, useFormContext } from '@/components/form/rhf';
 
-export default function AccountsList() {
-  const { t } = useTranslation();
-  return (
-    <Form.List name={['settings', 'accounts']}>
-      {(fields, { add, remove }) => (
-        <>
-          <Form.Item label={t('pages.inbounds.form.accounts')}>
-            <Button
-              size="small"
-              onClick={() => add({
-                user: RandomUtil.randomLowerAndNum(8),
-                pass: RandomUtil.randomLowerAndNum(12),
-              })}
-            >
-              <PlusOutlined /> {t('add')}
-            </Button>
-          </Form.Item>
-          {fields.length > 0 && (
-            <Form.Item wrapperCol={{ span: 24 }}>
-              {fields.map((field, idx) => (
-                <Space.Compact key={field.key} className="mb-8" block>
-                  <InputAddon>{String(idx + 1)}</InputAddon>
-                  <Form.Item name={[field.name, 'user']} noStyle>
-                    <Input placeholder={t('username')} />
-                  </Form.Item>
-                  <Form.Item name={[field.name, 'pass']} noStyle>
-                    <Input placeholder={t('password')} />
-                  </Form.Item>
-                  <Button onClick={() => remove(field.name)}>
-                    <MinusOutlined />
-                  </Button>
-                </Space.Compact>
-              ))}
-            </Form.Item>
-          )}
-        </>
-      )}
-    </Form.List>
-  );
+export default function AccountsList()
+{
+    const { t } = useTranslation();
+    const { control, register } = useFormContext();
+    const { fields, append, remove } = useFieldArray({ control, name: 'settings.accounts' });
+    return (
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between">
+        <Label>{t('pages.inbounds.form.accounts')}</Label>
+        <Button
+          size="sm"
+          variant="secondary"
+          onClick={() =>
+              append({ user: RandomUtil.randomLowerAndNum(8), pass: RandomUtil.randomLowerAndNum(12) })
+          }
+        >
+          <Plus className="h-4 w-4" />
+          {t('add')}
+        </Button>
+      </div>
+      {fields.map((field, i) => (
+        <div key={field.id} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface-sunken text-xs text-muted-foreground">
+            {i + 1}
+          </span>
+          <Input className="flex-1" placeholder={t('username')} {...register(`settings.accounts.${ i }.user`)} />
+          <Input className="flex-1" placeholder={t('password')} {...register(`settings.accounts.${ i }.pass`)} />
+          <Button variant="ghost" size="icon" aria-label={t('delete')} onClick={() => remove(i)}>
+            <Minus className="h-4 w-4 text-danger" />
+          </Button>
+        </div>
+      ))}
+    </div>
+    );
 }

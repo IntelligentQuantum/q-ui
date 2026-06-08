@@ -1,271 +1,151 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Select, Space, Switch } from 'antd';
+import { Plus, Minus } from 'lucide-react';
 
-import {
-  Address_Port_Strategy,
-  DOMAIN_STRATEGY_OPTION,
-  TCP_CONGESTION_OPTION,
-} from '@/schemas/primitives';
+import { Address_Port_Strategy, DOMAIN_STRATEGY_OPTION, TCP_CONGESTION_OPTION } from '@/schemas/primitives';
 import { HappyEyeballsSchema } from '@/schemas/protocols/stream/sockopt';
+import { Button, Label, Switch } from '@/components/ui';
+import { RHFText, RHFNumber, RHFSelect, RHFSwitch, RHFTags, useFormContext, useWatch } from '@/components/form/rhf';
 
-export default function SockoptForm({
-  toggleSockopt,
-}: {
-  toggleSockopt: (on: boolean) => void;
-}) {
-  const { t } = useTranslation();
-  return (
-    <Form.Item
-      noStyle
-      shouldUpdate={(prev, curr) => {
-        const a = (prev.streamSettings as { sockopt?: object } | undefined)?.sockopt;
-        const b = (curr.streamSettings as { sockopt?: object } | undefined)?.sockopt;
-        return !!a !== !!b;
-      }}
-    >
-      {({ getFieldValue }) => {
-        const sock = getFieldValue(['streamSettings', 'sockopt']);
-        const on = !!sock && typeof sock === 'object' && Object.keys(sock).length > 0;
-        return (
-          <>
-            <Form.Item label="Sockopt">
-              <Switch checked={on} onChange={toggleSockopt} />
-            </Form.Item>
-            {on && (
-              <>
-                <Form.Item name={['streamSettings', 'sockopt', 'mark']} label={t('pages.inbounds.form.routeMark')}>
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpKeepAliveInterval']}
-                  label={t('pages.inbounds.form.tcpKeepAliveInterval')}
-                >
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpKeepAliveIdle']}
-                  label={t('pages.inbounds.form.tcpKeepAliveIdle')}
-                >
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item name={['streamSettings', 'sockopt', 'tcpMaxSeg']} label={t('pages.inbounds.form.tcpMaxSeg')}>
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpUserTimeout']}
-                  label={t('pages.inbounds.form.tcpUserTimeout')}
-                >
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpWindowClamp']}
-                  label={t('pages.inbounds.form.tcpWindowClamp')}
-                  tooltip={t('pages.inbounds.form.tcpWindowClampHint')}
-                >
-                  <InputNumber min={0} />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'acceptProxyProtocol']}
-                  label={t('pages.inbounds.form.proxyProtocol')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpFastOpen']}
-                  label={t('pages.inbounds.form.tcpFastOpen')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpMptcp']}
-                  label={t('pages.inbounds.form.multipathTcp')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'penetrate']}
-                  label={t('pages.inbounds.form.penetrate')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'V6Only']}
-                  label={t('pages.inbounds.form.v6Only')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'domainStrategy']}
-                  label={t('pages.xray.wireguard.domainStrategy')}
-                >
-                  <Select
-                    style={{ width: '50%' }}
-                    options={Object.values(DOMAIN_STRATEGY_OPTION).map((d) => ({ value: d, label: d }))}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'tcpcongestion']}
-                  label={t('pages.inbounds.form.tcpCongestion')}
-                >
-                  <Select
-                    style={{ width: '50%' }}
-                    options={Object.values(TCP_CONGESTION_OPTION).map((c) => ({ value: c, label: c }))}
-                  />
-                </Form.Item>
-                <Form.Item name={['streamSettings', 'sockopt', 'tproxy']} label="TProxy">
-                  <Select
-                    style={{ width: '50%' }}
-                    options={[
-                      { value: 'off', label: 'Off' },
-                      { value: 'redirect', label: 'Redirect' },
-                      { value: 'tproxy', label: 'TProxy' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item name={['streamSettings', 'sockopt', 'dialerProxy']} label={t('pages.inbounds.form.dialerProxy')}>
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'interface']}
-                  label={t('pages.inbounds.info.interfaceName')}
-                >
-                  <Input />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'trustedXForwardedFor']}
-                  label={t('pages.inbounds.form.trustedXForwardedFor')}
-                >
-                  <Select
-                    mode="tags"
-                    style={{ width: '100%' }}
-                    tokenSeparators={[',']}
-                    options={[
-                      { value: 'CF-Connecting-IP', label: 'CF-Connecting-IP' },
-                      { value: 'X-Real-IP', label: 'X-Real-IP' },
-                      { value: 'True-Client-IP', label: 'True-Client-IP' },
-                      { value: 'X-Client-IP', label: 'X-Client-IP' },
-                    ]}
-                  />
-                </Form.Item>
-                <Form.Item
-                  name={['streamSettings', 'sockopt', 'addressPortStrategy']}
-                  label={t('pages.inbounds.form.addressPortStrategy')}
-                >
-                  <Select
-                    style={{ width: '50%' }}
-                    options={Object.values(Address_Port_Strategy).map((v) => ({ value: v, label: v }))}
-                  />
-                </Form.Item>
-                <Form.Item shouldUpdate noStyle>
-                  {({ getFieldValue, setFieldValue }) => {
-                    const he = getFieldValue(['streamSettings', 'sockopt', 'happyEyeballs']);
-                    const hasHe = he != null;
-                    return (
-                      <>
-                        <Form.Item label="Happy Eyeballs">
-                          <Switch
-                            checked={hasHe}
-                            onChange={(v) => {
-                              setFieldValue(
-                                ['streamSettings', 'sockopt', 'happyEyeballs'],
-                                v ? HappyEyeballsSchema.parse({}) : undefined,
-                              );
-                            }}
-                          />
-                        </Form.Item>
-                        {hasHe && (
-                          <>
-                            <Form.Item
-                              name={['streamSettings', 'sockopt', 'happyEyeballs', 'tryDelayMs']}
-                              label={t('pages.inbounds.form.tryDelayMs')}
-                            >
-                              <InputNumber min={0} placeholder="0 disabled — 250 recommended" />
-                            </Form.Item>
-                            <Form.Item
-                              name={['streamSettings', 'sockopt', 'happyEyeballs', 'prioritizeIPv6']}
-                              label={t('pages.inbounds.form.prioritizeIPv6')}
-                              valuePropName="checked"
-                            >
-                              <Switch />
-                            </Form.Item>
-                            <Form.Item
-                              name={['streamSettings', 'sockopt', 'happyEyeballs', 'interleave']}
-                              label={t('pages.inbounds.form.interleave')}
-                            >
-                              <InputNumber min={1} />
-                            </Form.Item>
-                            <Form.Item
-                              name={['streamSettings', 'sockopt', 'happyEyeballs', 'maxConcurrentTry']}
-                              label={t('pages.inbounds.form.maxConcurrentTry')}
-                            >
-                              <InputNumber min={0} />
-                            </Form.Item>
-                          </>
-                        )}
-                      </>
-                    );
-                  }}
-                </Form.Item>
-                <Form.List name={['streamSettings', 'sockopt', 'customSockopt']}>
-                  {(fields, { add, remove }) => (
-                    <>
-                      <Form.Item label={t('pages.inbounds.form.customSockopt')}>
-                        <Button
-                          type="dashed"
-                          size="small"
-                          onClick={() => add({ type: 'int', level: '6', opt: '', value: '' })}
-                        >
-                          + {t('pages.inbounds.form.addCustomOption')}
-                        </Button>
-                      </Form.Item>
-                      {fields.map((field) => (
-                        <Space.Compact key={field.key} style={{ display: 'flex', marginBottom: 8 }}>
-                          <Form.Item name={[field.name, 'system']} noStyle>
-                            <Select
-                              placeholder="all"
-                              allowClear
-                              style={{ width: 100 }}
-                              options={[
-                                { value: 'linux', label: 'linux' },
-                                { value: 'windows', label: 'windows' },
-                                { value: 'darwin', label: 'darwin' },
-                              ]}
-                            />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'type']} noStyle>
-                            <Select
-                              style={{ width: 80 }}
-                              options={[
-                                { value: 'int', label: 'int' },
-                                { value: 'str', label: 'str' },
-                              ]}
-                            />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'level']} noStyle>
-                            <Input placeholder="level (6=TCP)" style={{ width: 100 }} />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'opt']} noStyle>
-                            <Input placeholder="opt" style={{ width: 120 }} />
-                          </Form.Item>
-                          <Form.Item name={[field.name, 'value']} noStyle>
-                            <Input placeholder="value" style={{ flex: 1 }} />
-                          </Form.Item>
-                          <Button danger onClick={() => remove(field.name)}>−</Button>
-                        </Space.Compact>
-                      ))}
-                    </>
-                  )}
-                </Form.List>
-              </>
-            )}
-          </>
-        );
-      }}
-    </Form.Item>
-  );
+const SO = 'streamSettings.sockopt';
+
+export default function SockoptForm({ toggleSockopt }: { toggleSockopt: (on: boolean) => void })
+{
+    const { t } = useTranslation();
+    const { getValues, setValue } = useFormContext();
+    const sock = useWatch({ name: SO }) as Record<string, unknown> | undefined;
+    const on = !!sock && typeof sock === 'object' && Object.keys(sock).length > 0;
+    const hasHe = useWatch({ name: `${ SO }.happyEyeballs` }) != null;
+    const custom = (useWatch({ name: `${ SO }.customSockopt` }) ?? []) as unknown[];
+
+    const addCustom = () =>
+    {
+        const cur = (getValues(`${ SO }.customSockopt`) ?? []) as unknown[];
+        setValue(`${ SO }.customSockopt`, [...cur, { system: '', type: 'int', level: '6', opt: '', value: '' }]);
+    };
+    const removeCustom = (idx: number) =>
+    {
+        const cur = (getValues(`${ SO }.customSockopt`) ?? []) as unknown[];
+        setValue(`${ SO }.customSockopt`, cur.filter((_, i) => i !== idx));
+    };
+
+    return (
+    <>
+      <div className="flex items-center justify-between gap-3">
+        <Label>Sockopt</Label>
+        <Switch checked={on} aria-label="Sockopt" onCheckedChange={toggleSockopt} />
+      </div>
+      {on && (
+        <>
+          <RHFNumber name={`${ SO }.mark`} label={t('pages.inbounds.form.routeMark')} min={0} />
+          <RHFNumber name={`${ SO }.tcpKeepAliveInterval`} label={t('pages.inbounds.form.tcpKeepAliveInterval')} min={0} />
+          <RHFNumber name={`${ SO }.tcpKeepAliveIdle`} label={t('pages.inbounds.form.tcpKeepAliveIdle')} min={0} />
+          <RHFNumber name={`${ SO }.tcpMaxSeg`} label={t('pages.inbounds.form.tcpMaxSeg')} min={0} />
+          <RHFNumber name={`${ SO }.tcpUserTimeout`} label={t('pages.inbounds.form.tcpUserTimeout')} min={0} />
+          <RHFNumber
+            name={`${ SO }.tcpWindowClamp`}
+            label={t('pages.inbounds.form.tcpWindowClamp')}
+            hint={t('pages.inbounds.form.tcpWindowClampHint')}
+            min={0}
+          />
+          <RHFSwitch name={`${ SO }.acceptProxyProtocol`} label={t('pages.inbounds.form.proxyProtocol')} />
+          <RHFSwitch name={`${ SO }.tcpFastOpen`} label={t('pages.inbounds.form.tcpFastOpen')} />
+          <RHFSwitch name={`${ SO }.tcpMptcp`} label={t('pages.inbounds.form.multipathTcp')} />
+          <RHFSwitch name={`${ SO }.penetrate`} label={t('pages.inbounds.form.penetrate')} />
+          <RHFSwitch name={`${ SO }.V6Only`} label={t('pages.inbounds.form.v6Only')} />
+          <RHFSelect
+            name={`${ SO }.domainStrategy`}
+            label={t('pages.xray.wireguard.domainStrategy')}
+            options={Object.values(DOMAIN_STRATEGY_OPTION).map((d) => ({ value: d, label: d }))}
+          />
+          <RHFSelect
+            name={`${ SO }.tcpcongestion`}
+            label={t('pages.inbounds.form.tcpCongestion')}
+            options={Object.values(TCP_CONGESTION_OPTION).map((c) => ({ value: c, label: c }))}
+          />
+          <RHFSelect
+            name={`${ SO }.tproxy`}
+            label="TProxy"
+            options={[
+                { value: 'off', label: 'Off' },
+                { value: 'redirect', label: 'Redirect' },
+                { value: 'tproxy', label: 'TProxy' }
+            ]}
+          />
+          <RHFText name={`${ SO }.dialerProxy`} label={t('pages.inbounds.form.dialerProxy')} />
+          <RHFText name={`${ SO }.interface`} label={t('pages.inbounds.info.interfaceName')} />
+          <RHFTags
+            name={`${ SO }.trustedXForwardedFor`}
+            label={t('pages.inbounds.form.trustedXForwardedFor')}
+            placeholder="CF-Connecting-IP, X-Real-IP"
+          />
+          <RHFSelect
+            name={`${ SO }.addressPortStrategy`}
+            label={t('pages.inbounds.form.addressPortStrategy')}
+            options={Object.values(Address_Port_Strategy).map((v) => ({ value: v, label: v }))}
+          />
+
+          <div className="flex items-center justify-between gap-3">
+            <Label>Happy Eyeballs</Label>
+            <Switch
+              checked={hasHe}
+              aria-label="Happy Eyeballs"
+              onCheckedChange={(v) => setValue(`${ SO }.happyEyeballs`, v ? HappyEyeballsSchema.parse({}) : undefined)}
+            />
+          </div>
+          {hasHe && (
+            <>
+              <RHFNumber
+                name={`${ SO }.happyEyeballs.tryDelayMs`}
+                label={t('pages.inbounds.form.tryDelayMs')}
+                min={0}
+                placeholder="0 disabled — 250 recommended"
+              />
+              <RHFSwitch name={`${ SO }.happyEyeballs.prioritizeIPv6`} label={t('pages.inbounds.form.prioritizeIPv6')} />
+              <RHFNumber name={`${ SO }.happyEyeballs.interleave`} label={t('pages.inbounds.form.interleave')} min={1} />
+              <RHFNumber name={`${ SO }.happyEyeballs.maxConcurrentTry`} label={t('pages.inbounds.form.maxConcurrentTry')} min={0} />
+            </>
+          )}
+
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between">
+              <Label>{t('pages.inbounds.form.customSockopt')}</Label>
+              <Button size="sm" variant="secondary" onClick={addCustom}>
+                <Plus className="h-4 w-4" />
+                {t('pages.inbounds.form.addCustomOption')}
+              </Button>
+            </div>
+            {custom.map((_, idx) => (
+              <div key={idx} className="flex flex-wrap items-start gap-2 rounded-lg border border-border p-3">
+                <RHFSelect
+                  className="w-28"
+                  name={`${ SO }.customSockopt.${ idx }.system`}
+                  placeholder="all"
+                  options={[
+                      { value: '', label: 'all' },
+                      { value: 'linux', label: 'linux' },
+                      { value: 'windows', label: 'windows' },
+                      { value: 'darwin', label: 'darwin' }
+                  ]}
+                />
+                <RHFSelect
+                  className="w-24"
+                  name={`${ SO }.customSockopt.${ idx }.type`}
+                  options={[
+                      { value: 'int', label: 'int' },
+                      { value: 'str', label: 'str' }
+                  ]}
+                />
+                <RHFText className="w-28" name={`${ SO }.customSockopt.${ idx }.level`} placeholder="level (6=TCP)" />
+                <RHFText className="w-32" name={`${ SO }.customSockopt.${ idx }.opt`} placeholder="opt" />
+                <RHFText className="min-w-32 flex-1" name={`${ SO }.customSockopt.${ idx }.value`} placeholder="value" />
+                <Button variant="ghost" size="icon" aria-label={t('delete')} onClick={() => removeCustom(idx)}>
+                  <Minus className="h-4 w-4 text-danger" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+    </>
+    );
 }

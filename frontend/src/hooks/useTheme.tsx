@@ -1,202 +1,130 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
-import { theme as antdTheme } from 'antd';
-import type { ThemeConfig } from 'antd';
 
-// Theme is a single mode with four values. light/dark/ultra are explicit;
-// `system` follows the OS `prefers-color-scheme`. The legacy boolean keys are
-// migrated once into this single key.
-export type ThemeMode = 'light' | 'dark' | 'ultra' | 'system';
+// Two themes only: light and dark. (The old `ultra`/OLED and `system`/auto modes
+// were removed at the user's request.) Legacy stored values are migrated once.
+export type ThemeMode = 'light' | 'dark';
 
 const STORAGE_MODE = 'theme-mode';
-const STORAGE_DARK = 'dark-mode'; // legacy
-const STORAGE_ULTRA = 'isUltraDarkThemeEnabled'; // legacy
+const STORAGE_DARK = 'dark-mode'; // legacy boolean
 
-export const THEME_MODES: readonly ThemeMode[] = ['light', 'dark', 'ultra', 'system'];
+export const THEME_MODES: readonly ThemeMode[] = ['light', 'dark'];
 
-function prefersDark(): boolean {
-  return (
-    typeof window !== 'undefined' &&
-    typeof window.matchMedia === 'function' &&
-    window.matchMedia('(prefers-color-scheme: dark)').matches
-  );
+function readInitialMode(): ThemeMode
+{
+    const stored = localStorage.getItem(STORAGE_MODE);
+    if (stored === 'light')
+    {
+        return 'light';
+    }
+    if (stored === 'dark')
+    {
+        return 'dark';
+    }
+    // Migrate legacy values: removed 'ultra'/'system' collapse to dark; the old
+    // two-boolean scheme defaulted to dark when unset.
+    if (stored === 'ultra' || stored === 'system')
+    {
+        return 'dark';
+    }
+    const darkRaw = localStorage.getItem(STORAGE_DARK);
+    return darkRaw === 'false' ? 'light' : 'dark';
 }
 
-function resolveDark(mode: ThemeMode, systemDark: boolean): boolean {
-  if (mode === 'system') return systemDark;
-  return mode === 'dark' || mode === 'ultra';
+function applyDom(isDark: boolean)
+{
+    // The theme class lives on <html> so the document canvas (html background)
+    // reads the dark token too — body alone leaves html on the light :root value,
+    // which flashes through on short pages / overscroll. Body kept in sync for any
+    // code that still reads body.className.
+    const root = document.documentElement;
+    root.classList.toggle('dark', isDark);
+    root.classList.toggle('light', !isDark);
+    document.body.setAttribute('class', isDark ? 'dark' : 'light');
+    // Ultra removed — clear any stale OLED marker a previous build may have set.
+    root.removeAttribute('data-theme');
+    const msg = document.getElementById('message');
+    if (msg)
+    {
+        msg.className = isDark ? 'dark' : 'light';
+    }
 }
 
-function readInitialMode(): ThemeMode {
-  const stored = localStorage.getItem(STORAGE_MODE);
-  if (stored && (THEME_MODES as readonly string[]).includes(stored)) return stored as ThemeMode;
-  // Migrate from the old two-boolean scheme (default was dark).
-  if (localStorage.getItem(STORAGE_ULTRA) === 'true') return 'ultra';
-  const darkRaw = localStorage.getItem(STORAGE_DARK);
-  return darkRaw === 'false' ? 'light' : 'dark';
-}
-
-function applyDom(isDark: boolean, isUltra: boolean) {
-  document.body.setAttribute('class', isDark ? 'dark' : 'light');
-  if (isUltra) {
-    document.documentElement.setAttribute('data-theme', 'ultra-dark');
-  } else {
-    document.documentElement.removeAttribute('data-theme');
-  }
-  const msg = document.getElementById('message');
-  if (msg) msg.className = isDark ? 'dark' : 'light';
-}
-
-// module load so the document is in the right theme before React mounts.
+// Applied at module load so the document is themed before React mounts.
 const initialMode = readInitialMode();
-const initialSystemDark = prefersDark();
-applyDom(resolveDark(initialMode, initialSystemDark), initialMode === 'ultra');
+applyDom(initialMode === 'dark');
 
-const DARK_TOKENS = {
-  colorBgBase: '#1a1b1f',
-  colorBgLayout: '#1a1b1f',
-  colorBgContainer: '#23252b',
-  colorBgElevated: '#2d2f37',
-};
-const ULTRA_DARK_TOKENS = {
-  colorBgBase: '#000',
-  colorBgLayout: '#000',
-  colorBgContainer: '#101013',
-  colorBgElevated: '#1a1a1e',
-};
-const DARK_LAYOUT_TOKENS = {
-  bodyBg: '#1a1b1f',
-  headerBg: '#15161a',
-  headerColor: '#ffffff',
-  footerBg: '#1a1b1f',
-  siderBg: '#15161a',
-  triggerBg: '#23252b',
-  triggerColor: '#ffffff',
-};
-const ULTRA_DARK_LAYOUT_TOKENS = {
-  bodyBg: '#000',
-  headerBg: '#050507',
-  headerColor: '#ffffff',
-  footerBg: '#000',
-  siderBg: '#050507',
-  triggerBg: '#1a1a1e',
-  triggerColor: '#ffffff',
-};
-const DARK_MENU_TOKENS = {
-  darkItemBg: '#15161a',
-  darkSubMenuItemBg: '#1a1b1f',
-  darkPopupBg: '#23252b',
-};
-const ULTRA_DARK_MENU_TOKENS = {
-  darkItemBg: '#050507',
-  darkSubMenuItemBg: '#000',
-  darkPopupBg: '#101013',
-};
-const DARK_CARD_TOKENS = {
-  colorBorderSecondary: 'rgba(255, 255, 255, 0.06)',
-};
-const ULTRA_DARK_CARD_TOKENS = {
-  colorBorderSecondary: 'rgba(255, 255, 255, 0.04)',
-};
-const STATISTIC_TOKENS = {
-  contentFontSize: 17,
-  titleFontSize: 11,
-};
-
-export function buildAntdThemeConfig(isDark: boolean, isUltra: boolean): ThemeConfig {
-  if (!isDark) {
-    return {
-      algorithm: antdTheme.defaultAlgorithm,
-      components: {
-        Statistic: STATISTIC_TOKENS,
-      },
+export function pauseAnimationsUntilLeave(elementId: string): void
+{
+    document.documentElement.setAttribute('data-theme-animations', 'off');
+    const el = document.getElementById(elementId);
+    if (!el)
+    {
+        return;
+    }
+    const restore = () =>
+    {
+        document.documentElement.removeAttribute('data-theme-animations');
+        el.removeEventListener('mouseleave', restore);
+        el.removeEventListener('touchend', restore);
     };
-  }
-  return {
-    algorithm: antdTheme.darkAlgorithm,
-    token: isUltra ? ULTRA_DARK_TOKENS : DARK_TOKENS,
-    components: {
-      Layout: isUltra ? ULTRA_DARK_LAYOUT_TOKENS : DARK_LAYOUT_TOKENS,
-      Menu: isUltra ? ULTRA_DARK_MENU_TOKENS : DARK_MENU_TOKENS,
-      Card: isUltra ? ULTRA_DARK_CARD_TOKENS : DARK_CARD_TOKENS,
-      Statistic: STATISTIC_TOKENS,
-    },
-  };
-}
-
-export function pauseAnimationsUntilLeave(elementId: string): void {
-  document.documentElement.setAttribute('data-theme-animations', 'off');
-  const el = document.getElementById(elementId);
-  if (!el) return;
-  const restore = () => {
-    document.documentElement.removeAttribute('data-theme-animations');
-    el.removeEventListener('mouseleave', restore);
-    el.removeEventListener('touchend', restore);
-  };
-  el.addEventListener('mouseleave', restore);
-  el.addEventListener('touchend', restore);
+    el.addEventListener('mouseleave', restore);
+    el.addEventListener('touchend', restore);
 }
 
 interface ThemeContextValue {
-  /** The selected mode: light | dark | ultra | system. */
+  /** The selected mode: light | dark. */
   mode: ThemeMode;
   /** Set the mode explicitly (persisted). */
   setMode: (mode: ThemeMode) => void;
-  /** Advance to the next mode: light → dark → ultra → system → light. */
+  /** Toggle light ↔ dark. */
   cycleMode: () => void;
-  /** Effective dark state (resolves `system` against the OS preference). */
-  isDark: boolean;
-  /** Effective ultra-dark state. */
-  isUltra: boolean;
-  // Back-compat helpers (used by older callers): toggle light↔dark / dark↔ultra.
+  /** Toggle light ↔ dark (alias of cycleMode, kept for existing callers). */
   toggleTheme: () => void;
-  toggleUltra: () => void;
-  antdThemeConfig: ThemeConfig;
+  /** Effective dark state. */
+  isDark: boolean;
+  /** @deprecated Ultra/OLED mode was removed; always false. Kept so existing
+   *  callers (page `is-ultra` class helpers) compile until they're redesigned. */
+  isUltra: boolean;
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
 
-export function ThemeProvider({ children }: { children: ReactNode }) {
-  const [mode, setModeState] = useState<ThemeMode>(initialMode);
-  const [systemDark, setSystemDark] = useState<boolean>(initialSystemDark);
+export function ThemeProvider({ children }: { children: ReactNode })
+{
+    const [mode, setModeState] = useState<ThemeMode>(initialMode);
+    const isDark = mode === 'dark';
 
-  // Track the OS preference so `system` mode reacts live to light/dark changes.
-  useEffect(() => {
-    if (typeof window.matchMedia !== 'function') return;
-    const mql = window.matchMedia('(prefers-color-scheme: dark)');
-    const onChange = (e: MediaQueryListEvent) => setSystemDark(e.matches);
-    mql.addEventListener?.('change', onChange);
-    return () => mql.removeEventListener?.('change', onChange);
-  }, []);
+    useEffect(() =>
+    {
+        applyDom(isDark);
+        localStorage.setItem(STORAGE_MODE, mode);
+    }, [mode, isDark]);
 
-  const isDark = resolveDark(mode, systemDark);
-  const isUltra = mode === 'ultra';
+    const setMode = useCallback((m: ThemeMode) => setModeState(m), []);
+    const toggleTheme = useCallback(() => setModeState((m) => (m === 'light' ? 'dark' : 'light')), []);
 
-  useEffect(() => {
-    applyDom(isDark, isUltra);
-    localStorage.setItem(STORAGE_MODE, mode);
-  }, [mode, isDark, isUltra]);
+    const value = useMemo<ThemeContextValue>(
+        () => ({
+            mode,
+            setMode,
+            cycleMode: toggleTheme,
+            toggleTheme,
+            isDark,
+            isUltra: false
+        }),
+        [mode, setMode, toggleTheme, isDark]
+    );
 
-  const setMode = useCallback((m: ThemeMode) => setModeState(m), []);
-  const cycleMode = useCallback(
-    () => setModeState((m) => THEME_MODES[(THEME_MODES.indexOf(m) + 1) % THEME_MODES.length]),
-    [],
-  );
-  const toggleTheme = useCallback(() => setModeState((m) => (m === 'light' ? 'dark' : 'light')), []);
-  const toggleUltra = useCallback(() => setModeState((m) => (m === 'ultra' ? 'dark' : 'ultra')), []);
-
-  const antdThemeConfig = useMemo(() => buildAntdThemeConfig(isDark, isUltra), [isDark, isUltra]);
-
-  const value = useMemo<ThemeContextValue>(
-    () => ({ mode, setMode, cycleMode, isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig }),
-    [mode, setMode, cycleMode, isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig],
-  );
-
-  return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
+    return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used inside <ThemeProvider>');
-  return ctx;
+export function useTheme(): ThemeContextValue
+{
+    const ctx = useContext(ThemeContext);
+    if (!ctx)
+    {
+        throw new Error('useTheme must be used inside <ThemeProvider>');
+    }
+    return ctx;
 }

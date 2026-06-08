@@ -1,17 +1,18 @@
 import { useTranslation } from 'react-i18next';
-import { Form, Select } from 'antd';
+import { RHFSelect } from '@/components/form/rhf';
 
-export default function BlackholeFields() {
-  const { t } = useTranslation();
-  return (
-    <Form.Item label={t('pages.xray.outboundForm.responseType')} name={['settings', 'type']}>
-      <Select
-        options={[
+export default function BlackholeFields()
+{
+    const { t } = useTranslation();
+    return (
+    <RHFSelect
+      name="settings.type"
+      label={t('pages.xray.outboundForm.responseType')}
+      options={[
           { value: '', label: '(empty)' },
           { value: 'none', label: 'none' },
-          { value: 'http', label: 'http' },
-        ]}
-      />
-    </Form.Item>
-  );
+          { value: 'http', label: 'http' }
+      ]}
+    />
+    );
 }

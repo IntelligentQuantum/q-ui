@@ -44,167 +44,212 @@ export type DBInboundInit = Partial<{
     fallbackParent: FallbackParentRef | null;
 }>;
 
-export function coerceInboundJsonField(value: unknown): Record<string, unknown> {
-    if (value == null) return {};
-    if (typeof value === 'object' && !Array.isArray(value)) {
+export function coerceInboundJsonField(value: unknown): Record<string, unknown>
+{
+    if (value == null)
+    {
+        return {};
+    }
+    if (typeof value === 'object' && !Array.isArray(value))
+    {
         return value as Record<string, unknown>;
     }
-    if (typeof value !== 'string') return {};
+    if (typeof value !== 'string')
+    {
+        return {};
+    }
     const trimmed = value.trim();
-    if (trimmed === '') return {};
-    try {
+    if (trimmed === '')
+    {
+        return {};
+    }
+    try
+    {
         const parsed = JSON.parse(trimmed);
-        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
+        if (parsed && typeof parsed === 'object' && !Array.isArray(parsed))
+        {
             return parsed as Record<string, unknown>;
         }
         return {};
-    } catch {
+    }
+    catch
+    {
         return {};
     }
 }
 
-export class DBInbound {
-    id: number;
-    userId: number;
-    up: number;
-    down: number;
-    total: number;
-    remark: string;
-    enable: boolean;
-    expiryTime: number;
-    trafficReset: string;
-    lastTrafficResetTime: number;
+export class DBInbound
+{
+    public id: number;
+    public userId: number;
+    public up: number;
+    public down: number;
+    public total: number;
+    public remark: string;
+    public enable: boolean;
+    public expiryTime: number;
+    public trafficReset: string;
+    public lastTrafficResetTime: number;
 
-    listen: string;
-    port: number;
-    protocol: string;
-    settings: RawJsonField;
-    streamSettings: RawJsonField;
-    tag: string;
-    sniffing: RawJsonField;
-    clientStats: ClientStats[];
-    nodeId: number | null;
-    originNodeGuid: string;
-    fallbackParent: FallbackParentRef | null;
+    public listen: string;
+    public port: number;
+    public protocol: string;
+    public settings: RawJsonField;
+    public streamSettings: RawJsonField;
+    public tag: string;
+    public sniffing: RawJsonField;
+    public clientStats: ClientStats[];
+    public nodeId: number | null;
+    public originNodeGuid: string;
+    public fallbackParent: FallbackParentRef | null;
 
     private _clientStatsMap: Map<string, ClientStats> | null = null;
 
-    constructor(data?: DBInboundInit) {
+    constructor(data?: DBInboundInit)
+    {
         this.id = 0;
         this.userId = 0;
         this.up = 0;
         this.down = 0;
         this.total = 0;
-        this.remark = "";
+        this.remark = '';
         this.enable = true;
         this.expiryTime = 0;
-        this.trafficReset = "never";
+        this.trafficReset = 'never';
         this.lastTrafficResetTime = 0;
 
-        this.listen = "";
+        this.listen = '';
         this.port = 0;
-        this.protocol = "";
-        this.settings = "";
-        this.streamSettings = "";
-        this.tag = "";
-        this.sniffing = "";
+        this.protocol = '';
+        this.settings = '';
+        this.streamSettings = '';
+        this.tag = '';
+        this.sniffing = '';
         this.clientStats = [];
         this.nodeId = null;
-        this.originNodeGuid = "";
+        this.originNodeGuid = '';
         this.fallbackParent = null;
-        if (data == null) {
+        if (data == null)
+        {
             return;
         }
         ObjectUtil.cloneProps(this, data);
     }
 
-    get totalGB(): number {
+    public get totalGB(): number
+    {
         return NumberFormatter.toFixed(this.total / SizeFormatter.ONE_GB, 2);
     }
 
-    set totalGB(gb: number) {
+    public set totalGB(gb: number)
+    {
         this.total = NumberFormatter.toFixed(gb * SizeFormatter.ONE_GB, 0);
     }
 
-    get isVMess() {
+    public get isVMess()
+    {
         return this.protocol === Protocols.VMESS;
     }
 
-    get isVLess() {
+    public get isVLess()
+    {
         return this.protocol === Protocols.VLESS;
     }
 
-    get isTrojan() {
+    public get isTrojan()
+    {
         return this.protocol === Protocols.TROJAN;
     }
 
-    get isSS() {
+    public get isSS()
+    {
         return this.protocol === Protocols.SHADOWSOCKS;
     }
 
-    get isMixed() {
+    public get isMixed()
+    {
         return this.protocol === Protocols.MIXED;
     }
 
-    get isHTTP() {
+    public get isHTTP()
+    {
         return this.protocol === Protocols.HTTP;
     }
 
-    get isWireguard() {
+    public get isWireguard()
+    {
         return this.protocol === Protocols.WIREGUARD;
     }
 
-    get isHysteria() {
+    public get isHysteria()
+    {
         return this.protocol === Protocols.HYSTERIA;
     }
 
-    get isTunnel() {
+    public get isTunnel()
+    {
         return this.protocol === Protocols.TUNNEL;
     }
 
-    get address(): string {
+    public get address(): string
+    {
         let address = location.hostname;
-        if (!ObjectUtil.isEmpty(this.listen) && this.listen !== "0.0.0.0") {
+        if (!ObjectUtil.isEmpty(this.listen) && this.listen !== '0.0.0.0')
+        {
             address = this.listen;
         }
         return address;
     }
 
-    get _expiryTime(): Dayjs | null {
-        if (this.expiryTime === 0) {
+    public get _expiryTime(): Dayjs | null
+    {
+        if (this.expiryTime === 0)
+        {
             return null;
         }
         return dayjs(this.expiryTime);
     }
 
-    set _expiryTime(t: Dayjs | null | undefined) {
-        if (t == null) {
+    public set _expiryTime(t: Dayjs | null | undefined)
+    {
+        if (t == null)
+        {
             this.expiryTime = 0;
-        } else {
+        }
+        else
+        {
             this.expiryTime = t.valueOf();
         }
     }
 
-    get isExpiry(): boolean {
+    public get isExpiry(): boolean
+    {
         return this.expiryTime < new Date().getTime();
     }
 
-    invalidateCache(): void {
+    public invalidateCache(): void
+    {
         this._clientStatsMap = null;
     }
 
-    toJSON(): Record<string, unknown> {
+    public toJSON(): Record<string, unknown>
+    {
         const out: Record<string, unknown> = { ...(this as unknown as Record<string, unknown>) };
         delete out._clientStatsMap;
         return out;
     }
 
-    getClientStats(email: string): ClientStats | undefined {
-        if (!this._clientStatsMap) {
+    public getClientStats(email: string): ClientStats | undefined
+    {
+        if (!this._clientStatsMap)
+        {
             this._clientStatsMap = new Map();
-            if (Array.isArray(this.clientStats)) {
-                for (const stats of this.clientStats) {
-                    if (stats && stats.email) {
+            if (Array.isArray(this.clientStats))
+            {
+                for (const stats of this.clientStats)
+                {
+                    if (stats && stats.email)
+                    {
                         this._clientStatsMap.set(stats.email, stats);
                     }
                 }

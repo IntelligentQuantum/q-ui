@@ -3,6 +3,7 @@
 // globalThis, so we just alias `window` to `globalThis` instead of
 // pulling in jsdom — keeps the test env light and avoids a new dep.
 
-if (typeof globalThis.window === 'undefined') {
-  (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
+if (typeof globalThis.window === 'undefined')
+{
+    (globalThis as unknown as { window: typeof globalThis }).window = globalThis;
 }

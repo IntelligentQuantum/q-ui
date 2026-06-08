@@ -5,13 +5,13 @@ import { z } from 'zod';
 // original Host header. No client tracking (no email/limits) at the Xray
 // settings level — the panel doesn't model HTTP users as billable clients.
 export const HttpAccountSchema = z.object({
-  user: z.string().min(1),
-  pass: z.string().min(1),
+    user: z.string().min(1),
+    pass: z.string().min(1)
 });
 export type HttpAccount = z.infer<typeof HttpAccountSchema>;
 
 export const HttpInboundSettingsSchema = z.object({
-  accounts: z.array(HttpAccountSchema).default([]),
-  allowTransparent: z.boolean().default(false),
+    accounts: z.array(HttpAccountSchema).default([]),
+    allowTransparent: z.boolean().default(false)
 });
 export type HttpInboundSettings = z.infer<typeof HttpInboundSettingsSchema>;

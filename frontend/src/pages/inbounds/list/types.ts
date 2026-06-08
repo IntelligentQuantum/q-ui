@@ -6,7 +6,7 @@ export interface StreamHints {
   isReality: boolean;
 }
 
-export type ProtocolFlags = {
+export interface ProtocolFlags {
   isVMess?: boolean;
   isVLess?: boolean;
   isTrojan?: boolean;
@@ -16,7 +16,7 @@ export type ProtocolFlags = {
   isHTTP?: boolean;
   isWireguard?: boolean;
   isTunnel?: boolean;
-};
+}
 
 export interface DBInboundRecord extends ProtocolFlags {
   id: number;

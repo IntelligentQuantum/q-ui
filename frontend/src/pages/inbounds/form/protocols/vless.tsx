@@ -1,5 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Space, Typography } from 'antd';
+
+import { Button, Input } from '@/components/ui';
+import { RHFText, Field, useFormContext } from '@/components/form/rhf';
 
 interface VlessFieldsProps {
   saving: boolean;
@@ -11,50 +13,49 @@ interface VlessFieldsProps {
 }
 
 export default function VlessFields({
-  saving,
-  selectedVlessAuth,
-  network,
-  security,
-  getNewVlessEnc,
-  clearVlessEnc,
-}: VlessFieldsProps) {
-  const { t } = useTranslation();
-  return (
+    saving,
+    selectedVlessAuth,
+    network,
+    security,
+    getNewVlessEnc,
+    clearVlessEnc
+}: VlessFieldsProps)
+{
+    const { t } = useTranslation();
+    const { register } = useFormContext();
+    const showTestseed = network === 'tcp' && (security === 'tls' || security === 'reality');
+    return (
     <>
-      <Form.Item name={['settings', 'decryption']} label={t('pages.inbounds.decryption')}>
-        <Input />
-      </Form.Item>
-      <Form.Item name={['settings', 'encryption']} label={t('pages.inbounds.encryption')}>
-        <Input />
-      </Form.Item>
-      <Form.Item label=" ">
-        <Space size={8} wrap>
-          <Button type="primary" loading={saving} onClick={() => getNewVlessEnc('x25519')}>
+      <RHFText name="settings.decryption" label={t('pages.inbounds.decryption')} />
+      <RHFText name="settings.encryption" label={t('pages.inbounds.encryption')} />
+      <div className="flex flex-col gap-2">
+        <div className="flex flex-wrap gap-2">
+          <Button loading={saving} onClick={() => getNewVlessEnc('x25519')}>
             {t('pages.inbounds.vlessAuthX25519')}
           </Button>
-          <Button type="primary" loading={saving} onClick={() => getNewVlessEnc('mlkem768')}>
+          <Button loading={saving} onClick={() => getNewVlessEnc('mlkem768')}>
             {t('pages.inbounds.vlessAuthMlkem768')}
           </Button>
-          <Button danger onClick={clearVlessEnc}>{t('clear')}</Button>
-        </Space>
-        <Typography.Text type="secondary" className="vless-auth-state">
+          <Button variant="danger" onClick={clearVlessEnc}>
+            {t('clear')}
+          </Button>
+        </div>
+        <span className="text-xs text-muted-foreground">
           {t('pages.inbounds.vlessAuthSelected', { auth: selectedVlessAuth })}
-        </Typography.Text>
-      </Form.Item>
-      {network === 'tcp' && (security === 'tls' || security === 'reality') && (
-        <Form.Item
+        </span>
+      </div>
+      {showTestseed && (
+        <Field
           label={t('pages.inbounds.form.visionTestseed')}
-          extra="Applies only to clients using the xtls-rprx-vision flow; ignored otherwise."
+          hint="Applies only to clients using the xtls-rprx-vision flow; ignored otherwise."
         >
-          <Space.Compact block>
-            {[900, 500, 900, 256].map((def, i) => (
-              <Form.Item key={i} name={['settings', 'testseed', i]} noStyle initialValue={def}>
-                <InputNumber min={1} style={{ width: '25%' }} />
-              </Form.Item>
+          <div className="flex gap-2">
+            {[0, 1, 2, 3].map((i) => (
+              <Input key={i} type="number" min={1} {...register(`settings.testseed.${ i }`, { valueAsNumber: true })} />
             ))}
-          </Space.Compact>
-        </Form.Item>
+          </div>
+        </Field>
       )}
     </>
-  );
+    );
 }

@@ -11,21 +11,21 @@ import { z } from 'zod';
 // 404 page), and per-type config keys are only honored when their type is
 // active.
 export const HysteriaMasqueradeSchema = z.object({
-  type: z.enum(['', 'proxy', 'file', 'string']).default(''),
-  dir: z.string().default(''),
-  url: z.string().default(''),
-  rewriteHost: z.boolean().default(false),
-  insecure: z.boolean().default(false),
-  content: z.string().default(''),
-  headers: z.record(z.string(), z.string()).default({}),
-  statusCode: z.number().int().min(0).default(0),
+    type: z.enum(['', 'proxy', 'file', 'string']).default(''),
+    dir: z.string().default(''),
+    url: z.string().default(''),
+    rewriteHost: z.boolean().default(false),
+    insecure: z.boolean().default(false),
+    content: z.string().default(''),
+    headers: z.record(z.string(), z.string()).default({}),
+    statusCode: z.number().int().min(0).default(0)
 });
 export type HysteriaMasquerade = z.infer<typeof HysteriaMasqueradeSchema>;
 
 export const HysteriaStreamSettingsSchema = z.object({
-  version: z.literal(2).default(2),
-  auth: z.string().default(''),
-  udpIdleTimeout: z.number().int().min(1).default(60),
-  masquerade: HysteriaMasqueradeSchema.optional(),
+    version: z.literal(2).default(2),
+    auth: z.string().default(''),
+    udpIdleTimeout: z.number().int().min(1).default(60),
+    masquerade: HysteriaMasqueradeSchema.optional()
 });
 export type HysteriaStreamSettings = z.infer<typeof HysteriaStreamSettingsSchema>;

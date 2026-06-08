@@ -1,122 +1,136 @@
 import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Input, InputNumber, Space } from 'antd';
-import { MoreOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
-import type { ColumnsType } from 'antd/es/table';
+import { Pencil, Trash2 } from 'lucide-react';
 
+import { DropdownMenu, Input } from '@/components/ui';
+import type { Column } from '@/components/ui';
 import { addrFor, domainsFor, expectedIPsFor } from './helpers';
 import type { DnsServerValue } from './DnsServerModal';
 
-export type DnsServerRow = { key: number; server: DnsServerValue };
-export type FakednsTableRow = { key: number; ipPool: string; poolSize: number };
+export interface DnsServerRow { key: number; server: DnsServerValue }
+export interface FakednsTableRow { key: number; ipPool: string; poolSize: number }
 
 export function useDnsServerColumns({
-  openEditServer,
-  deleteServer,
+    openEditServer,
+    deleteServer
 }: {
   openEditServer: (idx: number) => void;
   deleteServer: (idx: number) => void;
-}): ColumnsType<DnsServerRow> {
-  const { t } = useTranslation();
-  return useMemo(
-    () => [
-      {
-        title: '#',
-        key: 'action',
-        align: 'center',
-        width: 60,
-        render: (_v, _record, index) => (
-          <Space size={6}>
-            <span className="row-index">{index + 1}</span>
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [
-                  { key: 'edit', label: <><EditOutlined /> {t('edit')}</>, onClick: () => openEditServer(index) },
-                  { key: 'del', danger: true, label: <><DeleteOutlined /> {t('delete')}</>, onClick: () => deleteServer(index) },
-                ],
-              }}
-            >
-              <Button aria-label="More" shape="circle" size="small" icon={<MoreOutlined />} />
-            </Dropdown>
-          </Space>
-        ),
-      },
-      {
-        title: t('pages.inbounds.address'),
-        key: 'address',
-        align: 'left',
-        render: (_v, record) => addrFor(record.server),
-      },
-      {
-        title: t('pages.xray.dns.domains'),
-        key: 'domains',
-        align: 'left',
-        render: (_v, record) => <span className="muted">{domainsFor(record.server)}</span>,
-      },
-      {
-        title: t('pages.xray.dns.expectIPs'),
-        key: 'expectedIPs',
-        align: 'left',
-        render: (_v, record) => <span className="muted">{expectedIPsFor(record.server)}</span>,
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [t],
-  );
+}): Column<DnsServerRow>[]
+{
+    const { t } = useTranslation();
+    return useMemo(
+        () => [
+            {
+                key: 'action',
+                header: '#',
+                align: 'center',
+                width: 80,
+                cell: (_row, index) => (
+          <div className="flex items-center justify-center gap-1.5">
+            <span className="font-medium text-muted-foreground">{index + 1}</span>
+            <DropdownMenu
+              align="end"
+              label={t('more')}
+              items={[
+                  {
+                      key: 'edit',
+                      label: t('edit'),
+                      icon: <Pencil className="h-4 w-4" aria-hidden />,
+                      onSelect: () => openEditServer(index)
+                  },
+                  {
+                      key: 'del',
+                      danger: true,
+                      label: t('delete'),
+                      icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                      onSelect: () => deleteServer(index)
+                  }
+              ]}
+            />
+          </div>
+                )
+            },
+            {
+                key: 'address',
+                header: t('pages.inbounds.address'),
+                align: 'start',
+                cell: (row) => addrFor(row.server)
+            },
+            {
+                key: 'domains',
+                header: t('pages.xray.dns.domains'),
+                align: 'start',
+                cell: (row) => <span className="break-all text-muted-foreground">{domainsFor(row.server)}</span>
+            },
+            {
+                key: 'expectedIPs',
+                header: t('pages.xray.dns.expectIPs'),
+                align: 'start',
+                cell: (row) => <span className="break-all text-muted-foreground">{expectedIPsFor(row.server)}</span>
+            }
+        ],
+        [t]
+    );
 }
 
 export function useFakednsColumns({
-  deleteFakedns,
-  updateFakednsField,
+    deleteFakedns,
+    updateFakednsField
 }: {
   deleteFakedns: (idx: number) => void;
   updateFakednsField: (idx: number, field: 'ipPool' | 'poolSize', value: string | number) => void;
-}): ColumnsType<FakednsTableRow> {
-  return useMemo(
-    () => [
-      {
-        title: '#',
-        key: 'action',
-        align: 'center',
-        width: 60,
-        render: (_v, _record, index) => (
-          <Space size={6}>
-            <span className="row-index">{index + 1}</span>
-            <Button aria-label="Delete" shape="circle" size="small" danger icon={<DeleteOutlined />} onClick={() => deleteFakedns(index)} />
-          </Space>
-        ),
-      },
-      {
-        title: 'IP pool',
-        dataIndex: 'ipPool',
-        key: 'ipPool',
-        align: 'left',
-        render: (_v, record, index) => (
+}): Column<FakednsTableRow>[]
+{
+    const { t } = useTranslation();
+    return useMemo(
+        () => [
+            {
+                key: 'action',
+                header: '#',
+                align: 'center',
+                width: 80,
+                cell: (_row, index) => (
+          <div className="flex items-center justify-center gap-1.5">
+            <span className="font-medium text-muted-foreground">{index + 1}</span>
+            <button
+              type="button"
+              aria-label={t('delete')}
+              onClick={() => deleteFakedns(index)}
+              className="grid h-8 w-8 place-items-center rounded-md text-danger outline-none transition-colors hover:bg-danger-subtle focus-visible:ring-2 focus-visible:ring-ring"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </button>
+          </div>
+                )
+            },
+            {
+                key: 'ipPool',
+                header: 'IP pool',
+                align: 'start',
+                cell: (row, index) => (
           <Input
-            value={record.ipPool}
-            size="small"
+            value={row.ipPool}
             onChange={(e) => updateFakednsField(index, 'ipPool', e.target.value)}
           />
-        ),
-      },
-      {
-        title: 'Pool size',
-        dataIndex: 'poolSize',
-        key: 'poolSize',
-        align: 'right',
-        width: 120,
-        render: (_v, record, index) => (
-          <InputNumber
-            value={record.poolSize}
+                )
+            },
+            {
+                key: 'poolSize',
+                header: 'Pool size',
+                align: 'end',
+                width: 140,
+                cell: (row, index) => (
+          <Input
+            type="number"
             min={1}
-            size="small"
-            onChange={(v) => updateFakednsField(index, 'poolSize', Number(v) || 0)}
+            value={row.poolSize}
+            className="text-end"
+            onChange={(e) => updateFakednsField(index, 'poolSize', Number(e.target.value) || 0)}
           />
-        ),
-      },
-    ],
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [],
-  );
+                )
+            }
+        ],
+        [t]
+    );
 }

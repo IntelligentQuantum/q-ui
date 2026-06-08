@@ -9,29 +9,37 @@ import { keys } from '@/api/queryKeys';
 
 const POLL_INTERVAL_MS = 2000;
 
-async function fetchStatus(): Promise<Status> {
-  const msg = await HttpUtil.get('/panel/api/server/status', undefined, { silent: true });
-  if (!msg?.success) throw new Error(msg?.msg || 'Failed to fetch status');
-  const validated = parseMsg(msg, StatusSchema, 'server/status');
-  return new Status(validated.obj);
+async function fetchStatus(): Promise<Status>
+{
+    const msg = await HttpUtil.get('/panel/api/server/status', undefined, { silent: true });
+    if (!msg?.success)
+    {
+        throw new Error(msg?.msg || 'Failed to fetch status');
+    }
+    const validated = parseMsg(msg, StatusSchema, 'server/status');
+    return new Status(validated.obj);
 }
 
-export function useStatusQuery() {
-  const query = useQuery({
-    queryKey: keys.server.status(),
-    queryFn: fetchStatus,
-    refetchInterval: POLL_INTERVAL_MS,
-    refetchIntervalInBackground: false,
-    staleTime: 0,
-  });
+export function useStatusQuery()
+{
+    const query = useQuery({
+        queryKey: keys.server.status(),
+        queryFn: fetchStatus,
+        refetchInterval: POLL_INTERVAL_MS,
+        refetchIntervalInBackground: false,
+        staleTime: 0
+    });
 
-  const status = useMemo(() => query.data ?? new Status(), [query.data]);
-  const refresh = async () => { await query.refetch(); };
+    const status = useMemo(() => query.data ?? new Status(), [query.data]);
+    const refresh = async () =>
+    {
+        await query.refetch();
+    };
 
-  return {
-    status,
-    fetched: query.data !== undefined || query.isError,
-    fetchError: query.error ? (query.error as Error).message : '',
-    refresh,
-  };
+    return {
+        status,
+        fetched: query.data !== undefined || query.isError,
+        fetchError: query.error ? (query.error as Error).message : '',
+        refresh
+    };
 }

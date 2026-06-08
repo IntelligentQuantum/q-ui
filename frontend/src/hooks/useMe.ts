@@ -43,42 +43,46 @@ export interface MeInfo {
 
 export const ME_QUERY_KEY = ['me'] as const;
 
-function normalizeRole(role: unknown): Role {
-  switch (String(role)) {
-    case 'admin':
-    case 'moderator':
-    case 'reseller':
-    case 'member':
-      return role as Role;
-    case 'user':
-      return 'reseller'; // legacy alias
-    default:
-      return 'member';
-  }
+function normalizeRole(role: unknown): Role
+{
+    switch (String(role))
+    {
+        case 'admin':
+        case 'moderator':
+        case 'reseller':
+        case 'member':
+            return role as Role;
+        case 'user':
+            return 'reseller'; // legacy alias
+        default:
+            return 'member';
+    }
 }
 
-async function fetchMe(): Promise<MeInfo> {
-  const msg = await HttpUtil.get('/panel/api/me', undefined, { silent: true });
-  if (!msg?.success || !msg.obj) {
-    throw new Error(msg?.msg || 'Failed to load profile');
-  }
-  const o = msg.obj as Partial<MeInfo> & { permissions?: unknown };
-  return {
-    id: Number(o.id) || 0,
-    username: String(o.username ?? ''),
-    email: String(o.email ?? ''),
-    role: normalizeRole(o.role),
-    permissions: Array.isArray(o.permissions) ? (o.permissions as Permission[]) : [],
-    isAdmin: Boolean(o.isAdmin),
-    isModerator: Boolean(o.isModerator),
-    isReseller: Boolean(o.isReseller),
-    isMember: Boolean(o.isMember),
-    balance: Number(o.balance) || 0,
-    clientCost: Number(o.clientCost) || 0,
-    clientCostPerGB: Number(o.clientCostPerGB) || 0,
-    zarinpalEnable: Boolean(o.zarinpalEnable),
-    currency: String(o.currency ?? 'IRT'),
-  };
+async function fetchMe(): Promise<MeInfo>
+{
+    const msg = await HttpUtil.get('/panel/api/me', undefined, { silent: true });
+    if (!msg?.success || !msg.obj)
+    {
+        throw new Error(msg?.msg || 'Failed to load profile');
+    }
+    const o = msg.obj as Partial<MeInfo> & { permissions?: unknown };
+    return {
+        id: Number(o.id) || 0,
+        username: String(o.username ?? ''),
+        email: String(o.email ?? ''),
+        role: normalizeRole(o.role),
+        permissions: Array.isArray(o.permissions) ? (o.permissions as Permission[]) : [],
+        isAdmin: Boolean(o.isAdmin),
+        isModerator: Boolean(o.isModerator),
+        isReseller: Boolean(o.isReseller),
+        isMember: Boolean(o.isMember),
+        balance: Number(o.balance) || 0,
+        clientCost: Number(o.clientCost) || 0,
+        clientCostPerGB: Number(o.clientCostPerGB) || 0,
+        zarinpalEnable: Boolean(o.zarinpalEnable),
+        currency: String(o.currency ?? 'IRT')
+    };
 }
 
 /**
@@ -88,23 +92,24 @@ async function fetchMe(): Promise<MeInfo> {
  * these — the hook only drives presentation. `can()` mirrors the backend's
  * User.Can(): admins implicitly hold every permission.
  */
-export function useMe() {
-  const query = useQuery({
-    queryKey: ME_QUERY_KEY,
-    queryFn: fetchMe,
-    staleTime: 15_000,
-  });
-  const me = query.data;
-  const can = (perm: Permission): boolean =>
-    !!me && (me.isAdmin || me.permissions.includes(perm));
-  return {
-    me,
-    role: me?.role,
-    can,
-    isAdmin: me?.isAdmin,
-    balance: me?.balance ?? 0,
-    clientCost: me?.clientCost ?? 0,
-    loading: query.isLoading,
-    refetch: query.refetch,
-  };
+export function useMe()
+{
+    const query = useQuery({
+        queryKey: ME_QUERY_KEY,
+        queryFn: fetchMe,
+        staleTime: 15_000
+    });
+    const me = query.data;
+    const can = (perm: Permission): boolean =>
+        !!me && (me.isAdmin || me.permissions.includes(perm));
+    return {
+        me,
+        role: me?.role,
+        can,
+        isAdmin: me?.isAdmin,
+        balance: me?.balance ?? 0,
+        clientCost: me?.clientCost ?? 0,
+        loading: query.isLoading,
+        refetch: query.refetch
+    };
 }

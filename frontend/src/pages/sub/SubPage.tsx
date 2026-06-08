@@ -1,42 +1,28 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import {
-  Button,
-  Card,
-  Col,
-  ConfigProvider,
-  Descriptions,
-  Divider,
-  Dropdown,
-  Layout,
-  Menu,
-  message,
-  Popover,
-  QRCode,
-  Row,
-  Space,
-  Tag,
-  Tooltip,
-} from 'antd';
-import {
-  AndroidOutlined,
-  AppleOutlined,
-  CopyOutlined,
-  DownOutlined,
-  MoonFilled,
-  MoonOutlined,
-  QrcodeOutlined,
-  SunOutlined,
-  TranslationOutlined,
-} from '@ant-design/icons';
+import { QRCode } from '@/components/ui';
+import { message } from '@/components/ui/message';
+import { Apple, ChevronDown, Copy, Languages, Moon, QrCode, Smartphone, Sun } from 'lucide-react';
 
 import { ClipboardManager, IntlUtil, LanguageManager } from '@/utils';
 import { isPostQuantumLink } from '@/lib/xray/inbound-link';
 import { LinkTags, parseLinkParts } from '@/lib/xray/link-label';
 import { setMessageInstance } from '@/utils/messageBus';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
+import {
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    DropdownMenu,
+    Modal,
+    Tooltip,
+    cn
+} from '@/components/ui';
 import SubUsageSummary from './SubUsageSummary';
-import './SubPage.css';
 
 const QR_SIZE = 240;
 
@@ -60,223 +46,307 @@ const links: string[] = Array.isArray(subData.links) ? subData.links : [];
 const linkEmails: string[] = Array.isArray(subData.emails) ? subData.emails : [];
 const datepicker = subData.datepicker || 'gregorian';
 
+// Style the DropdownMenu's built-in trigger button as a full-width primary
+// button (the trigger styling is internal, so override it via a child variant).
+const appDropdownClass = cn(
+    'w-full',
+    '[&>button]:w-full [&>button]:!h-11 [&>button]:!px-4',
+    '[&>button]:!bg-primary [&>button]:!text-primary-foreground',
+    '[&>button]:hover:!bg-primary-hover [&>button]:hover:!text-primary-foreground'
+);
+
 const isUnlimited = totalByte <= 0 && expireMs === 0;
-const isActive = (() => {
-  if (!enabled) return false;
-  if (totalByte > 0) {
-    const usedByteCalc = Number(subData.usedByte || 0)
+const isActive = (() =>
+{
+    if (!enabled)
+    {
+        return false;
+    }
+    if (totalByte > 0)
+    {
+        const usedByteCalc = Number(subData.usedByte || 0)
       || (Number(subData.downloadByte || 0) + Number(subData.uploadByte || 0));
-    if (usedByteCalc >= totalByte) return false;
-  }
-  if (expireMs > 0 && Date.now() >= expireMs) return false;
-  return true;
+        if (usedByteCalc >= totalByte)
+        {
+            return false;
+        }
+    }
+    if (expireMs > 0 && Date.now() >= expireMs)
+    {
+        return false;
+    }
+    return true;
 })();
 
-export default function SubPage() {
-  const { t } = useTranslation();
-  const { isDark, isUltra, toggleTheme, toggleUltra, antdThemeConfig } = useTheme();
-  const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
+interface QrState {
+  value: string;
+  label: ReactNode;
+}
 
-  const [isMobile, setIsMobile] = useState<boolean>(() => window.innerWidth < 576);
-  const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
+// One definition-list row inside the info card.
+function InfoRow({ label, children }: { label: ReactNode; children: ReactNode })
+{
+    return (
+    <div className="flex items-center justify-between gap-3 px-4 py-2.5 text-sm">
+      <dt className="shrink-0 text-muted-foreground">{label}</dt>
+      <dd className="min-w-0 truncate text-end font-medium text-foreground tabular-nums">{children}</dd>
+    </div>
+    );
+}
 
-  useEffect(() => {
-    const onResize = () => setIsMobile(window.innerWidth < 576);
-    window.addEventListener('resize', onResize);
-    return () => window.removeEventListener('resize', onResize);
-  }, []);
+// A single share/sub link row: tag(s) + name + copy/QR actions.
+function LinkRow({
+    tags,
+    href,
+    title,
+    rowTitle,
+    onCopy,
+    onQr,
+    copyLabel
+}: {
+  tags: ReactNode;
+  href?: string;
+  title?: string;
+  rowTitle: ReactNode;
+  onCopy: () => void;
+  onQr?: () => void;
+  copyLabel: string;
+})
+{
+    return (
+    <div className="flex items-center gap-2 rounded-lg border border-border bg-foreground/[0.02] px-3 py-2 transition-colors hover:bg-foreground/[0.04]">
+      {tags}
+      {href ? (
+        <a
+          href={href}
+          target="_blank"
+          rel="noopener noreferrer"
+          title={title}
+          className="min-w-0 flex-1 truncate text-sm text-foreground hover:text-accent hover:underline"
+        >
+          {rowTitle}
+        </a>
+      ) : (
+        <span className="min-w-0 flex-1 truncate text-sm text-foreground" title={title}>
+          {rowTitle}
+        </span>
+      )}
+      <div className="flex shrink-0 items-center gap-1">
+        <Button variant="secondary" size="icon" onClick={onCopy} aria-label={copyLabel} title={copyLabel}>
+          <Copy className="h-4 w-4" aria-hidden />
+        </Button>
+        {onQr && (
+          <Button variant="secondary" size="icon" onClick={onQr} aria-label="QR" title="QR">
+            <QrCode className="h-4 w-4" aria-hidden />
+          </Button>
+        )}
+      </div>
+    </div>
+    );
+}
 
-  const onLangChange = useCallback((next: string) => {
-    setLang(next);
-    LanguageManager.setLanguage(next);
-  }, []);
+// Hairline-bordered section heading (replaces AntD <Divider/>).
+function SectionTitle({ children }: { children: ReactNode })
+{
+    return (
+    <div className="my-5 flex items-center gap-3">
+      <span className="h-px flex-1 bg-border" />
+      <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{children}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+    );
+}
 
-  const cycleTheme = useCallback(() => {
-    pauseAnimationsUntilLeave('sub-theme-cycle');
-    if (!isDark) {
-      toggleTheme();
-      if (isUltra) toggleUltra();
-    } else if (!isUltra) {
-      toggleUltra();
-    } else {
-      toggleUltra();
-      toggleTheme();
-    }
-  }, [isDark, isUltra, toggleTheme, toggleUltra]);
-
-  const copy = useCallback(async (value: string) => {
-    if (!value) return;
-    const ok = await ClipboardManager.copyText(value);
-    if (ok) messageApi.success(t('copied'));
-  }, [t, messageApi]);
-
-  const open = useCallback((url: string) => {
-    if (!url) return;
-    window.open(url, '_blank');
-  }, []);
-
-  const shadowrocketUrl = useMemo(() => {
-    if (!subUrl) return '';
-    const separator = subUrl.includes('?') ? '&' : '?';
-    const rawUrl = subUrl + separator + 'flag=shadowrocket';
-    const base64Url = btoa(rawUrl);
-    const remark = encodeURIComponent(subTitle || sId || 'Subscription');
-    return `shadowrocket://add/sub/${base64Url}?remark=${remark}`;
-  }, []);
-
-  const v2boxUrl = useMemo(
-    () => `v2box://install-sub?url=${encodeURIComponent(subUrl)}&name=${encodeURIComponent(sId)}`,
-    [],
-  );
-  const streisandUrl = useMemo(() => `streisand://import/${encodeURIComponent(subUrl)}`, []);
-  const happUrl = useMemo(() => `happ://add/${subUrl}`, []);
-
-  const pageClass = useMemo(() => {
-    const classes = ['subscription-page'];
-    if (isDark) classes.push('is-dark');
-    if (isUltra) classes.push('is-ultra');
-    return classes.join(' ');
-  }, [isDark, isUltra]);
-
-  const descriptionsItems = useMemo(() => {
-    const items = [
-      { key: 'subId', label: t('subscription.subId'), children: sId },
-      {
-        key: 'status',
-        label: t('subscription.status'),
-        children: !enabled
-          ? <Tag color="red">{t('subscription.inactive')}</Tag>
-          : isUnlimited
-            ? <Tag color="purple">{t('subscription.unlimited')}</Tag>
-            : <Tag color={isActive ? 'green' : 'red'}>
-                {isActive ? t('subscription.active') : t('subscription.inactive')}
-              </Tag>,
-      },
-      { key: 'down', label: t('subscription.downloaded'), children: download },
-      { key: 'up', label: t('subscription.uploaded'), children: upload },
-      { key: 'used', label: t('usage'), children: used },
-      { key: 'total', label: t('subscription.totalQuota'), children: total },
-    ];
-    if (totalByte > 0) {
-      items.push({ key: 'remained', label: t('remained'), children: remained });
-    }
-    items.push({
-      key: 'lastOnline',
-      label: t('lastOnline'),
-      children: lastOnlineMs > 0 ? IntlUtil.formatDate(lastOnlineMs, datepicker) : '-',
-    });
-    items.push({
-      key: 'expiry',
-      label: t('subscription.expiry'),
-      children: expireMs === 0
-        ? t('subscription.noExpiry')
-        : IntlUtil.formatDate(expireMs, datepicker),
-    });
-    return items;
-  }, [t]);
-
-  const androidMenuItems = useMemo(() => [
+export default function SubPage()
+{
+    const { t } = useTranslation();
+    const { isDark, toggleTheme } = useTheme();
+    const [messageApi] = message.useMessage();
+    useEffect(() =>
     {
-      key: 'android-v2box',
-      label: 'V2Box',
-      onClick: () => open(`v2box://install-sub?url=${encodeURIComponent(subUrl)}&name=${encodeURIComponent(sId)}`),
-    },
+        setMessageInstance(messageApi);
+    }, [messageApi]);
+
+    const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
+    const [qr, setQr] = useState<QrState | null>(null);
+
+    const onLangChange = useCallback((next: string) =>
     {
-      key: 'android-v2rayng',
-      label: 'V2RayNG',
-      onClick: () => open(`v2rayng://install-config?url=${encodeURIComponent(subUrl)}`),
-    },
-    { key: 'android-singbox', label: 'Sing-box', onClick: () => copy(subUrl) },
-    { key: 'android-v2raytun', label: 'V2RayTun', onClick: () => copy(subUrl) },
-    { key: 'android-npvtunnel', label: 'NPV Tunnel', onClick: () => copy(subUrl) },
-    { key: 'android-happ', label: 'Happ', onClick: () => open(`happ://add/${subUrl}`) },
-  ], [copy, open]);
+        setLang(next);
+        LanguageManager.setLanguage(next);
+    }, []);
 
-  const iosMenuItems = useMemo(() => [
-    { key: 'ios-shadowrocket', label: 'Shadowrocket', onClick: () => open(shadowrocketUrl) },
-    { key: 'ios-v2box', label: 'V2Box', onClick: () => open(v2boxUrl) },
-    { key: 'ios-streisand', label: 'Streisand', onClick: () => open(streisandUrl) },
-    { key: 'ios-v2raytun', label: 'V2RayTun', onClick: () => copy(subUrl) },
-    { key: 'ios-npvtunnel', label: 'NPV Tunnel', onClick: () => copy(subUrl) },
-    { key: 'ios-happ', label: 'Happ', onClick: () => open(happUrl) },
-  ], [copy, open, shadowrocketUrl, v2boxUrl, streisandUrl, happUrl]);
+    const cycleTheme = useCallback(() =>
+    {
+        pauseAnimationsUntilLeave('sub-theme-cycle');
+        toggleTheme();
+    }, [toggleTheme]);
 
-  const langMenuItems = useMemo(
-    () => (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map((l) => ({
-      key: l.value,
-      label: (
-        <Space size={8}>
+    const copy = useCallback(async (value: string) =>
+    {
+        if (!value)
+        {
+            return;
+        }
+        const ok = await ClipboardManager.copyText(value);
+        if (ok)
+        {
+            messageApi.success(t('copied'));
+        }
+    }, [t, messageApi]);
+
+    const open = useCallback((url: string) =>
+    {
+        if (!url)
+        {
+            return;
+        }
+        window.open(url, '_blank');
+    }, []);
+
+    const shadowrocketUrl = useMemo(() =>
+    {
+        if (!subUrl)
+        {
+            return '';
+        }
+        const separator = subUrl.includes('?') ? '&' : '?';
+        const rawUrl = subUrl + separator + 'flag=shadowrocket';
+        const base64Url = btoa(rawUrl);
+        const remark = encodeURIComponent(subTitle || sId || 'Subscription');
+        return `shadowrocket://add/sub/${ base64Url }?remark=${ remark }`;
+    }, []);
+
+    const v2boxUrl = useMemo(
+        () => `v2box://install-sub?url=${ encodeURIComponent(subUrl) }&name=${ encodeURIComponent(sId) }`,
+        []
+    );
+    const streisandUrl = useMemo(() => `streisand://import/${ encodeURIComponent(subUrl) }`, []);
+    const happUrl = useMemo(() => `happ://add/${ subUrl }`, []);
+
+    const statusBadge = useMemo(() =>
+    {
+        if (!enabled)
+        {
+            return <Badge variant="danger">{t('subscription.inactive')}</Badge>;
+        }
+        if (isUnlimited)
+        {
+            return <Badge variant="primary">{t('subscription.unlimited')}</Badge>;
+        }
+        return (
+      <Badge variant={isActive ? 'success' : 'danger'}>
+        {isActive ? t('subscription.active') : t('subscription.inactive')}
+      </Badge>
+        );
+    }, [t]);
+
+    const infoRows = useMemo(() =>
+    {
+        const rows: { key: string; label: string; children: ReactNode }[] = [
+            { key: 'subId', label: t('subscription.subId'), children: sId },
+            { key: 'status', label: t('subscription.status'), children: statusBadge },
+            { key: 'down', label: t('subscription.downloaded'), children: download },
+            { key: 'up', label: t('subscription.uploaded'), children: upload },
+            { key: 'used', label: t('usage'), children: used },
+            { key: 'total', label: t('subscription.totalQuota'), children: total }
+        ];
+        if (totalByte > 0)
+        {
+            rows.push({ key: 'remained', label: t('remained'), children: remained });
+        }
+        rows.push({
+            key: 'lastOnline',
+            label: t('lastOnline'),
+            children: lastOnlineMs > 0 ? IntlUtil.formatDate(lastOnlineMs, datepicker) : '-'
+        });
+        rows.push({
+            key: 'expiry',
+            label: t('subscription.expiry'),
+            children: expireMs === 0 ? t('subscription.noExpiry') : IntlUtil.formatDate(expireMs, datepicker)
+        });
+        return rows;
+    }, [t, statusBadge]);
+
+    const androidMenuItems = useMemo(() => [
+        {
+            key: 'android-v2box',
+            label: 'V2Box',
+            onSelect: () => open(`v2box://install-sub?url=${ encodeURIComponent(subUrl) }&name=${ encodeURIComponent(sId) }`)
+        },
+        {
+            key: 'android-v2rayng',
+            label: 'V2RayNG',
+            onSelect: () => open(`v2rayng://install-config?url=${ encodeURIComponent(subUrl) }`)
+        },
+        { key: 'android-singbox', label: 'Sing-box', onSelect: () => copy(subUrl) },
+        { key: 'android-v2raytun', label: 'V2RayTun', onSelect: () => copy(subUrl) },
+        { key: 'android-npvtunnel', label: 'NPV Tunnel', onSelect: () => copy(subUrl) },
+        { key: 'android-happ', label: 'Happ', onSelect: () => open(`happ://add/${ subUrl }`) }
+    ], [copy, open]);
+
+    const iosMenuItems = useMemo(() => [
+        { key: 'ios-shadowrocket', label: 'Shadowrocket', onSelect: () => open(shadowrocketUrl) },
+        { key: 'ios-v2box', label: 'V2Box', onSelect: () => open(v2boxUrl) },
+        { key: 'ios-streisand', label: 'Streisand', onSelect: () => open(streisandUrl) },
+        { key: 'ios-v2raytun', label: 'V2RayTun', onSelect: () => copy(subUrl) },
+        { key: 'ios-npvtunnel', label: 'NPV Tunnel', onSelect: () => copy(subUrl) },
+        { key: 'ios-happ', label: 'Happ', onSelect: () => open(happUrl) }
+    ], [copy, open, shadowrocketUrl, v2boxUrl, streisandUrl, happUrl]);
+
+    const langMenuItems = useMemo(
+        () => (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map((l) => ({
+            key: l.value,
+            label: (
+        <span className={cn('flex items-center gap-2', l.value === lang && 'font-semibold text-accent')}>
           <span aria-hidden="true">{l.icon}</span>
           <span>{l.name}</span>
-        </Space>
-      ),
-    })),
-    [],
-  );
+        </span>
+            ),
+            onSelect: () => onLangChange(l.value)
+        })),
+        [lang, onLangChange]
+    );
 
-  const themeIcon = !isDark ? <SunOutlined /> : !isUltra ? <MoonOutlined /> : <MoonFilled />;
+    return (
+    <div className="min-h-screen bg-background">
+          <div className="mx-auto w-full max-w-2xl px-3 py-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between gap-3">
+                  <CardTitle className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{t('subscription.title')}</span>
+                    <Badge variant="neutral" className="shrink-0">{sId}</Badge>
+                  </CardTitle>
+                  <div className="flex shrink-0 items-center gap-1">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      aria-label={t('menu.theme')}
+                      title={t('menu.theme')}
+                      onClick={cycleTheme}
+                    >
+                      {isDark ? <Moon className="h-5 w-5" aria-hidden /> : <Sun className="h-5 w-5" aria-hidden />}
+                    </Button>
+                    <DropdownMenu
+                      align="end"
+                      label={t('pages.settings.language')}
+                      items={langMenuItems}
+                      trigger={<Languages className="h-5 w-5" aria-hidden />}
+                    />
+                  </div>
+                </div>
+              </CardHeader>
 
-  const cardTitle = (
-    <Space>
-      <span>{t('subscription.title')}</span>
-      <Tag>{sId}</Tag>
-    </Space>
-  );
-
-  const cardExtra = (
-    <Space size={8} align="center">
-      <Button
-        shape="circle"
-        size="large"
-        className="toolbar-btn"
-        aria-label={t('menu.theme')}
-        title={t('menu.theme')}
-        icon={themeIcon}
-        onClick={cycleTheme}
-      />
-      <Popover
-        rootClassName={isDark ? 'dark' : 'light'}
-        placement="bottomRight"
-        trigger="click"
-        styles={{ content: { padding: 4 } }}
-        content={
-          <Menu
-            mode="vertical"
-            selectable
-            selectedKeys={[lang]}
-            items={langMenuItems}
-            onClick={({ key }) => onLangChange(key)}
-            style={{ border: 'none', minWidth: 160 }}
-          />
-        }
-      >
-        <Button
-          shape="circle"
-          size="large"
-          className="toolbar-btn"
-          aria-label={t('pages.settings.language')}
-          icon={<TranslationOutlined />}
-        />
-      </Popover>
-    </Space>
-  );
-
-  return (
-    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
-      {messageContextHolder}
-      <Layout className={pageClass}>
-        <Layout.Content className="content">
-          <Row justify="center">
-            <Col xs={24} sm={22} md={18} lg={14} xl={12}>
-              <Card hoverable className="subscription-card" title={cardTitle} extra={cardExtra}>
-                <Descriptions
-                  bordered
-                  column={1}
-                  size="small"
-                  className="info-table"
-                  items={descriptionsItems}
-                />
+              <CardContent>
+                {/* Info definition list */}
+                <dl className="divide-y divide-border overflow-hidden rounded-lg border border-border bg-surface">
+                  {infoRows.map((row) => (
+                    <InfoRow key={row.key} label={row.label}>
+                      {row.children}
+                    </InfoRow>
+                  ))}
+                </dl>
 
                 <SubUsageSummary
                   usedByte={Number(subData.usedByte || 0)
@@ -291,99 +361,53 @@ export default function SubPage() {
 
                 {(subUrl || subJsonUrl || subClashUrl) && (
                   <>
-                    <Divider>{t('subscription.title')}</Divider>
-                    <div className="links-section">
+                    <SectionTitle>{t('subscription.title')}</SectionTitle>
+                    <div className="flex flex-col gap-2">
                       {subUrl && (
-                        <div className="sub-link-row">
-                          <Tag color="green" className="sub-link-tag">SUB</Tag>
-                          <a
-                            href={subUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="sub-link-title sub-link-anchor"
-                            title={subUrl}
-                          >
-                            {sId}
-                          </a>
-                          <div className="sub-link-actions">
-                            <Button size="small" icon={<CopyOutlined />} onClick={() => copy(subUrl)} aria-label={t('copy')} title={t('copy')} />
-                            <Popover
-                              trigger="click"
-                              placement="left"
-                              destroyOnHidden
-                              content={
-                                <div className="sub-link-qr-popover">
-                                  <Tag color="green" className="qr-tag">{t('pages.settings.subSettings')}</Tag>
-                                  <QRCode value={subUrl} size={QR_SIZE} type="svg" bordered={false} color="#000000" bgColor="#ffffff" />
-                                </div>
-                              }
-                            >
-                              <Button size="small" icon={<QrcodeOutlined />} aria-label="QR" title="QR" />
-                            </Popover>
-                          </div>
-                        </div>
+                        <LinkRow
+                          tags={<Badge variant="success" className="shrink-0 font-semibold tracking-wide">SUB</Badge>}
+                          href={subUrl}
+                          title={subUrl}
+                          rowTitle={sId}
+                          copyLabel={t('copy')}
+                          onCopy={() => copy(subUrl)}
+                          onQr={() => setQr({
+                              value: subUrl,
+                              label: <Badge variant="success">{t('pages.settings.subSettings')}</Badge>
+                          })}
+                        />
                       )}
                       {subJsonUrl && (
-                        <div className="sub-link-row">
-                          <Tag color="purple" className="sub-link-tag">JSON</Tag>
-                          <a
-                            href={subJsonUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="sub-link-title sub-link-anchor"
-                            title={subJsonUrl}
-                          >
-                            {sId}
-                          </a>
-                          <div className="sub-link-actions">
-                            <Button size="small" icon={<CopyOutlined />} onClick={() => copy(subJsonUrl)} aria-label={t('copy')} title={t('copy')} />
-                            <Popover
-                              trigger="click"
-                              placement="left"
-                              destroyOnHidden
-                              content={
-                                <div className="sub-link-qr-popover">
-                                  <Tag color="purple" className="qr-tag">{t('pages.settings.subSettings')} JSON</Tag>
-                                  <QRCode value={subJsonUrl} size={QR_SIZE} type="svg" bordered={false} color="#000000" bgColor="#ffffff" />
-                                </div>
-                              }
-                            >
-                              <Button size="small" icon={<QrcodeOutlined />} aria-label="QR" title="QR" />
-                            </Popover>
-                          </div>
-                        </div>
+                        <LinkRow
+                          tags={<Badge variant="primary" className="shrink-0 font-semibold tracking-wide">JSON</Badge>}
+                          href={subJsonUrl}
+                          title={subJsonUrl}
+                          rowTitle={sId}
+                          copyLabel={t('copy')}
+                          onCopy={() => copy(subJsonUrl)}
+                          onQr={() => setQr({
+                              value: subJsonUrl,
+                              label: <Badge variant="primary">{t('pages.settings.subSettings')} JSON</Badge>
+                          })}
+                        />
                       )}
                       {subClashUrl && (
-                        <div className="sub-link-row">
-                          <Tooltip title="Clash / Mihomo">
-                            <Tag color="gold" className="sub-link-tag">CLASH</Tag>
-                          </Tooltip>
-                          <a
-                            href={subClashUrl}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="sub-link-title sub-link-anchor"
-                            title={subClashUrl}
-                          >
-                            {sId}
-                          </a>
-                          <div className="sub-link-actions">
-                            <Button size="small" icon={<CopyOutlined />} onClick={() => copy(subClashUrl)} aria-label={t('copy')} title={t('copy')} />
-                            <Popover
-                              trigger="click"
-                              placement="left"
-                              destroyOnHidden
-                              content={
-                                <div className="sub-link-qr-popover">
-                                  <Tag color="gold" className="qr-tag">Clash / Mihomo</Tag>
-                                  <QRCode value={subClashUrl} size={QR_SIZE} type="svg" bordered={false} color="#000000" bgColor="#ffffff" />
-                                </div>
-                              }
-                            >
-                              <Button size="small" icon={<QrcodeOutlined />} aria-label="QR" title="QR" />
-                            </Popover>
-                          </div>
-                        </div>
+                        <LinkRow
+                          tags={(
+                            <Tooltip content="Clash / Mihomo">
+                              <Badge variant="warning" className="shrink-0 font-semibold tracking-wide">CLASH</Badge>
+                            </Tooltip>
+                          )}
+                          href={subClashUrl}
+                          title={subClashUrl}
+                          rowTitle={sId}
+                          copyLabel={t('copy')}
+                          onCopy={() => copy(subClashUrl)}
+                          onQr={() => setQr({
+                              value: subClashUrl,
+                              label: <Badge variant="warning">Clash / Mihomo</Badge>
+                          })}
+                        />
                       )}
                     </div>
                   </>
@@ -391,86 +415,74 @@ export default function SubPage() {
 
                 {links.length > 0 && (
                   <>
-                    <Divider>{t('pages.inbounds.copyLink')}</Divider>
-                    <div className="links-section">
-                      {links.map((link, idx) => {
-                        const parts = parseLinkParts(link, linkEmails[idx] || '');
-                        const fallback = `Link ${idx + 1}`;
-                        const rowTitle = parts?.remark || fallback;
-                        const qrLabel = [parts?.remark, linkEmails[idx]].filter(Boolean).join('-') || rowTitle;
-                        const canQr = !isPostQuantumLink(link);
-                        return (
-                          <div key={link} className="sub-link-row">
-                            {parts
-                              ? <LinkTags parts={parts} />
-                              : <Tag className="sub-link-tag">LINK</Tag>}
-                            <span className="sub-link-title" title={rowTitle}>
-                              {rowTitle}
-                            </span>
-                            <div className="sub-link-actions">
-                              <Button
-                                size="small"
-                                icon={<CopyOutlined />}
-                                onClick={() => copy(link)}
-                                aria-label={t('copy')}
-                                title={t('copy')}
-                              />
-                              {canQr && (
-                                <Popover
-                                  trigger="click"
-                                  placement="left"
-                                  destroyOnHidden
-                                  content={
-                                    <div className="sub-link-qr-popover">
-                                      <Tag className="qr-tag">{qrLabel}</Tag>
-                                      <QRCode
-                                        value={link}
-                                        size={220}
-                                        type="svg"
-                                        bordered={false}
-                                        color="#000000"
-                                        bgColor="#ffffff"
-                                      />
-                                    </div>
-                                  }
-                                >
-                                  <Button
-                                    size="small"
-                                    icon={<QrcodeOutlined />}
-                                    aria-label="QR"
-                                    title="QR"
-                                  />
-                                </Popover>
-                              )}
-                            </div>
-                          </div>
-                        );
+                    <SectionTitle>{t('pages.inbounds.copyLink')}</SectionTitle>
+                    <div className="flex flex-col gap-2">
+                      {links.map((link, idx) =>
+                      {
+                          const parts = parseLinkParts(link, linkEmails[idx] || '');
+                          const fallback = `Link ${ idx + 1 }`;
+                          const rowTitle = parts?.remark || fallback;
+                          const qrLabel = [parts?.remark, linkEmails[idx]].filter(Boolean).join('-') || rowTitle;
+                          const canQr = !isPostQuantumLink(link);
+                          return (
+                          <LinkRow
+                            key={link}
+                            tags={parts
+                                ? <LinkTags parts={parts} />
+                                : <Badge variant="neutral" className="shrink-0 font-semibold tracking-wide">LINK</Badge>}
+                            title={rowTitle}
+                            rowTitle={rowTitle}
+                            copyLabel={t('copy')}
+                            onCopy={() => copy(link)}
+                            onQr={canQr ? () => setQr({
+                                value: link,
+                                label: <Badge variant="neutral">{qrLabel}</Badge>
+                            }) : undefined}
+                          />
+                          );
                       })}
                     </div>
                   </>
                 )}
 
-                <Row gutter={[8, 8]} justify="center" className="apps-row">
-                  <Col xs={24} sm={12} className="app-col">
-                    <Dropdown trigger={['click']} menu={{ items: androidMenuItems }}>
-                      <Button block={isMobile} size="large" type="primary">
-                        <AndroidOutlined /> Android <DownOutlined />
-                      </Button>
-                    </Dropdown>
-                  </Col>
-                  <Col xs={24} sm={12} className="app-col">
-                    <Dropdown trigger={['click']} menu={{ items: iosMenuItems }}>
-                      <Button block={isMobile} size="large" type="primary">
-                        <AppleOutlined /> iOS <DownOutlined />
-                      </Button>
-                    </Dropdown>
-                  </Col>
-                </Row>
-              </Card>
-            </Col>
-          </Row>
-        </Layout.Content>
-      </Layout>
-    </ConfigProvider>
-  );
+                <div className="mt-6 grid grid-cols-1 gap-2 sm:grid-cols-2">
+                  <DropdownMenu
+                    align="start"
+                    className={appDropdownClass}
+                    label="Android"
+                    items={androidMenuItems}
+                    trigger={(
+                      <span className="flex w-full items-center justify-center gap-2">
+                        <Smartphone className="h-4 w-4" aria-hidden /> Android <ChevronDown className="h-4 w-4" aria-hidden />
+                      </span>
+                    )}
+                  />
+                  <DropdownMenu
+                    align="start"
+                    className={appDropdownClass}
+                    label="iOS"
+                    items={iosMenuItems}
+                    trigger={(
+                      <span className="flex w-full items-center justify-center gap-2">
+                        <Apple className="h-4 w-4" aria-hidden /> iOS <ChevronDown className="h-4 w-4" aria-hidden />
+                      </span>
+                    )}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+      <Modal open={!!qr} onClose={() => setQr(null)} size="sm" title="QR">
+        {qr && (
+          <div className="flex flex-col items-center gap-3">
+            <div className="w-full text-center">{qr.label}</div>
+            <div className="rounded-lg bg-white p-3">
+              <QRCode value={qr.value} size={QR_SIZE} />
+            </div>
+          </div>
+        )}
+      </Modal>
+    </div>
+    );
 }

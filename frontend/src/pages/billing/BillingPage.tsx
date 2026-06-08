@@ -1,24 +1,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import {
-  Alert,
-  Button,
-  Card,
-  Col,
-  ConfigProvider,
-  InputNumber,
-  Layout,
-  Result,
-  Row,
-  Space,
-  Statistic,
-  Table,
-  Tag,
-  message,
-} from 'antd';
-import type { TableColumnsType } from 'antd';
-import { WalletOutlined } from '@ant-design/icons';
+import { message } from '@/components/ui/message';
+import { CircleCheck, Info, Receipt, Wallet } from 'lucide-react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/hooks/useTheme';
@@ -27,7 +11,22 @@ import { useMe, ME_QUERY_KEY } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import { HttpUtil, IntlUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import AppSidebar from '@/layouts/AppSidebar';
+import PageShell from '@/layouts/PageShell';
+import {
+    Alert,
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    Input,
+    Label,
+    StatCard,
+    Table,
+    cn
+} from '@/components/ui';
+import type { BadgeVariant, Column } from '@/components/ui';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
 const QUICK_AMOUNTS = [50000, 100000, 200000, 500000];
@@ -41,200 +40,234 @@ interface Payment {
   createdAt: number;
 }
 
-async function fetchPayments(): Promise<Payment[]> {
-  const msg = await HttpUtil.get('/panel/api/billing/payments', undefined, { silent: true });
-  if (!msg?.success) return [];
-  return (msg.obj as Payment[]) ?? [];
+const STATUS_BADGE: Record<string, BadgeVariant> = {
+    paid: 'success',
+    failed: 'danger'
+};
+
+async function fetchPayments(): Promise<Payment[]>
+{
+    const msg = await HttpUtil.get('/panel/api/billing/payments', undefined, { silent: true });
+    if (!msg?.success)
+    {
+        return [];
+    }
+    return (msg.obj as Payment[]) ?? [];
 }
 
-export default function BillingPage() {
-  usePageTitle();
-  const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
-  const { me } = useMe();
-  const { format: formatMoney, formatNumber, unit, clientCostPerGB } = useCurrency();
-  const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
-  const queryClient = useQueryClient();
-  const [searchParams, setSearchParams] = useSearchParams();
-
-  const [amount, setAmount] = useState<number>(QUICK_AMOUNTS[1]);
-
-  const paymentsQuery = useQuery({ queryKey: ['billing', 'payments'], queryFn: fetchPayments });
-
-  const paidStats = useMemo(() => {
-    const rows = paymentsQuery.data ?? [];
-    let totalPaid = 0;
-    let count = 0;
-    for (const p of rows) {
-      if (p.status === 'paid') {
-        totalPaid += p.amount || 0;
-        count += 1;
-      }
-    }
-    return { totalPaid, count };
-  }, [paymentsQuery.data]);
-
-  // Handle the redirect back from ZarinPal (?status=ok|cancelled|failed).
-  useEffect(() => {
-    const status = searchParams.get('status');
-    if (!status) return;
-    const refId = searchParams.get('refId');
-    if (status === 'ok') {
-      messageApi.success(refId ? t('pages.billing.toasts.paidWithRef', { refId }) : t('pages.billing.toasts.paid'));
-      queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
-      queryClient.invalidateQueries({ queryKey: ['billing', 'payments'] });
-    } else if (status === 'cancelled') {
-      messageApi.warning(t('pages.billing.toasts.cancelled'));
-    } else {
-      messageApi.error(t('pages.billing.toasts.failed'));
-    }
-    setSearchParams({}, { replace: true });
-  }, [searchParams, setSearchParams, messageApi, t, queryClient]);
-
-  const payMut = useMutation({
-    mutationFn: (amt: number) =>
-      HttpUtil.post('/panel/api/billing/zarinpal/request', { amount: amt }, JSON_HEADERS),
-    onSuccess: (msg) => {
-      const url = (msg?.obj as { url?: string } | null)?.url;
-      if (msg?.success && url) {
-        window.location.href = url; // hand off to the ZarinPal gateway
-      }
-    },
-  });
-
-  function startPayment() {
-    if (!amount || amount <= 0) {
-      messageApi.error(t('pages.billing.toasts.invalidAmount'));
-      return;
-    }
-    payMut.mutate(amount);
-  }
-
-  const columns: TableColumnsType<Payment> = [
+// One compact metric tile inside the summary card.
+export default function BillingPage()
+{
+    usePageTitle();
+    const { t } = useTranslation();
+    const { isDark } = useTheme();
+    const { me } = useMe();
+    const { format: formatMoney, formatNumber, unit, clientCostPerGB } = useCurrency();
+    const [messageApi] = message.useMessage();
+    useEffect(() =>
     {
-      title: t('pages.billing.amount'),
-      dataIndex: 'amount',
-      key: 'amount',
-      render: (a: number) => <strong>{formatMoney(a)}</strong>,
-    },
+        setMessageInstance(messageApi);
+    }, [messageApi]);
+    const queryClient = useQueryClient();
+    const [searchParams, setSearchParams] = useSearchParams();
+
+    const [amount, setAmount] = useState<number>(QUICK_AMOUNTS[1]);
+
+    const paymentsQuery = useQuery({ queryKey: ['billing', 'payments'], queryFn: fetchPayments });
+
+    const paidStats = useMemo(() =>
     {
-      title: t('pages.users.txType'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (s: string) => {
-        const color = s === 'paid' ? 'green' : s === 'failed' ? 'volcano' : 'gold';
-        return <Tag color={color}>{t(`pages.billing.status_${s}`, { defaultValue: s })}</Tag>;
-      },
-    },
-    { title: t('pages.billing.refId'), dataIndex: 'refId', key: 'refId', responsive: ['md'] },
+        const rows = paymentsQuery.data ?? [];
+        let totalPaid = 0;
+        let count = 0;
+        for (const p of rows)
+        {
+            if (p.status === 'paid')
+            {
+                totalPaid += p.amount || 0;
+                count += 1;
+            }
+        }
+        return { totalPaid, count };
+    }, [paymentsQuery.data]);
+
+    // Handle the redirect back from ZarinPal (?status=ok|cancelled|failed).
+    useEffect(() =>
     {
-      title: t('pages.users.txDate'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (ts: number) => IntlUtil.formatDate(ts),
-    },
-  ];
+        const status = searchParams.get('status');
+        if (!status)
+        {
+            return;
+        }
+        const refId = searchParams.get('refId');
+        if (status === 'ok')
+        {
+            messageApi.success(refId ? t('pages.billing.toasts.paidWithRef', { refId }) : t('pages.billing.toasts.paid'));
+            queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+            queryClient.invalidateQueries({ queryKey: ['billing', 'payments'] });
+        }
+        else if (status === 'cancelled')
+        {
+            messageApi.warning(t('pages.billing.toasts.cancelled'));
+        }
+        else
+        {
+            messageApi.error(t('pages.billing.toasts.failed'));
+        }
+        setSearchParams({}, { replace: true });
+    }, [searchParams, setSearchParams, messageApi, t, queryClient]);
 
-  const pageClass = useMemo(() => {
-    const classes = ['billing-page'];
-    if (isDark) classes.push('is-dark');
-    if (isUltra) classes.push('is-ultra');
-    return classes.join(' ');
-  }, [isDark, isUltra]);
+    const payMut = useMutation({
+        mutationFn: (amt: number) =>
+            HttpUtil.post('/panel/api/billing/zarinpal/request', { amount: amt }, JSON_HEADERS),
+        onSuccess: (msg) =>
+        {
+            const url = (msg?.obj as { url?: string } | null)?.url;
+            if (msg?.success && url)
+            {
+                window.location.href = url; // hand off to the ZarinPal gateway
+            }
+        }
+    });
 
-  const disabled = !!me && !me.zarinpalEnable;
+    function startPayment()
+    {
+        if (!amount || amount <= 0)
+        {
+            messageApi.error(t('pages.billing.toasts.invalidAmount'));
+            return;
+        }
+        payMut.mutate(amount);
+    }
 
-  return (
-    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
-      {messageContextHolder}
-      <Layout className={pageClass}>
-        <AppSidebar />
-        <Layout className="content-shell">
-          <Layout.Content id="content-layout" className="content-area">
-            <Row gutter={[16, 16]} justify="center">
-              <Col xs={24} md={18} lg={14} xxl={12}>
-                <Card size="small" hoverable className="summary-card" style={{ marginBottom: 16 }}>
-                  <Row gutter={[16, 12]}>
-                    <Col xs={24} sm={8}>
-                      <Statistic
-                        title={t('pages.billing.currentBalance')}
-                        value={me?.balance ?? 0}
-                        prefix={<WalletOutlined />}
-                        suffix={unit}
-                        groupSeparator=","
-                      />
-                    </Col>
-                    <Col xs={12} sm={8}>
-                      <Statistic
-                        title={t('pages.billing.totalPaid')}
-                        value={paidStats.totalPaid}
-                        suffix={unit}
-                        groupSeparator=","
-                      />
-                    </Col>
-                    <Col xs={12} sm={8}>
-                      <Statistic title={t('pages.billing.paymentsCount')} value={String(paidStats.count)} />
-                    </Col>
-                  </Row>
-                  {clientCostPerGB > 0 && (
-                    <div style={{ marginTop: 12, opacity: 0.75 }}>
-                      {t('pages.billing.perGbInfo', { price: formatMoney(clientCostPerGB) })}
-                    </div>
-                  )}
+    const columns: Column<Payment>[] = [
+        {
+            key: 'amount',
+            header: t('pages.billing.amount'),
+            cell: (row) => <strong>{formatMoney(row.amount)}</strong>
+        },
+        {
+            key: 'status',
+            header: t('pages.users.txType'),
+            cell: (row) => (
+        <Badge variant={STATUS_BADGE[row.status] ?? 'warning'}>
+          {t(`pages.billing.status_${ row.status }`, { defaultValue: row.status })}
+        </Badge>
+            )
+        },
+        {
+            key: 'refId',
+            header: t('pages.billing.refId'),
+            className: 'hidden md:table-cell',
+            cell: (row) => row.refId
+        },
+        {
+            key: 'createdAt',
+            header: t('pages.users.txDate'),
+            cell: (row) => IntlUtil.formatDate(row.createdAt)
+        }
+    ];
+
+    const pageClass = useMemo(() => `billing-page${ isDark ? ' is-dark' : '' }`, [isDark]);
+
+    const disabled = !!me && !me.zarinpalEnable;
+
+    return (
+    <PageShell name={pageClass}>
+            <div className="flex w-full flex-col gap-4">
+              {/* Summary */}
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                <StatCard
+                  icon={<Wallet className="h-5 w-5" aria-hidden />}
+                  label={t('pages.billing.currentBalance')}
+                  value={<>{formatNumber(me?.balance ?? 0)} <span className="text-base font-medium text-muted-foreground">{unit}</span></>}
+                />
+                <StatCard
+                  icon={<CircleCheck className="h-5 w-5" aria-hidden />}
+                  label={t('pages.billing.totalPaid')}
+                  value={<>{formatNumber(paidStats.totalPaid)} <span className="text-base font-medium text-muted-foreground">{unit}</span></>}
+                />
+                <StatCard
+                  icon={<Receipt className="h-5 w-5" aria-hidden />}
+                  label={t('pages.billing.paymentsCount')}
+                  value={formatNumber(paidStats.count)}
+                />
+              </div>
+              {clientCostPerGB > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  {t('pages.billing.perGbInfo', { price: formatMoney(clientCostPerGB) })}
+                </p>
+              )}
+
+              {/* Top-up */}
+              {disabled ? (
+                <Card>
+                  <CardContent className="flex flex-col items-center gap-2 p-8 pt-8 text-center">
+                    <Info className="h-8 w-8 text-muted-foreground" aria-hidden />
+                    <div className="text-base font-semibold">{t('pages.billing.disabledTitle')}</div>
+                    <p className="text-sm text-muted-foreground">{t('pages.billing.disabledDesc')}</p>
+                  </CardContent>
                 </Card>
+              ) : (
+                <Card>
+                  <CardHeader className="p-4 sm:p-5">
+                    <CardTitle>{t('pages.billing.topUpTitle')}</CardTitle>
+                  </CardHeader>
+                  <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
+                    <Alert variant="info">{t('pages.billing.topUpHint')}</Alert>
 
-                {disabled ? (
-                  <Card size="small" hoverable>
-                    <Result status="info" title={t('pages.billing.disabledTitle')} subTitle={t('pages.billing.disabledDesc')} />
-                  </Card>
-                ) : (
-                  <Card size="small" hoverable title={t('pages.billing.topUpTitle')}>
-                    <Alert type="info" showIcon style={{ marginBottom: 16 }} message={t('pages.billing.topUpHint')} />
-                    <Space wrap style={{ marginBottom: 12 }}>
+                    <div className="flex flex-wrap gap-2">
                       {QUICK_AMOUNTS.map((a) => (
-                        <Button key={a} onClick={() => setAmount(a)} type={amount === a ? 'primary' : 'default'}>
+                        <Button
+                          key={a}
+                          variant={amount === a ? 'primary' : 'secondary'}
+                          onClick={() => setAmount(a)}
+                        >
                           {formatNumber(a)}
                         </Button>
                       ))}
-                    </Space>
-                    <Row gutter={8} align="middle">
-                      <Col flex="auto">
-                        <InputNumber
-                          min={1000}
-                          step={10000}
-                          value={amount}
-                          onChange={(v) => setAmount(Number(v) || 0)}
-                          style={{ width: '100%' }}
-                          formatter={(v) => `${v}`.replace(/\B(?=(\d{3})+(?!\d))/g, ',')}
-                          parser={(v) => Number((v || '').replace(/[^\d]/g, ''))}
-                          addonAfter={unit}
-                        />
-                      </Col>
-                      <Col>
-                        <Button type="primary" loading={payMut.isPending} onClick={startPayment}>
-                          {t('pages.billing.payWithZarinpal')}
-                        </Button>
-                      </Col>
-                    </Row>
-                  </Card>
-                )}
+                    </div>
 
-                <Card size="small" hoverable title={t('pages.billing.history')} style={{ marginTop: 16 }}>
-                  <Table<Payment> scroll={{ x: 'max-content' }}
-                    dataSource={paymentsQuery.data ?? []}
-                    columns={columns}
-                    rowKey="id"
-                    size="small"
-                    loading={paymentsQuery.isFetching}
-                    pagination={{ pageSize: 10, hideOnSinglePage: true }}
-                  />
+                    <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+                      <div className="flex flex-1 flex-col gap-1.5">
+                        <Label htmlFor="bill-amount">{t('pages.billing.amount')}</Label>
+                        <div className="flex">
+                          <Input
+                            id="bill-amount"
+                            inputMode="numeric"
+                            className={cn('rounded-e-none')}
+                            value={amount ? formatNumber(amount) : ''}
+                            onChange={(e) => setAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
+                          />
+                          <span className="inline-flex items-center rounded-e-md border border-s-0 border-border bg-surface-sunken px-3 text-sm text-muted-foreground">
+                            {unit}
+                          </span>
+                        </div>
+                      </div>
+                      <Button loading={payMut.isPending} onClick={startPayment} className="sm:w-auto">
+                        {t('pages.billing.payWithZarinpal')}
+                      </Button>
+                    </div>
+                  </CardContent>
                 </Card>
-              </Col>
-            </Row>
-          </Layout.Content>
-        </Layout>
-      </Layout>
-    </ConfigProvider>
-  );
+              )}
+
+              {/* History */}
+              <Card>
+                <CardHeader className="p-4 sm:p-5">
+                  <CardTitle>{t('pages.billing.history')}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+                  <Table<Payment>
+                    columns={columns}
+                    data={paymentsQuery.data ?? []}
+                    rowKey={(row) => String(row.id)}
+                    loading={paymentsQuery.isFetching}
+                    pageSize={10}
+                  />
+                </CardContent>
+              </Card>
+            </div>
+    </PageShell>
+    );
 }

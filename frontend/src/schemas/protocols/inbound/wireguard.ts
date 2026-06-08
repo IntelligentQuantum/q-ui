@@ -6,18 +6,18 @@ import { z } from 'zod';
 // optionally store the client's privateKey so the panel can render configs
 // for the user — outbound peers never have a privateKey.
 export const WireguardInboundPeerSchema = z.object({
-  privateKey: z.string().optional(),
-  publicKey: z.string().min(1),
-  preSharedKey: z.string().optional(),
-  allowedIPs: z.array(z.string()).default([]),
-  keepAlive: z.number().int().min(0).optional(),
+    privateKey: z.string().optional(),
+    publicKey: z.string().min(1),
+    preSharedKey: z.string().optional(),
+    allowedIPs: z.array(z.string()).default([]),
+    keepAlive: z.number().int().min(0).optional()
 });
 export type WireguardInboundPeer = z.infer<typeof WireguardInboundPeerSchema>;
 
 export const WireguardInboundSettingsSchema = z.object({
-  mtu: z.number().int().min(1).optional(),
-  secretKey: z.string().min(1),
-  peers: z.array(WireguardInboundPeerSchema).default([]),
-  noKernelTun: z.boolean().default(false),
+    mtu: z.number().int().min(1).optional(),
+    secretKey: z.string().min(1),
+    peers: z.array(WireguardInboundPeerSchema).default([]),
+    noKernelTun: z.boolean().default(false)
 });
 export type WireguardInboundSettings = z.infer<typeof WireguardInboundSettingsSchema>;

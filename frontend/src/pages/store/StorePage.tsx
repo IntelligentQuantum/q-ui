@@ -1,16 +1,28 @@
 import { useMemo, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Input, Modal, Row, Statistic, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { AppstoreOutlined, SearchOutlined, ShoppingCartOutlined, WalletOutlined } from '@ant-design/icons';
+import {
+    LayoutGrid,
+    ShoppingCart,
+    Wallet,
+    Clock,
+    Gauge
+} from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { EmptyState, ErrorState, StatCard, SearchInput } from '@/components/ui';
 
 import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
 import { ME_QUERY_KEY, useMe } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import PageShell from '@/layouts/PageShell';
-import { TableSkeleton, ErrorState } from '@/components/ui';
+import {
+    Button,
+    Card,
+    Input,
+    Label,
+    Modal,
+    Skeleton
+} from '@/components/ui';
 
 interface Product {
   id: number;
@@ -28,185 +40,215 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as cons
 // product with their wallet balance. Buying calls POST /panel/api/orders; the
 // backend debits the balance (writing a Transaction) and creates the order
 // atomically. All gating is enforced server-side — this is presentation only.
-export default function StorePage() {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const { balance } = useMe();
-  const { format, formatNumber, unit } = useCurrency();
-  const [buying, setBuying] = useState<Product | null>(null);
-  const [name, setName] = useState('');
-  const [busy, setBusy] = useState(false);
+export default function StorePage()
+{
+    const { t } = useTranslation();
+    const qc = useQueryClient();
+    const { balance } = useMe();
+    const { format, formatNumber, unit } = useCurrency();
+    const [buying, setBuying] = useState<Product | null>(null);
+    const [name, setName] = useState('');
+    const [busy, setBusy] = useState(false);
 
-  const { data: products, isLoading, isError, refetch } = useQuery({
-    queryKey: ['products', 'store'],
-    queryFn: async () => {
-      const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
-      if (!msg?.success) throw new Error(msg?.msg || '');
-      return (msg.obj as Product[] | null) ?? [];
-    },
-  });
+    const { data: products, isLoading, isError, refetch } = useQuery({
+        queryKey: ['products', 'store'],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
+            if (!msg?.success)
+            {
+                throw new Error(msg?.msg || '');
+            }
+            return (msg.obj as Product[] | null) ?? [];
+        }
+    });
 
-  // Open the buy dialog where the buyer can name the config (the config name is
-  // the client "email", as on the Clients page).
-  const openBuy = (p: Product) => {
-    setBuying(p);
-    setName('');
-  };
-
-  const doBuy = async () => {
-    if (!buying) return;
-    setBusy(true);
-    try {
-      const msg = await HttpUtil.post(
-        '/panel/api/orders',
-        { productId: buying.id, name: name.trim() },
-        { ...JSON_HEADERS, silent: true },
-      );
-      if (msg.success) {
-        getMessage().success(t('pages.store.purchased'));
-        setBuying(null);
-        qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
-        qc.invalidateQueries({ queryKey: ['orders'] });
-        qc.invalidateQueries({ queryKey: ['clients'] });
-      } else {
-        getMessage().error(msg.msg || t('somethingWentWrong'));
-      }
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const list = products ?? [];
-  const [q, setQ] = useState('');
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return s ? list.filter((p) => p.name.toLowerCase().includes(s)) : list;
-  }, [list, q]);
-
-  const columns: ColumnsType<Product> = [
-    { title: t('pages.store.product'), dataIndex: 'name' },
+    // Open the buy dialog where the buyer can name the config (the config name is
+    // the client "email", as on the Clients page).
+    const openBuy = (p: Product) =>
     {
-      title: t('pages.store.traffic'),
-      dataIndex: 'trafficLimit',
-      render: (v: number) => (v > 0 ? `${Math.round(v / GB)} GB` : '∞'),
-    },
-    {
-      title: t('pages.store.duration'),
-      dataIndex: 'durationDays',
-      render: (v: number) => (v > 0 ? `${v} ${t('pages.store.days')}` : '∞'),
-    },
-    {
-      title: t('pages.store.price'),
-      dataIndex: 'price',
-      render: (v: number) => format(v),
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: 140,
-      render: (_, p) => (
-        <Button
-          type="primary"
-          size="small"
-          icon={<ShoppingCartOutlined />}
-          disabled={balance < p.price}
-          onClick={() => openBuy(p)}
-        >
-          {t('pages.store.buy')}
-        </Button>
-      ),
-    },
-  ];
+        setBuying(p);
+        setName('');
+    };
 
-  return (
+    const doBuy = async () =>
+    {
+        if (!buying)
+        {
+            return;
+        }
+        setBusy(true);
+        try
+        {
+            const msg = await HttpUtil.post(
+                '/panel/api/orders',
+                { productId: buying.id, name: name.trim() },
+                { ...JSON_HEADERS, silent: true }
+            );
+            if (msg.success)
+            {
+                getMessage().success(t('pages.store.purchased'));
+                setBuying(null);
+                qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
+                qc.invalidateQueries({ queryKey: ['orders'] });
+                qc.invalidateQueries({ queryKey: ['clients'] });
+            }
+            else
+            {
+                getMessage().error(msg.msg || t('somethingWentWrong'));
+            }
+        }
+        finally
+        {
+            setBusy(false);
+        }
+    };
+
+    const list = products ?? [];
+    const [q, setQ] = useState('');
+    const filtered = useMemo(() =>
+    {
+        const s = q.trim().toLowerCase();
+        return s ? list.filter((p) => p.name.toLowerCase().includes(s)) : list;
+    }, [list, q]);
+
+    const formatTraffic = (v: number) => (v > 0 ? `${ Math.round(v / GB) } GB` : '∞');
+    const formatDuration = (v: number) => (v > 0 ? `${ v } ${ t('pages.store.days') }` : '∞');
+
+    return (
     <PageShell name="store-page">
+      <div className="flex w-full flex-col gap-4">
+        {/* Summary */}
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+          <StatCard
+            icon={<Wallet className="h-5 w-5" aria-hidden />}
+            label={t('pages.store.balance')}
+            value={
+              <>
+                {formatNumber(balance)}{' '}
+                <span className="text-base font-medium text-muted-foreground">{unit}</span>
+              </>
+            }
+          />
+          <StatCard
+            icon={<LayoutGrid className="h-5 w-5" aria-hidden />}
+            label={t('pages.store.available')}
+            value={list.length}
+          />
+        </div>
+
+        {/* Catalog */}
+        <Card className="p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            <SearchInput
+              className="w-full sm:w-64"
+              aria-label={t('search')}
+              placeholder={t('search')}
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+            />
+          </div>
+
+          {isLoading ? (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="flex flex-col gap-3 rounded-lg border border-border p-4">
+                  <Skeleton className="h-5 w-2/3" />
+                  <Skeleton className="h-4 w-1/2" />
+                  <Skeleton className="h-9 w-full" />
+                </div>
+              ))}
+            </div>
+          ) : isError ? (
+            <ErrorState onRetry={() => refetch()} />
+          ) : filtered.length === 0 ? (
+            <EmptyState icon={<LayoutGrid aria-hidden />} title={t('noData')} />
+          ) : (
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              {filtered.map((p) =>
+              {
+                  const affordable = balance >= p.price;
+                  return (
+                  <div
+                    key={p.id}
+                    className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong"
+                  >
+                    <div className="flex min-w-0 flex-col gap-1">
+                      <span className="truncate text-base font-semibold text-foreground">{p.name}</span>
+                      <span className="text-lg font-bold tabular-nums text-foreground">{format(p.price)}</span>
+                    </div>
+
+                    <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                      <span className="inline-flex items-center gap-1.5">
+                        <Gauge className="h-4 w-4" aria-hidden />
+                        {formatTraffic(p.trafficLimit)}
+                      </span>
+                      <span className="inline-flex items-center gap-1.5">
+                        <Clock className="h-4 w-4" aria-hidden />
+                        {formatDuration(p.durationDays)}
+                      </span>
+                    </div>
+
+                    <Button
+                      className="mt-auto w-full"
+                      disabled={!affordable}
+                      onClick={() => openBuy(p)}
+                    >
+                      <ShoppingCart className="h-4 w-4" aria-hidden />
+                      {t('pages.store.buy')}
+                    </Button>
+                  </div>
+                  );
+              })}
+            </div>
+          )}
+        </Card>
+      </div>
+
+      {/* Buy dialog */}
       <Modal
         open={!!buying}
+        onClose={() => setBuying(null)}
         title={t('pages.store.confirmTitle')}
-        okText={t('pages.store.buy')}
-        cancelText={t('cancel')}
-        confirmLoading={busy}
-        onCancel={() => setBuying(null)}
-        onOk={doBuy}
-        destroyOnClose
+        size="sm"
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setBuying(null)}>
+              {t('cancel')}
+            </Button>
+            <Button loading={busy} onClick={doBuy}>
+              {t('pages.store.buy')}
+            </Button>
+          </>
+        }
       >
         {buying && (
-          <>
-            <p style={{ marginBottom: 4 }}>
-              <strong>{buying.name}</strong>
-            </p>
-            <p style={{ marginBottom: 4 }}>
-              {t('pages.store.price')}: <strong>{format(buying.price)}</strong>
-            </p>
-            <p style={{ marginBottom: 12, opacity: 0.75 }}>
-              {t('pages.store.balanceAfter')}: {format(Math.max(0, balance - buying.price))}
-            </p>
-            <div style={{ marginBottom: 4 }}>{t('pages.store.configName')}</div>
-            <Input
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              placeholder={t('pages.store.configNamePlaceholder')}
-              maxLength={64}
-            />
-          </>
+          <div className="flex flex-col gap-4">
+            <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3 text-sm">
+              <span className="text-base font-semibold text-foreground">{buying.name}</span>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t('pages.store.price')}</span>
+                <span className="font-semibold tabular-nums">{format(buying.price)}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">{t('pages.store.balanceAfter')}</span>
+                <span className="tabular-nums">{format(Math.max(0, balance - buying.price))}</span>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="store-config-name">{t('pages.store.configName')}</Label>
+              <Input
+                id="store-config-name"
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder={t('pages.store.configNamePlaceholder')}
+                maxLength={64}
+              />
+            </div>
+          </div>
         )}
       </Modal>
-      <>
-        <Row gutter={[16, 12]}>
-          <Col span={24}>
-            <Card size="small" hoverable className="summary-card">
-              <Row gutter={[16, 12]}>
-                <Col xs={12}>
-                  <Statistic
-                    title={t('pages.store.balance')}
-                    value={formatNumber(balance)}
-                    prefix={<WalletOutlined />}
-                    suffix={unit}
-                  />
-                </Col>
-                <Col xs={12}>
-                  <Statistic title={t('pages.store.available')} value={list.length} prefix={<AppstoreOutlined />} />
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-
-          <Col span={24}>
-            <Card
-              size="small"
-              hoverable
-              title={t('menu.store')}
-              extra={
-                <Input
-                  allowClear
-                  size="small"
-                  style={{ width: 200 }}
-                  prefix={<SearchOutlined />}
-                  aria-label={t('search')}
-                  placeholder={t('search')}
-                  value={q}
-                  onChange={(e) => setQ(e.target.value)}
-                />
-              }
-            >
-              {isLoading ? (
-                <TableSkeleton rows={6} />
-              ) : isError ? (
-                <ErrorState onRetry={() => refetch()} />
-              ) : (
-                <Table
-                  rowKey="id"
-                  size="small"
-                  columns={columns}
-                  dataSource={filtered}
-                  scroll={{ x: 'max-content' }}
-                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-                />
-              )}
-            </Card>
-          </Col>
-        </Row>
-      </>
     </PageShell>
-  );
+    );
 }

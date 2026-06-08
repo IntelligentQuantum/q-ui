@@ -1,31 +1,44 @@
 import { NumberFormatter } from '@/utils';
 
-export class CurTotal {
-  current: number;
-  total: number;
+export class CurTotal
+{
+    public current: number;
+    public total: number;
 
-  constructor(current: number, total: number) {
-    this.current = current;
-    this.total = total;
-  }
+    constructor(current: number, total: number)
+    {
+        this.current = current;
+        this.total = total;
+    }
 
-  get percent(): number {
-    if (this.total === 0) return 0;
-    return NumberFormatter.toFixed((this.current / this.total) * 100, 2);
-  }
+    public get percent(): number
+    {
+        if (this.total === 0)
+        {
+            return 0;
+        }
+        return NumberFormatter.toFixed((this.current / this.total) * 100, 2);
+    }
 
-  get color(): string {
-    const p = this.percent;
-    if (p < 80) return '#1677ff';
-    if (p < 90) return '#faad14';
-    return '#ff4d4f';
-  }
+    public get color(): string
+    {
+        const p = this.percent;
+        if (p < 80)
+        {
+            return '#1677ff';
+        }
+        if (p < 90)
+        {
+            return '#faad14';
+        }
+        return '#ff4d4f';
+    }
 }
 
 const XRAY_STATE_COLORS: Record<string, string> = {
-  running: 'green',
-  stop: 'orange',
-  error: 'red',
+    running: 'green',
+    stop: 'orange',
+    error: 'red'
 };
 
 export interface NetIO {
@@ -76,45 +89,50 @@ interface StatusInput {
   xray?: Partial<XrayInfo>;
 }
 
-export class Status {
-  cpu: CurTotal = new CurTotal(0, 0);
-  cpuCores = 0;
-  logicalPro = 0;
-  cpuSpeedMhz = 0;
-  disk: CurTotal = new CurTotal(0, 0);
-  loads: number[] = [0, 0, 0];
-  mem: CurTotal = new CurTotal(0, 0);
-  netIO: NetIO = { up: 0, down: 0 };
-  netTraffic: NetTraffic = { sent: 0, recv: 0 };
-  publicIP: PublicIP = { ipv4: 0, ipv6: 0 };
-  swap: CurTotal = new CurTotal(0, 0);
-  tcpCount = 0;
-  udpCount = 0;
-  uptime = 0;
-  appUptime = 0;
-  appStats: AppStats = { threads: 0, mem: 0, uptime: 0 };
-  xray: XrayInfo = { state: 'stop', errorMsg: '', version: '', color: '' };
+export class Status
+{
+    public cpu: CurTotal = new CurTotal(0, 0);
+    public cpuCores = 0;
+    public logicalPro = 0;
+    public cpuSpeedMhz = 0;
+    public disk: CurTotal = new CurTotal(0, 0);
+    public loads: number[] = [0, 0, 0];
+    public mem: CurTotal = new CurTotal(0, 0);
+    public netIO: NetIO = { up: 0, down: 0 };
+    public netTraffic: NetTraffic = { sent: 0, recv: 0 };
+    public publicIP: PublicIP = { ipv4: 0, ipv6: 0 };
+    public swap: CurTotal = new CurTotal(0, 0);
+    public tcpCount = 0;
+    public udpCount = 0;
+    public uptime = 0;
+    public appUptime = 0;
+    public appStats: AppStats = { threads: 0, mem: 0, uptime: 0 };
+    public xray: XrayInfo = { state: 'stop', errorMsg: '', version: '', color: '' };
 
-  constructor(data?: StatusInput | null) {
-    if (data == null) return;
+    constructor(data?: StatusInput | null)
+    {
+        if (data == null)
+        {
+            return;
+        }
 
-    this.cpu = new CurTotal(data.cpu ?? 0, 100);
-    this.cpuCores = data.cpuCores ?? 0;
-    this.logicalPro = data.logicalPro ?? 0;
-    this.cpuSpeedMhz = data.cpuSpeedMhz ?? 0;
-    this.disk = new CurTotal(data.disk?.current ?? 0, data.disk?.total ?? 0);
-    this.loads = (data.loads || [0, 0, 0]).map((v) => NumberFormatter.toFixed(v, 2));
-    this.mem = new CurTotal(data.mem?.current ?? 0, data.mem?.total ?? 0);
-    this.netIO = data.netIO ?? this.netIO;
-    this.netTraffic = data.netTraffic ?? this.netTraffic;
-    this.publicIP = data.publicIP ?? this.publicIP;
-    this.swap = new CurTotal(data.swap?.current ?? 0, data.swap?.total ?? 0);
-    this.tcpCount = data.tcpCount ?? 0;
-    this.udpCount = data.udpCount ?? 0;
-    this.uptime = data.uptime ?? 0;
-    this.appUptime = data.appUptime ?? 0;
-    this.appStats = data.appStats ?? this.appStats;
-    this.xray = { ...this.xray, ...(data.xray || {}) };
-    this.xray.color = XRAY_STATE_COLORS[this.xray.state] ?? 'gray';
-  }
+        this.cpu = new CurTotal(data.cpu ?? 0, 100);
+        this.cpuCores = data.cpuCores ?? 0;
+        this.logicalPro = data.logicalPro ?? 0;
+        this.cpuSpeedMhz = data.cpuSpeedMhz ?? 0;
+        this.disk = new CurTotal(data.disk?.current ?? 0, data.disk?.total ?? 0);
+        this.loads = (data.loads || [0, 0, 0]).map((v) => NumberFormatter.toFixed(v, 2));
+        this.mem = new CurTotal(data.mem?.current ?? 0, data.mem?.total ?? 0);
+        this.netIO = data.netIO ?? this.netIO;
+        this.netTraffic = data.netTraffic ?? this.netTraffic;
+        this.publicIP = data.publicIP ?? this.publicIP;
+        this.swap = new CurTotal(data.swap?.current ?? 0, data.swap?.total ?? 0);
+        this.tcpCount = data.tcpCount ?? 0;
+        this.udpCount = data.udpCount ?? 0;
+        this.uptime = data.uptime ?? 0;
+        this.appUptime = data.appUptime ?? 0;
+        this.appStats = data.appStats ?? this.appStats;
+        this.xray = { ...this.xray, ...(data.xray || {}) };
+        this.xray.color = XRAY_STATE_COLORS[this.xray.state] ?? 'gray';
+    }
 }

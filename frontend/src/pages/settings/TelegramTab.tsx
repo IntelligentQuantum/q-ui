@@ -1,99 +1,113 @@
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Input, InputNumber, Select, Switch, Tabs } from 'antd';
-import { BellOutlined, SettingOutlined } from '@ant-design/icons';
+import { SettingRow } from '@/components/ui';
+import { Bell, Settings } from 'lucide-react';
+
 import { LanguageManager } from '@/utils';
 import type { AllSetting } from '@/models/setting';
-import { SettingListItem } from '@/components/ui';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
-import { catTabLabel } from './catTabLabel';
+import {
+    Input,
+    PasswordInput,
+    Select,
+    Switch,
+    Tabs
+} from '@/components/ui';
 
 interface TelegramTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
 
-export default function TelegramTab({ allSetting, updateSetting }: TelegramTabProps) {
-  const { t } = useTranslation();
-  const { isMobile } = useMediaQuery();
+// One labelled settings row: title + optional description on the start, control on the end.
+export default function TelegramTab({ allSetting, updateSetting }: TelegramTabProps)
+{
+    const { t } = useTranslation();
 
-  const langOptions = useMemo(
-    () => LanguageManager.supportedLanguages.map((l: { value: string; name: string; icon: string }) => ({
-      value: l.value,
-      label: (
-        <>
+    const [activeTab, setActiveTab] = useState('1');
+
+    const langOptions = useMemo(
+        () => LanguageManager.supportedLanguages.map((l: { value: string; name: string; icon: string }) => ({
+            value: l.value,
+            label: (
+        <span className="inline-flex items-center gap-1.5">
           <span role="img" aria-label={l.name}>{l.icon}</span>
-          &nbsp;&nbsp;<span>{l.name}</span>
-        </>
-      ),
-    })),
-    [],
-  );
+          <span>{l.name}</span>
+        </span>
+            )
+        })),
+        []
+    );
 
-  return (
-    <Tabs defaultActiveKey="1" items={[
-      {
-        key: '1',
-        label: catTabLabel(<SettingOutlined />, t('pages.settings.panelSettings'), isMobile),
-        children: (
-          <>
-            <SettingListItem paddings="small" title={t('pages.settings.telegramBotEnable')} description={t('pages.settings.telegramBotEnableDesc')}>
-              <Switch checked={allSetting.tgBotEnable} onChange={(v) => updateSetting({ tgBotEnable: v })} />
-            </SettingListItem>
+    return (
+    <div className="flex flex-col gap-4">
+      <Tabs
+        value={activeTab}
+        onChange={setActiveTab}
+        tabs={[
+            { key: '1', label: t('pages.settings.panelSettings'), icon: <Settings className="h-4 w-4" /> },
+            { key: '2', label: t('pages.settings.notifications'), icon: <Bell className="h-4 w-4" /> }
+        ]}
+      />
 
-            <SettingListItem
-              paddings="small"
-              title={t('pages.settings.telegramToken')}
-              description={allSetting.hasTgBotToken ? 'Configured; leave blank to keep current token.' : t('pages.settings.telegramTokenDesc')}
-            >
-              <Input.Password
-                value={allSetting.tgBotToken}
-                placeholder={allSetting.hasTgBotToken ? 'Configured - enter a new token to replace' : ''}
-                onChange={(e) => updateSetting({ tgBotToken: e.target.value })}
-              />
-            </SettingListItem>
+      {activeTab === '1' && (
+        <div className="flex flex-col divide-y divide-border">
+          <SettingRow title={t('pages.settings.telegramBotEnable')} description={t('pages.settings.telegramBotEnableDesc')}>
+            <div className="flex lg:justify-end">
+              <Switch checked={allSetting.tgBotEnable} onCheckedChange={(v) => updateSetting({ tgBotEnable: v })} />
+            </div>
+          </SettingRow>
 
-            <SettingListItem paddings="small" title={t('pages.settings.telegramChatId')} description={t('pages.settings.telegramChatIdDesc')}>
-              <Input value={allSetting.tgBotChatId} onChange={(e) => updateSetting({ tgBotChatId: e.target.value })} />
-            </SettingListItem>
+          <SettingRow
+            title={t('pages.settings.telegramToken')}
+            description={allSetting.hasTgBotToken ? 'Configured; leave blank to keep current token.' : t('pages.settings.telegramTokenDesc')}
+          >
+            <PasswordInput
+              value={allSetting.tgBotToken}
+              placeholder={allSetting.hasTgBotToken ? 'Configured - enter a new token to replace' : ''}
+              onChange={(e) => updateSetting({ tgBotToken: e.target.value })}
+            />
+          </SettingRow>
 
-            <SettingListItem paddings="small" title={t('pages.settings.telegramBotLanguage')}>
-              <Select
-                value={allSetting.tgLang}
-                onChange={(v) => updateSetting({ tgLang: v })}
-                style={{ width: '100%' }}
-                options={langOptions}
-              />
-            </SettingListItem>
+          <SettingRow title={t('pages.settings.telegramChatId')} description={t('pages.settings.telegramChatIdDesc')}>
+            <Input value={allSetting.tgBotChatId} onChange={(e) => updateSetting({ tgBotChatId: e.target.value })} />
+          </SettingRow>
 
-            <SettingListItem paddings="small" title={t('pages.settings.telegramAPIServer')} description={t('pages.settings.telegramAPIServerDesc')}>
-              <Input value={allSetting.tgBotAPIServer} placeholder="https://api.example.com"
-                onChange={(e) => updateSetting({ tgBotAPIServer: e.target.value })} />
-            </SettingListItem>
-          </>
-        ),
-      },
-      {
-        key: '2',
-        label: catTabLabel(<BellOutlined />, t('pages.settings.notifications'), isMobile),
-        children: (
-          <>
-            <SettingListItem paddings="small" title={t('pages.settings.telegramNotifyTime')} description={t('pages.settings.telegramNotifyTimeDesc')}>
-              <Input value={allSetting.tgRunTime} onChange={(e) => updateSetting({ tgRunTime: e.target.value })} />
-            </SettingListItem>
-            <SettingListItem paddings="small" title={t('pages.settings.tgNotifyBackup')} description={t('pages.settings.tgNotifyBackupDesc')}>
-              <Switch checked={allSetting.tgBotBackup} onChange={(v) => updateSetting({ tgBotBackup: v })} />
-            </SettingListItem>
-            <SettingListItem paddings="small" title={t('pages.settings.tgNotifyLogin')} description={t('pages.settings.tgNotifyLoginDesc')}>
-              <Switch checked={allSetting.tgBotLoginNotify} onChange={(v) => updateSetting({ tgBotLoginNotify: v })} />
-            </SettingListItem>
-            <SettingListItem paddings="small" title={t('pages.settings.tgNotifyCpu')} description={t('pages.settings.tgNotifyCpuDesc')}>
-              <InputNumber value={allSetting.tgCpu} min={0} max={100} style={{ width: '100%' }}
-                onChange={(v) => updateSetting({ tgCpu: Number(v) || 0 })} />
-            </SettingListItem>
-          </>
-        ),
-      },
-    ]} />
-  );
+          <SettingRow title={t('pages.settings.telegramBotLanguage')}>
+            <Select
+              value={allSetting.tgLang}
+              onChange={(v) => updateSetting({ tgLang: v })}
+              options={langOptions}
+            />
+          </SettingRow>
+
+          <SettingRow title={t('pages.settings.telegramAPIServer')} description={t('pages.settings.telegramAPIServerDesc')}>
+            <Input value={allSetting.tgBotAPIServer} placeholder="https://api.example.com"
+              onChange={(e) => updateSetting({ tgBotAPIServer: e.target.value })} />
+          </SettingRow>
+        </div>
+      )}
+
+      {activeTab === '2' && (
+        <div className="flex flex-col divide-y divide-border">
+          <SettingRow title={t('pages.settings.telegramNotifyTime')} description={t('pages.settings.telegramNotifyTimeDesc')}>
+            <Input value={allSetting.tgRunTime} onChange={(e) => updateSetting({ tgRunTime: e.target.value })} />
+          </SettingRow>
+          <SettingRow title={t('pages.settings.tgNotifyBackup')} description={t('pages.settings.tgNotifyBackupDesc')}>
+            <div className="flex lg:justify-end">
+              <Switch checked={allSetting.tgBotBackup} onCheckedChange={(v) => updateSetting({ tgBotBackup: v })} />
+            </div>
+          </SettingRow>
+          <SettingRow title={t('pages.settings.tgNotifyLogin')} description={t('pages.settings.tgNotifyLoginDesc')}>
+            <div className="flex lg:justify-end">
+              <Switch checked={allSetting.tgBotLoginNotify} onCheckedChange={(v) => updateSetting({ tgBotLoginNotify: v })} />
+            </div>
+          </SettingRow>
+          <SettingRow title={t('pages.settings.tgNotifyCpu')} description={t('pages.settings.tgNotifyCpuDesc')}>
+            <Input type="number" min={0} max={100} value={allSetting.tgCpu}
+              onChange={(e) => updateSetting({ tgCpu: Number(e.target.value) || 0 })} />
+          </SettingRow>
+        </div>
+      )}
+    </div>
+    );
 }

@@ -1,49 +1,46 @@
 import { useEffect, useMemo, useState } from 'react';
+import type { InputHTMLAttributes, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
+import { StatCard, SearchInput } from '@/components/ui';
+import { message } from '@/components/ui/message';
 import {
-  Button,
-  Card,
-  Col,
-  ConfigProvider,
-  Form,
-  Input,
-  InputNumber,
-  Layout,
-  Modal,
-  Result,
-  Row,
-  Segmented,
-  Select,
-  Space,
-  Spin,
-  Statistic,
-  Table,
-  Tag,
-  Tooltip,
-  message,
-} from 'antd';
-import type { TableColumnsType } from 'antd';
-import {
-  CrownOutlined,
-  DeleteOutlined,
-  EditOutlined,
-  HistoryOutlined,
-  PlusOutlined,
-  SearchOutlined,
-  TeamOutlined,
-  UserOutlined,
-  WalletOutlined,
-} from '@ant-design/icons';
+    Crown,
+    History,
+    Pencil,
+    Plus,
+    Trash2,
+    Users,
+    User,
+    Wallet
+} from 'lucide-react';
+import { useForm, Controller } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import { useTheme } from '@/hooks/useTheme';
-import { useMediaQuery } from '@/hooks/useMediaQuery';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useMe, ME_QUERY_KEY } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import { HttpUtil, IntlUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
-import AppSidebar from '@/layouts/AppSidebar';
+import PageShell from '@/layouts/PageShell';
+import {
+    Badge,
+    Button,
+    Card,
+    ErrorState,
+    Input,
+    Label,
+    Modal,
+    PasswordInput,
+    Select,
+    Spinner,
+    Table,
+    Tabs,
+    Tooltip,
+    cn,
+    confirm
+} from '@/components/ui';
+import type { BadgeVariant, Column } from '@/components/ui';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
 
@@ -82,452 +79,617 @@ interface UserFormValues {
 
 type BalanceOp = 'add' | 'deduct' | 'set';
 
-async function fetchUsers(): Promise<PanelUser[]> {
-  const msg = await HttpUtil.get('/panel/api/admin/users', undefined, { silent: true });
-  if (!msg?.success) throw new Error(msg?.msg || 'Failed to load users');
-  return (msg.obj as PanelUser[]) ?? [];
+interface BalanceFormValues {
+  op: BalanceOp;
+  amount: number;
+  description: string;
 }
 
-async function fetchTransactions(userId: number): Promise<Transaction[]> {
-  const msg = await HttpUtil.get(`/panel/api/admin/transactions?userId=${userId}`, undefined, { silent: true });
-  if (!msg?.success) throw new Error(msg?.msg || 'Failed to load transactions');
-  return (msg.obj as Transaction[]) ?? [];
+const ROLE_BADGE: Record<string, BadgeVariant> = {
+    admin: 'warning',
+    moderator: 'primary',
+    reseller: 'neutral',
+    member: 'success'
+};
+
+// Normalize casing + legacy "user" alias so the label/colour resolve no matter
+// how the role was stored (e.g. "Admin", "ADMIN", "user").
+function normalizeRole(role: string): string
+{
+    const raw = (role || '').toLowerCase();
+    return raw === 'user' ? 'reseller' : raw || 'member';
 }
 
-export default function UsersPage() {
-  usePageTitle();
-  const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
-  const { isMobile } = useMediaQuery();
-  const { me } = useMe();
-  const { format: formatMoney, formatNumber, unit } = useCurrency();
-  const [modal, modalContextHolder] = Modal.useModal();
-  const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
-  const queryClient = useQueryClient();
-
-  const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: fetchUsers });
-  const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
-
-  const [search, setSearch] = useState('');
-  const filteredUsers = useMemo(() => {
-    const needle = search.trim().toLowerCase();
-    if (!needle) return users;
-    return users.filter((u) =>
-      [u.username, u.email, u.fullName, u.phone, u.role]
-        .some((v) => (v || '').toLowerCase().includes(needle)),
-    );
-  }, [users, search]);
-  const fetched = usersQuery.data !== undefined || usersQuery.isError;
-  const fetchError = usersQuery.error ? (usersQuery.error as Error).message : '';
-
-  const stats = useMemo(() => {
-    let admins = 0;
-    let totalBalance = 0;
-    for (const u of users) {
-      if (u.role === 'admin') admins += 1;
-      totalBalance += u.balance || 0;
-    }
-    return { total: users.length, admins, resellers: users.length - admins, totalBalance };
-  }, [users]);
-
-  const invalidate = () => {
-    queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
-    queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
-  };
-
-  // ---- create / edit user ----
-  const [userForm] = Form.useForm<UserFormValues>();
-  const [userModalOpen, setUserModalOpen] = useState(false);
-  const [editing, setEditing] = useState<PanelUser | null>(null);
-
-  const saveUserMut = useMutation({
-    mutationFn: (values: UserFormValues) => {
-      const url = editing ? `/panel/api/admin/users/${editing.id}` : '/panel/api/admin/users';
-      return HttpUtil.post(url, values, JSON_HEADERS);
-    },
-    onSuccess: (msg) => {
-      if (msg?.success) {
-        invalidate();
-        setUserModalOpen(false);
-        messageApi.success(editing ? t('pages.users.toasts.userUpdated') : t('pages.users.toasts.userCreated'));
-      }
-    },
-  });
-
-  function openCreate() {
-    setEditing(null);
-    userForm.resetFields();
-    userForm.setFieldsValue({ role: 'reseller', balance: 0 });
-    setUserModalOpen(true);
-  }
-
-  function openEdit(row: PanelUser) {
-    setEditing(row);
-    userForm.resetFields();
-    userForm.setFieldsValue({
-      username: row.username,
-      fullName: row.fullName,
-      phone: row.phone,
-      email: row.email,
-      // Normalize casing + legacy "user" alias so the Select pre-selects the
-      // right option regardless of how the role was stored.
-      role: (() => { const r = (row.role || '').toLowerCase(); return r === 'user' ? 'reseller' : (r || 'member'); })(),
-      costPerGbOverride: row.costPerGbOverride || undefined,
-    });
-    setUserModalOpen(true);
-  }
-
-  async function submitUser() {
-    const values = await userForm.validateFields();
-    await saveUserMut.mutateAsync(values);
-  }
-
-  function onDelete(row: PanelUser) {
-    modal.confirm({
-      title: t('pages.users.deleteConfirmTitle', { name: row.username }),
-      content: t('pages.users.deleteConfirmContent'),
-      okText: t('delete'),
-      okType: 'danger',
-      cancelText: t('cancel'),
-      onOk: async () => {
-        const msg = await HttpUtil.post(`/panel/api/admin/users/${row.id}/del`);
-        if (msg?.success) invalidate();
-      },
-    });
-  }
-
-  // ---- balance adjustment ----
-  const [balanceForm] = Form.useForm<{ op: BalanceOp; amount: number; description: string }>();
-  const [balanceTarget, setBalanceTarget] = useState<PanelUser | null>(null);
-
-  const balanceMut = useMutation({
-    mutationFn: (body: { op: BalanceOp; amount: number; description: string }) =>
-      HttpUtil.post(`/panel/api/admin/users/${balanceTarget!.id}/balance`, body, JSON_HEADERS),
-    onSuccess: (msg) => {
-      if (msg?.success) {
-        invalidate();
-        setBalanceTarget(null);
-        messageApi.success(t('pages.users.toasts.balanceUpdated'));
-      }
-    },
-  });
-
-  function openBalance(row: PanelUser) {
-    setBalanceTarget(row);
-    balanceForm.resetFields();
-    balanceForm.setFieldsValue({ op: 'add', amount: 0, description: '' });
-  }
-
-  async function submitBalance() {
-    const values = await balanceForm.validateFields();
-    await balanceMut.mutateAsync(values);
-  }
-
-  // ---- transaction history ----
-  const [historyTarget, setHistoryTarget] = useState<PanelUser | null>(null);
-  const txQuery = useQuery({
-    queryKey: ['admin', 'transactions', historyTarget?.id],
-    queryFn: () => fetchTransactions(historyTarget!.id),
-    enabled: !!historyTarget,
-  });
-
-  const columns: TableColumnsType<PanelUser> = [
+async function fetchUsers(): Promise<PanelUser[]>
+{
+    const msg = await HttpUtil.get('/panel/api/admin/users', undefined, { silent: true });
+    if (!msg?.success)
     {
-      title: t('pages.users.actions'),
-      key: 'actions',
-      width: 170,
-      render: (_v, row) => (
-        <Space size={2}>
-          <Tooltip title={t('pages.users.editUser')}>
-            <Button aria-label={t('pages.users.editUser')} size="small" type="text" icon={<EditOutlined />} onClick={() => openEdit(row)} />
+        throw new Error(msg?.msg || 'Failed to load users');
+    }
+    return (msg.obj as PanelUser[]) ?? [];
+}
+
+async function fetchTransactions(userId: number): Promise<Transaction[]>
+{
+    const msg = await HttpUtil.get(`/panel/api/admin/transactions?userId=${ userId }`, undefined, { silent: true });
+    if (!msg?.success)
+    {
+        throw new Error(msg?.msg || 'Failed to load transactions');
+    }
+    return (msg.obj as Transaction[]) ?? [];
+}
+
+// One labelled form row: label, control, optional hint + validation error.
+function Field({
+    label,
+    htmlFor,
+    hint,
+    error,
+    children
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+})
+{
+    return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+      {error ? (
+        <span className="text-xs text-danger">{error}</span>
+      ) : hint ? (
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      ) : null}
+    </div>
+    );
+}
+
+// A numeric input with a trailing unit addon, styled with design-system tokens
+// (logical radii so it flips correctly in RTL).
+function UnitInput({ unit, className, ...props }: { unit: ReactNode } & InputHTMLAttributes<HTMLInputElement>)
+{
+    return (
+    <div className="flex items-stretch">
+      <Input type="number" className={cn('rounded-e-none', className)} {...props} />
+      <span className="inline-flex shrink-0 items-center rounded-e-md border border-s-0 border-border bg-surface-sunken px-3 text-sm text-muted-foreground">
+        {unit}
+      </span>
+    </div>
+    );
+}
+
+export default function UsersPage()
+{
+    usePageTitle();
+    const { t } = useTranslation();
+    const { isDark } = useTheme();
+    const { me } = useMe();
+    const { format: formatMoney, formatNumber, unit } = useCurrency();
+    const [messageApi] = message.useMessage();
+    useEffect(() =>
+    {
+        setMessageInstance(messageApi);
+    }, [messageApi]);
+    const queryClient = useQueryClient();
+
+    const usersQuery = useQuery({ queryKey: ['admin', 'users'], queryFn: fetchUsers });
+    const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
+
+    const [search, setSearch] = useState('');
+    const filteredUsers = useMemo(() =>
+    {
+        const needle = search.trim().toLowerCase();
+        if (!needle)
+        {
+            return users;
+        }
+        return users.filter((u) =>
+            [u.username, u.email, u.fullName, u.phone, u.role]
+                .some((v) => (v || '').toLowerCase().includes(needle))
+        );
+    }, [users, search]);
+    const fetched = usersQuery.data !== undefined || usersQuery.isError;
+    const fetchError = usersQuery.error ? (usersQuery.error as Error).message : '';
+
+    const stats = useMemo(() =>
+    {
+        let admins = 0;
+        let totalBalance = 0;
+        for (const u of users)
+        {
+            if (u.role === 'admin')
+            {
+                admins += 1;
+            }
+            totalBalance += u.balance || 0;
+        }
+        return { total: users.length, admins, resellers: users.length - admins, totalBalance };
+    }, [users]);
+
+    const invalidate = () =>
+    {
+        queryClient.invalidateQueries({ queryKey: ['admin', 'users'] });
+        queryClient.invalidateQueries({ queryKey: ME_QUERY_KEY });
+    };
+
+    // ---- create / edit user ----
+    const [userModalOpen, setUserModalOpen] = useState(false);
+    const [editing, setEditing] = useState<PanelUser | null>(null);
+
+    const {
+        register: registerUser,
+        handleSubmit: handleSubmitUser,
+        reset: resetUser,
+        control: userControl,
+        formState: { errors: userErrors }
+    } = useForm<UserFormValues>({
+        defaultValues: { username: '', role: 'reseller', balance: 0 }
+    });
+
+    const saveUserMut = useMutation({
+        mutationFn: (values: UserFormValues) =>
+        {
+            const url = editing ? `/panel/api/admin/users/${ editing.id }` : '/panel/api/admin/users';
+            return HttpUtil.post(url, values, JSON_HEADERS);
+        },
+        onSuccess: (msg) =>
+        {
+            if (msg?.success)
+            {
+                invalidate();
+                setUserModalOpen(false);
+                messageApi.success(editing ? t('pages.users.toasts.userUpdated') : t('pages.users.toasts.userCreated'));
+            }
+        }
+    });
+
+    function openCreate()
+    {
+        setEditing(null);
+        resetUser({ username: '', password: '', fullName: '', phone: '', email: '', role: 'reseller', balance: 0, costPerGbOverride: undefined });
+        setUserModalOpen(true);
+    }
+
+    function openEdit(row: PanelUser)
+    {
+        setEditing(row);
+        resetUser({
+            username: row.username,
+            password: '',
+            fullName: row.fullName,
+            phone: row.phone,
+            email: row.email,
+            role: normalizeRole(row.role),
+            costPerGbOverride: row.costPerGbOverride || undefined
+        });
+        setUserModalOpen(true);
+    }
+
+    // RHF `register` on number inputs yields strings; coerce to numbers (empty ->
+    // undefined so the backend keeps its default).
+    const toNum = (v: unknown): number | undefined =>
+    {
+        if (v === '' || v == null)
+        {
+            return undefined;
+        }
+        const n = Number(v);
+        return Number.isNaN(n) ? undefined : n;
+    };
+
+    const submitUser = handleSubmitUser((values) =>
+        saveUserMut.mutateAsync({
+            ...values,
+            balance: toNum(values.balance),
+            costPerGbOverride: toNum(values.costPerGbOverride)
+        })
+    );
+
+    async function onDelete(row: PanelUser)
+    {
+        const ok = await confirm({
+            title: t('pages.users.deleteConfirmTitle', { name: row.username }),
+            description: t('pages.users.deleteConfirmContent'),
+            confirmText: t('delete'),
+            cancelText: t('cancel'),
+            danger: true
+        });
+        if (!ok)
+        {
+            return;
+        }
+        const msg = await HttpUtil.post(`/panel/api/admin/users/${ row.id }/del`);
+        if (msg?.success)
+        {
+            invalidate();
+        }
+    }
+
+    // ---- balance adjustment ----
+    const [balanceTarget, setBalanceTarget] = useState<PanelUser | null>(null);
+
+    const {
+        register: registerBalance,
+        handleSubmit: handleSubmitBalance,
+        reset: resetBalance,
+        control: balanceControl,
+        formState: { errors: balanceErrors }
+    } = useForm<BalanceFormValues>({
+        defaultValues: { op: 'add', amount: 0, description: '' }
+    });
+
+    const balanceMut = useMutation({
+        mutationFn: (body: BalanceFormValues) =>
+            HttpUtil.post(`/panel/api/admin/users/${ balanceTarget!.id }/balance`, body, JSON_HEADERS),
+        onSuccess: (msg) =>
+        {
+            if (msg?.success)
+            {
+                invalidate();
+                setBalanceTarget(null);
+                messageApi.success(t('pages.users.toasts.balanceUpdated'));
+            }
+        }
+    });
+
+    function openBalance(row: PanelUser)
+    {
+        setBalanceTarget(row);
+        resetBalance({ op: 'add', amount: 0, description: '' });
+    }
+
+    const submitBalance = handleSubmitBalance((values) =>
+        balanceMut.mutateAsync({ ...values, amount: Number(values.amount) })
+    );
+
+    // ---- transaction history ----
+    const [historyTarget, setHistoryTarget] = useState<PanelUser | null>(null);
+    const txQuery = useQuery({
+        queryKey: ['admin', 'transactions', historyTarget?.id],
+        queryFn: () => fetchTransactions(historyTarget!.id),
+        enabled: !!historyTarget
+    });
+
+    const roleOptions = [
+        { value: 'admin', label: t('pages.users.role_admin') },
+        { value: 'moderator', label: t('pages.users.role_moderator') },
+        { value: 'reseller', label: t('pages.users.role_reseller') },
+        { value: 'member', label: t('pages.users.role_member') }
+    ];
+
+    const columns: Column<PanelUser>[] = [
+        {
+            key: 'actions',
+            header: t('pages.users.actions'),
+            width: 170,
+            cell: (row) => (
+        <div className="flex items-center gap-0.5">
+          <Tooltip content={t('pages.users.editUser')}>
+            <Button aria-label={t('pages.users.editUser')} variant="ghost" size="icon" onClick={() => openEdit(row)}>
+              <Pencil className="h-4 w-4" aria-hidden />
+            </Button>
           </Tooltip>
-          <Tooltip title={t('pages.users.manageBalance')}>
-            <Button aria-label={t('pages.users.manageBalance')} size="small" type="text" icon={<WalletOutlined />} onClick={() => openBalance(row)} />
+          <Tooltip content={t('pages.users.manageBalance')}>
+            <Button aria-label={t('pages.users.manageBalance')} variant="ghost" size="icon" onClick={() => openBalance(row)}>
+              <Wallet className="h-4 w-4" aria-hidden />
+            </Button>
           </Tooltip>
-          <Tooltip title={t('pages.users.history')}>
-            <Button aria-label={t('pages.users.history')} size="small" type="text" icon={<HistoryOutlined />} onClick={() => setHistoryTarget(row)} />
+          <Tooltip content={t('pages.users.history')}>
+            <Button aria-label={t('pages.users.history')} variant="ghost" size="icon" onClick={() => setHistoryTarget(row)}>
+              <History className="h-4 w-4" aria-hidden />
+            </Button>
           </Tooltip>
-          <Tooltip title={t('delete')}>
-            <Button aria-label={t('delete')}
-              size="small"
-              type="text"
-              danger
-              icon={<DeleteOutlined />}
+          <Tooltip content={t('delete')}>
+            <Button
+              aria-label={t('delete')}
+              variant="ghost"
+              size="icon"
               disabled={!!me && me.id === row.id}
               onClick={() => onDelete(row)}
-            />
+              className="text-danger hover:text-danger"
+            >
+              <Trash2 className="h-4 w-4" aria-hidden />
+            </Button>
           </Tooltip>
-        </Space>
-      ),
-    },
-    { title: t('username'), dataIndex: 'username', key: 'username' },
-    {
-      title: t('pages.users.role'),
-      dataIndex: 'role',
-      key: 'role',
-      render: (role: string) => {
-        // Normalize casing + the legacy "user" alias so the label/colour resolve
-        // no matter how the role was stored (e.g. "Admin", "ADMIN", "user").
-        const raw = (role || '').toLowerCase();
-        const r = raw === 'user' ? 'reseller' : (raw || 'member');
-        const colors: Record<string, string> = { admin: 'gold', moderator: 'purple', reseller: 'blue', member: 'green' };
-        return <Tag color={colors[r] || 'default'}>{t(`pages.users.role_${r}`)}</Tag>;
-      },
-    },
-    { title: t('email'), dataIndex: 'email', key: 'email', responsive: ['md'] },
-    {
-      title: t('balance'),
-      dataIndex: 'balance',
-      key: 'balance',
-      render: (b: number) => <strong>{formatMoney(b)}</strong>,
-    },
-  ];
+        </div>
+            )
+        },
+        {
+            key: 'username',
+            header: t('username'),
+            accessor: (row) => row.username,
+            sortable: true,
+            cell: (row) => <span className="font-medium">{row.username}</span>
+        },
+        {
+            key: 'role',
+            header: t('pages.users.role'),
+            accessor: (row) => normalizeRole(row.role),
+            sortable: true,
+            cell: (row) =>
+            {
+                const r = normalizeRole(row.role);
+                return <Badge variant={ROLE_BADGE[r] ?? 'neutral'}>{t(`pages.users.role_${ r }`)}</Badge>;
+            }
+        },
+        {
+            key: 'email',
+            header: t('email'),
+            accessor: (row) => row.email || '',
+            cell: (row) => <span className="text-muted-foreground">{row.email || '—'}</span>,
+            className: 'hidden md:table-cell'
+        },
+        {
+            key: 'balance',
+            header: t('balance'),
+            accessor: (row) => row.balance,
+            sortable: true,
+            cell: (row) => <strong className="tabular-nums">{formatMoney(row.balance)}</strong>
+        }
+    ];
 
-  const txColumns: TableColumnsType<Transaction> = [
-    {
-      title: t('pages.users.txType'),
-      dataIndex: 'type',
-      key: 'type',
-      render: (type: string) => (
-        <Tag color={type === 'credit' ? 'green' : 'volcano'}>
-          {t(`pages.users.tx_${type === 'credit' ? 'credit' : 'debit'}`)}
-        </Tag>
-      ),
-    },
-    { title: t('pages.users.txAmount'), dataIndex: 'amount', key: 'amount', render: (a: number) => formatNumber(a) },
-    { title: t('pages.users.txBefore'), dataIndex: 'balanceBefore', key: 'balanceBefore', responsive: ['sm'], render: (a: number) => formatNumber(a) },
-    { title: t('pages.users.txAfter'), dataIndex: 'balanceAfter', key: 'balanceAfter', render: (a: number) => formatNumber(a) },
-    { title: t('pages.users.txDescription'), dataIndex: 'description', key: 'description', responsive: ['md'] },
-    {
-      title: t('pages.users.txDate'),
-      dataIndex: 'createdAt',
-      key: 'createdAt',
-      render: (ts: number) => IntlUtil.formatDate(ts),
-    },
-  ];
+    const txColumns: Column<Transaction>[] = [
+        {
+            key: 'type',
+            header: t('pages.users.txType'),
+            cell: (row) => (
+        <Badge variant={row.type === 'credit' ? 'success' : 'danger'}>
+          {t(`pages.users.tx_${ row.type === 'credit' ? 'credit' : 'debit' }`)}
+        </Badge>
+            )
+        },
+        { key: 'amount', header: t('pages.users.txAmount'), cell: (row) => <span className="tabular-nums">{formatNumber(row.amount)}</span> },
+        {
+            key: 'balanceBefore',
+            header: t('pages.users.txBefore'),
+            cell: (row) => <span className="tabular-nums">{formatNumber(row.balanceBefore)}</span>,
+            className: 'hidden sm:table-cell'
+        },
+        { key: 'balanceAfter', header: t('pages.users.txAfter'), cell: (row) => <span className="tabular-nums">{formatNumber(row.balanceAfter)}</span> },
+        {
+            key: 'description',
+            header: t('pages.users.txDescription'),
+            cell: (row) => <span className="text-muted-foreground">{row.description}</span>,
+            className: 'hidden md:table-cell'
+        },
+        {
+            key: 'createdAt',
+            header: t('pages.users.txDate'),
+            cell: (row) => <span className="whitespace-nowrap text-muted-foreground">{IntlUtil.formatDate(row.createdAt)}</span>
+        }
+    ];
 
-  const pageClass = useMemo(() => {
-    const classes = ['users-page'];
-    if (isDark) classes.push('is-dark');
-    if (isUltra) classes.push('is-ultra');
-    return classes.join(' ');
-  }, [isDark, isUltra]);
+    const pageClass = useMemo(() => `users-page${ isDark ? ' is-dark' : '' }`, [isDark]);
 
-  return (
-    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
-      {messageContextHolder}
-      {modalContextHolder}
-      <Layout className={pageClass}>
-        <AppSidebar />
-        <Layout className="content-shell">
-          <Layout.Content id="content-layout" className="content-area">
-            <Spin spinning={!fetched} delay={200} size="large">
-              {!fetched ? (
-                <div className="loading-spacer" />
-              ) : fetchError ? (
-                <Result
-                  status="error"
-                  title={t('somethingWentWrong')}
-                  subTitle={fetchError}
-                  extra={<Button type="primary" onClick={() => usersQuery.refetch()}>{t('refresh')}</Button>}
-                />
-              ) : (
-                <Row gutter={[isMobile ? 8 : 16, isMobile ? 8 : 12]}>
-                  <Col span={24}>
-                    <Card size="small" hoverable className="summary-card">
-                      <Row gutter={[16, isMobile ? 16 : 12]}>
-                        <Col xs={12} sm={8} md={6}>
-                          <Statistic title={t('pages.users.totalUsers')} value={String(stats.total)} prefix={<TeamOutlined />} />
-                        </Col>
-                        <Col xs={12} sm={8} md={6}>
-                          <Statistic title={t('pages.users.admins')} value={String(stats.admins)} prefix={<CrownOutlined />} />
-                        </Col>
-                        <Col xs={12} sm={8} md={6}>
-                          <Statistic title={t('pages.users.resellers')} value={String(stats.resellers)} prefix={<UserOutlined />} />
-                        </Col>
-                        <Col xs={12} sm={8} md={6}>
-                          <Statistic
-                            title={t('pages.users.totalBalance')}
-                            value={formatNumber(stats.totalBalance)}
-                            prefix={<WalletOutlined />}
-                            suffix={unit}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
+    return (
+    <PageShell
+      name={pageClass}
+      actions={
+        <Button onClick={openCreate}>
+          <Plus className="h-4 w-4" aria-hidden />
+          {t('pages.users.addUser')}
+        </Button>
+      }
+    >
+            {!fetched ? (
+              <div className="flex min-h-[40vh] items-center justify-center">
+                <Spinner className="h-8 w-8" />
+              </div>
+            ) : fetchError ? (
+              <ErrorState message={fetchError} onRetry={() => usersQuery.refetch()} />
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+                  <StatCard title={t('pages.users.totalUsers')} value={String(stats.total)} icon={<Users className="h-5 w-5" aria-hidden />} />
+                  <StatCard title={t('pages.users.admins')} value={String(stats.admins)} icon={<Crown className="h-5 w-5" aria-hidden />} />
+                  <StatCard title={t('pages.users.resellers')} value={String(stats.resellers)} icon={<User className="h-5 w-5" aria-hidden />} />
+                  <StatCard
+                    title={t('pages.users.totalBalance')}
+                    value={
+                      <span className="tabular-nums">
+                        {formatNumber(stats.totalBalance)} <span className="text-sm font-medium text-muted-foreground">{unit}</span>
+                      </span>
+                    }
+                    icon={<Wallet className="h-5 w-5" aria-hidden />}
+                  />
+                </div>
 
-                  <Col span={24}>
-                    <Card
-                      size="small"
-                      hoverable
-                      title={
-                        <div className="card-toolbar" style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                            {!isMobile && t('pages.users.addUser')}
-                          </Button>
-                          <Input
-                            allowClear
-                            prefix={<SearchOutlined />}
-                            placeholder={t('pages.users.searchPlaceholder')}
-                            value={search}
-                            onChange={(e) => setSearch(e.target.value)}
-                            style={{ maxWidth: 280 }}
-                          />
-                        </div>
-                      }
-                    >
-                      <Table<PanelUser> scroll={{ x: 'max-content' }}
-                        dataSource={filteredUsers}
-                        columns={columns}
-                        rowKey="id"
-                        size="small"
-                        pagination={false}
-                        loading={usersQuery.isFetching}
-                        locale={{
-                          emptyText: (
-                            <div className="card-empty">
-                              <TeamOutlined style={{ fontSize: 32, marginBottom: 8 }} />
-                              <div>{t('noData')}</div>
-                            </div>
-                          ),
-                        }}
-                      />
-                    </Card>
-                  </Col>
-                </Row>
-              )}
-            </Spin>
-          </Layout.Content>
-        </Layout>
+                <Card className="p-4 sm:p-5">
+                  <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+                    <SearchInput
+                      className="w-full max-w-[280px] sm:w-auto"
+                      aria-label={t('pages.users.searchPlaceholder')}
+                      placeholder={t('pages.users.searchPlaceholder')}
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                    />
+                  </div>
+
+                  <Table<PanelUser>
+                    columns={columns}
+                    data={filteredUsers}
+                    rowKey={(row) => String(row.id)}
+                    loading={usersQuery.isFetching}
+                    pageSize={0}
+                    empty={
+                      <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
+                        <Users className="h-8 w-8 opacity-50" aria-hidden />
+                        <div>{t('noData')}</div>
+                      </div>
+                    }
+                  />
+                </Card>
+              </div>
+            )}
 
         {/* Create / edit user */}
         <Modal
           open={userModalOpen}
+          onClose={() => setUserModalOpen(false)}
           title={editing ? t('pages.users.editUser') : t('pages.users.addUser')}
-          okText={t('save')}
-          cancelText={t('cancel')}
-          confirmLoading={saveUserMut.isPending}
-          onCancel={() => setUserModalOpen(false)}
-          onOk={submitUser}
-          destroyOnHidden
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setUserModalOpen(false)}>{t('cancel')}</Button>
+              <Button onClick={() => submitUser()} loading={saveUserMut.isPending}>{t('save')}</Button>
+            </>
+          }
         >
-          <Form form={userForm} layout="vertical">
-            <Form.Item
-              label={t('username')}
-              name="username"
-              rules={[{ required: true, pattern: /^[A-Za-z0-9_]{3,32}$/, message: t('pages.register.errors.username') }]}
-            >
-              <Input autoComplete="off" />
-            </Form.Item>
-            <Form.Item
+          <form noValidate onSubmit={submitUser} className="flex flex-col gap-4">
+            <Field label={t('username')} htmlFor="user-username" error={userErrors.username?.message}>
+              <Input
+                id="user-username"
+                autoComplete="off"
+                aria-invalid={!!userErrors.username}
+                {...registerUser('username', {
+                    required: t('pages.register.errors.username'),
+                    pattern: { value: /^[A-Za-z0-9_]{3,32}$/, message: t('pages.register.errors.username') }
+                })}
+              />
+            </Field>
+
+            <Field
               label={t('password')}
-              name="password"
-              rules={editing
-                ? []
-                : [{ required: true, min: 8, message: t('pages.register.errors.password') }]}
-              extra={editing ? t('pages.users.passwordEditHint') : undefined}
+              htmlFor="user-password"
+              hint={editing ? t('pages.users.passwordEditHint') : undefined}
+              error={userErrors.password?.message}
             >
-              <Input.Password autoComplete="new-password" />
-            </Form.Item>
-            <Form.Item label={t('fullName')} name="fullName">
-              <Input autoComplete="off" />
-            </Form.Item>
-            <Form.Item label={t('phoneNumber')} name="phone">
-              <Input autoComplete="off" />
-            </Form.Item>
-            <Form.Item label={t('email')} name="email">
-              <Input autoComplete="off" />
-            </Form.Item>
-            <Form.Item label={t('pages.users.role')} name="role" rules={[{ required: true }]}>
-              <Select
-                options={[
-                  { value: 'admin', label: t('pages.users.role_admin') },
-                  { value: 'moderator', label: t('pages.users.role_moderator') },
-                  { value: 'reseller', label: t('pages.users.role_reseller') },
-                  { value: 'member', label: t('pages.users.role_member') },
-                ]}
+              <PasswordInput
+                id="user-password"
+                autoComplete="new-password"
+                aria-invalid={!!userErrors.password}
+                {...registerUser('password', editing
+                    ? {}
+                    : {
+                        required: t('pages.register.errors.password'),
+                        minLength: { value: 8, message: t('pages.register.errors.password') }
+                    })}
               />
-            </Form.Item>
+            </Field>
+
+            <Field label={t('fullName')} htmlFor="user-fullName">
+              <Input id="user-fullName" autoComplete="off" {...registerUser('fullName')} />
+            </Field>
+
+            <Field label={t('phoneNumber')} htmlFor="user-phone">
+              <Input id="user-phone" autoComplete="off" {...registerUser('phone')} />
+            </Field>
+
+            <Field label={t('email')} htmlFor="user-email">
+              <Input id="user-email" autoComplete="off" {...registerUser('email')} />
+            </Field>
+
+            <Field label={t('pages.users.role')} htmlFor="user-role">
+              <Controller
+                control={userControl}
+                name="role"
+                rules={{ required: true }}
+                render={({ field }) => (
+                  <Select id="user-role" value={field.value} onChange={field.onChange} options={roleOptions} />
+                )}
+              />
+            </Field>
+
             {!editing && (
-              <Form.Item label={t('pages.users.initialBalance')} name="balance">
-                <InputNumber min={0} style={{ width: '100%' }} addonAfter={unit} />
-              </Form.Item>
+              <Field label={t('pages.users.initialBalance')} htmlFor="user-balance">
+                <UnitInput id="user-balance" min={0} unit={unit} {...registerUser('balance')} />
+              </Field>
             )}
-            <Form.Item
+
+            <Field
               label={t('pages.users.costPerGb')}
-              name="costPerGbOverride"
-              extra={t('pages.users.costPerGbHint')}
+              htmlFor="user-costPerGb"
+              hint={t('pages.users.costPerGbHint')}
             >
-              <InputNumber
+              <UnitInput
+                id="user-costPerGb"
                 min={0}
-                style={{ width: '100%' }}
-                addonAfter={unit}
                 placeholder={t('pages.users.costPerGbDefault')}
+                unit={unit}
+                {...registerUser('costPerGbOverride')}
               />
-            </Form.Item>
-          </Form>
+            </Field>
+          </form>
         </Modal>
 
         {/* Balance adjustment */}
         <Modal
           open={!!balanceTarget}
+          onClose={() => setBalanceTarget(null)}
           title={balanceTarget ? t('pages.users.balanceTitle', { name: balanceTarget.username }) : ''}
-          okText={t('confirm')}
-          cancelText={t('cancel')}
-          confirmLoading={balanceMut.isPending}
-          onCancel={() => setBalanceTarget(null)}
-          onOk={submitBalance}
-          destroyOnHidden
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setBalanceTarget(null)}>{t('cancel')}</Button>
+              <Button onClick={() => submitBalance()} loading={balanceMut.isPending}>{t('confirm')}</Button>
+            </>
+          }
         >
           {balanceTarget && (
-            <p style={{ marginTop: 0 }}>
-              {t('balance')}: <strong>{formatMoney(balanceTarget.balance)}</strong>
+            <p className="mb-4 text-sm">
+              {t('balance')}: <strong className="tabular-nums">{formatMoney(balanceTarget.balance)}</strong>
             </p>
           )}
-          <Form form={balanceForm} layout="vertical">
-            <Form.Item name="op" label={t('pages.users.operation')} rules={[{ required: true }]}>
-              <Segmented
-                options={[
-                  { value: 'add', label: t('pages.users.opAdd') },
-                  { value: 'deduct', label: t('pages.users.opDeduct') },
-                  { value: 'set', label: t('pages.users.opSet') },
-                ]}
+          <form noValidate onSubmit={submitBalance} className="flex flex-col gap-4">
+            <Field label={t('pages.users.operation')}>
+              <Controller
+                control={balanceControl}
+                name="op"
+                render={({ field }) => (
+                  <Tabs
+                    variant="segmented"
+                    fullWidth
+                    value={field.value}
+                    onChange={(k) => field.onChange(k as BalanceOp)}
+                    aria-label={t('pages.users.operation')}
+                    tabs={[
+                        { key: 'add', label: t('pages.users.opAdd') },
+                        { key: 'deduct', label: t('pages.users.opDeduct') },
+                        { key: 'set', label: t('pages.users.opSet') }
+                    ]}
+                  />
+                )}
               />
-            </Form.Item>
-            <Form.Item
-              name="amount"
-              label={t('pages.users.amount')}
-              rules={[{ required: true, type: 'number', min: 0, message: t('pages.users.toasts.invalidAmount') }]}
-            >
-              <InputNumber min={0} style={{ width: '100%' }} addonAfter={unit} />
-            </Form.Item>
-            <Form.Item name="description" label={t('pages.users.txDescription')}>
-              <Input maxLength={200} />
-            </Form.Item>
-          </Form>
+            </Field>
+
+            <Field label={t('pages.users.amount')} htmlFor="balance-amount" error={balanceErrors.amount?.message}>
+              <UnitInput
+                id="balance-amount"
+                min={0}
+                unit={unit}
+                aria-invalid={!!balanceErrors.amount}
+                {...registerBalance('amount', {
+                    required: t('pages.users.toasts.invalidAmount'),
+                    min: { value: 0, message: t('pages.users.toasts.invalidAmount') },
+                    valueAsNumber: true
+                })}
+              />
+            </Field>
+
+            <Field label={t('pages.users.txDescription')} htmlFor="balance-description">
+              <Input id="balance-description" maxLength={200} {...registerBalance('description')} />
+            </Field>
+          </form>
         </Modal>
 
         {/* Transaction history */}
         <Modal
           open={!!historyTarget}
+          onClose={() => setHistoryTarget(null)}
           title={historyTarget ? t('pages.users.historyTitle', { name: historyTarget.username }) : ''}
-          footer={null}
-          width={760}
-          onCancel={() => setHistoryTarget(null)}
-          destroyOnHidden
+          size="xl"
         >
-          <Table<Transaction> scroll={{ x: 'max-content' }}
-            dataSource={txQuery.data ?? []}
+          <Table<Transaction>
             columns={txColumns}
-            rowKey="id"
-            size="small"
+            data={txQuery.data ?? []}
+            rowKey={(row) => String(row.id)}
             loading={txQuery.isFetching}
-            pagination={{ pageSize: 10, hideOnSinglePage: true }}
+            pageSize={10}
+            empty={<div className="py-6 text-center text-muted-foreground">{t('noData')}</div>}
           />
         </Modal>
-      </Layout>
-    </ConfigProvider>
-  );
+    </PageShell>
+    );
 }

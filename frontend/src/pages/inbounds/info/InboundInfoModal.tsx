@@ -1,386 +1,530 @@
 import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Divider, Modal, Space, Tabs, Tag, Tooltip } from 'antd';
-import { CopyOutlined, SyncOutlined, DeleteOutlined, DownloadOutlined } from '@ant-design/icons';
+import { Copy, RefreshCw, Trash2, Download } from 'lucide-react';
 
 import { HttpUtil, IntlUtil, SizeFormatter, ColorUtils } from '@/utils';
 import { Protocols } from '@/schemas/primitives';
-import { InfinityIcon } from '@/components/ui';
+import { InfinityIcon, Modal, Tabs, Badge, Button, Tooltip, type BadgeVariant } from '@/components/ui';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import {
-  genAllLinks,
-  genWireguardConfigs,
-  genWireguardLinks,
-  preferPublicHost,
+    genAllLinks,
+    genWireguardConfigs,
+    genWireguardLinks,
+    preferPublicHost
 } from '@/lib/xray/inbound-link';
 import { inboundFromDb } from '@/lib/xray/inbound-from-db';
 
 import {
-  buildInboundInfo,
-  copyText,
-  downloadText,
-  formatIpInfo,
-  hasShareLink,
-  statsColor,
+    buildInboundInfo,
+    copyText,
+    downloadText,
+    formatIpInfo,
+    hasShareLink,
+    statsColor
 } from './helpers';
 import type { ClientSetting, ClientStats, InboundInfo, InboundInfoModalProps } from './types';
-import './InboundInfoModal.css';
+
+// Map the legacy AntD Tag color tokens (and ColorUtils outputs) onto Badge variants.
+function tagVariant(color?: string): BadgeVariant
+{
+    switch (color)
+    {
+        case 'green':
+        case 'success':
+            return 'success';
+        case 'red':
+        case 'error':
+            return 'danger';
+        case 'orange':
+        case 'gold':
+        case 'warning':
+            return 'warning';
+        case 'blue':
+        case 'purple':
+            return 'primary';
+        default:
+            return 'neutral';
+    }
+}
+
+// Section divider with a centered label, used to separate info groups.
+function SectionDivider({ children }: { children: ReactNode })
+{
+    return (
+    <div className="my-3 flex items-center gap-3">
+      <span className="h-px flex-1 bg-border" />
+      <span className="text-xs font-medium text-muted-foreground">{children}</span>
+      <span className="h-px flex-1 bg-border" />
+    </div>
+    );
+}
+
+// Two-column "label | value" row.
+function InfoRow({ label, children }: { label: ReactNode; children: ReactNode })
+{
+    return (
+    <div className="grid grid-cols-[120px_minmax(0,1fr)] items-center gap-3 border-b border-border py-1.5 last:border-0 sm:grid-cols-[140px_minmax(0,1fr)]">
+      <span className="text-[13px] text-muted-foreground">{label}</span>
+      <span className="min-w-0">{children}</span>
+    </div>
+    );
+}
+
+// Small icon-only copy button.
+function IconButton({ label, onClick, icon }: { label: string; onClick: () => void; icon: ReactNode })
+{
+    return (
+    <Button aria-label={label} variant="secondary" size="icon" className="h-7 w-7 shrink-0" onClick={onClick}>
+      {icon}
+    </Button>
+    );
+}
+
+// A copyable link/code block with header.
+function LinkPanel({
+    title,
+    value,
+    isAnchor,
+    onCopy,
+    copyLabel,
+    extra
+}: {
+  title: ReactNode;
+  value: string;
+  isAnchor?: boolean;
+  onCopy: () => void;
+  copyLabel: string;
+  extra?: ReactNode;
+})
+{
+    return (
+    <div className="mb-2.5 flex flex-col gap-1.5 rounded-lg border border-border p-2.5">
+      <div className="flex flex-wrap items-center gap-1.5">
+        <Badge variant="success">{title}</Badge>
+        <Tooltip content={copyLabel}>
+          <IconButton label={copyLabel} onClick={onCopy} icon={<Copy className="h-3.5 w-3.5" aria-hidden />} />
+        </Tooltip>
+        {extra}
+      </div>
+      {isAnchor ? (
+        <a
+          href={value}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="break-all rounded-md bg-surface-sunken px-2 py-1.5 font-mono text-[11px] text-accent underline decoration-accent/40 hover:decoration-accent"
+        >
+          {value}
+        </a>
+      ) : (
+        <code className="break-all whitespace-pre-wrap rounded-md bg-surface-sunken px-2 py-1.5 font-mono text-[11px] select-all">
+          {value}
+        </code>
+      )}
+    </div>
+    );
+}
 
 export default function InboundInfoModal({
-  open,
-  onClose,
-  dbInbound,
-  clientIndex = 0,
-  remarkModel = '-io',
-  expireDiff = 0,
-  trafficDiff = 0,
-  ipLimitEnable = false,
-  tgBotEnable = false,
-  nodeAddress = '',
-  subSettings,
-  lastOnlineMap = {},
-}: InboundInfoModalProps) {
-  const { t } = useTranslation();
-  const { datepicker } = useDatepicker();
+    open,
+    onClose,
+    dbInbound,
+    clientIndex = 0,
+    remarkModel = '-io',
+    expireDiff = 0,
+    trafficDiff = 0,
+    ipLimitEnable = false,
+    tgBotEnable = false,
+    nodeAddress = '',
+    subSettings,
+    lastOnlineMap = {}
+}: InboundInfoModalProps)
+{
+    const { t } = useTranslation();
+    const { datepicker } = useDatepicker();
 
-  const [inbound, setInbound] = useState<InboundInfo | null>(null);
-  const [clientSettings, setClientSettings] = useState<ClientSetting | null>(null);
-  const [clientStats, setClientStats] = useState<ClientStats | null>(null);
-  const [links, setLinks] = useState<{ remark?: string; link: string }[]>([]);
-  const [wireguardConfigs, setWireguardConfigs] = useState<string[]>([]);
-  const [wireguardLinks, setWireguardLinks] = useState<string[]>([]);
-  const [subLink, setSubLink] = useState('');
-  const [subJsonLink, setSubJsonLink] = useState('');
-  const [refreshing, setRefreshing] = useState(false);
-  const [clientIpsArray, setClientIpsArray] = useState<string[]>([]);
-  const [clientIpsText, setClientIpsText] = useState('');
-  const [activeTab, setActiveTab] = useState('client');
+    const [inbound, setInbound] = useState<InboundInfo | null>(null);
+    const [clientSettings, setClientSettings] = useState<ClientSetting | null>(null);
+    const [clientStats, setClientStats] = useState<ClientStats | null>(null);
+    const [links, setLinks] = useState<{ remark?: string; link: string }[]>([]);
+    const [wireguardConfigs, setWireguardConfigs] = useState<string[]>([]);
+    const [wireguardLinks, setWireguardLinks] = useState<string[]>([]);
+    const [subLink, setSubLink] = useState('');
+    const [subJsonLink, setSubJsonLink] = useState('');
+    const [refreshing, setRefreshing] = useState(false);
+    const [clientIpsArray, setClientIpsArray] = useState<string[]>([]);
+    const [clientIpsText, setClientIpsText] = useState('');
+    const [activeTab, setActiveTab] = useState('client');
 
-  const loadClientIps = useCallback(async () => {
-    if (!clientStats?.email) return;
-    setRefreshing(true);
-    try {
-      const msg = await HttpUtil.post(`/panel/api/clients/ips/${clientStats.email}`);
-      if (!msg?.success) {
-        setClientIpsText((msg?.obj as string) || 'No IP record');
-        setClientIpsArray([]);
-        return;
-      }
-      let ips: unknown = msg.obj;
-      if (typeof ips === 'string') {
-        try {
-          ips = JSON.parse(ips);
-        } catch {
-          setClientIpsText(String(ips));
-          setClientIpsArray([String(ips)]);
-          return;
-        }
-      }
-      if (ips && !Array.isArray(ips) && typeof ips === 'object') ips = [ips];
-      if (Array.isArray(ips) && ips.length > 0) {
-        const arr = (ips as unknown[]).map(formatIpInfo).filter(Boolean) as string[];
-        setClientIpsArray(arr);
-        setClientIpsText(arr.join(' | '));
-      } else {
-        setClientIpsArray([]);
-        setClientIpsText(String(ips || t('tgbot.noIpRecord')));
-      }
-    } finally {
-      setRefreshing(false);
-    }
-  }, [clientStats, t]);
-
-  const clearClientIps = useCallback(async () => {
-    if (!clientStats?.email) return;
-    const msg = await HttpUtil.post(`/panel/api/clients/clearIps/${clientStats.email}`);
-    if (msg?.success) {
-      setClientIpsArray([]);
-      setClientIpsText(t('tgbot.noIpRecord'));
-    }
-  }, [clientStats, t]);
-
-  useEffect(() => {
-    if (!open || !dbInbound) return;
-    const info = buildInboundInfo(dbInbound);
-    setInbound(info);
-    setActiveTab(info.clients.length > 0 ? 'client' : 'inbound');
-
-    const idx = clientIndex ?? 0;
-    const clientSet = info.clients.length > 0 ? (info.clients[idx] || null) : null;
-    setClientSettings(clientSet);
-    const stats = clientSet
-      ? (dbInbound.clientStats || []).find((s) => s.email === clientSet.email) || null
-      : null;
-    setClientStats(stats);
-
-    const inboundForLinks = inboundFromDb(dbInbound);
-    const fallbackHostname = preferPublicHost(window.location.hostname, subSettings?.publicHost ?? '');
-    if (info.protocol === Protocols.WIREGUARD) {
-      setWireguardConfigs(
-        genWireguardConfigs({
-          inbound: inboundForLinks,
-          remark: dbInbound.remark,
-          remarkModel: '-io',
-          hostOverride: nodeAddress,
-          fallbackHostname,
-        }).split('\r\n'),
-      );
-      setWireguardLinks(
-        genWireguardLinks({
-          inbound: inboundForLinks,
-          remark: dbInbound.remark,
-          remarkModel: '-io',
-          hostOverride: nodeAddress,
-          fallbackHostname,
-        }).split('\r\n'),
-      );
-      setLinks([]);
-    } else {
-      setLinks(
-        genAllLinks({
-          inbound: inboundForLinks,
-          remark: dbInbound.remark,
-          remarkModel,
-          client: (clientSet ?? {}) as Parameters<typeof genAllLinks>[0]['client'],
-          hostOverride: nodeAddress,
-          fallbackHostname,
-        }),
-      );
-      setWireguardConfigs([]);
-      setWireguardLinks([]);
-    }
-
-    if (clientSet?.subId) {
-      setSubLink((subSettings?.subURI || '') + clientSet.subId);
-      setSubJsonLink(
-        subSettings?.subJsonEnable ? (subSettings?.subJsonURI || '') + clientSet.subId : '',
-      );
-    } else {
-      setSubLink('');
-      setSubJsonLink('');
-    }
-
-    setClientIpsArray([]);
-    setClientIpsText('');
-
-    if (ipLimitEnable && (clientSet?.limitIp ?? 0) > 0 && stats?.email) {
-      void HttpUtil.post(`/panel/api/clients/ips/${stats.email}`).then((msg) => {
-        if (!msg?.success) {
-          setClientIpsText((msg?.obj as string) || 'No IP record');
-          return;
-        }
-        let ips: unknown = msg.obj;
-        if (typeof ips === 'string') {
-          try {
-            ips = JSON.parse(ips);
-          } catch {
-            setClientIpsText(String(ips));
-            setClientIpsArray([String(ips)]);
+    const loadClientIps = useCallback(async () =>
+    {
+        if (!clientStats?.email)
+        {
             return;
-          }
         }
-        if (ips && !Array.isArray(ips) && typeof ips === 'object') ips = [ips];
-        if (Array.isArray(ips) && ips.length > 0) {
-          const arr = (ips as unknown[]).map(formatIpInfo).filter(Boolean) as string[];
-          setClientIpsArray(arr);
-          setClientIpsText(arr.join(' | '));
-        } else {
-          setClientIpsText(String(ips || t('tgbot.noIpRecord')));
+        setRefreshing(true);
+        try
+        {
+            const msg = await HttpUtil.post(`/panel/api/clients/ips/${ clientStats.email }`);
+            if (!msg?.success)
+            {
+                setClientIpsText((msg?.obj as string) || 'No IP record');
+                setClientIpsArray([]);
+                return;
+            }
+            let ips: unknown = msg.obj;
+            if (typeof ips === 'string')
+            {
+                try
+                {
+                    ips = JSON.parse(ips);
+                }
+                catch
+                {
+                    setClientIpsText(String(ips));
+                    setClientIpsArray([String(ips)]);
+                    return;
+                }
+            }
+            if (ips && !Array.isArray(ips) && typeof ips === 'object')
+            {
+                ips = [ips];
+            }
+            if (Array.isArray(ips) && ips.length > 0)
+            {
+                const arr = (ips as unknown[]).map(formatIpInfo).filter(Boolean) as string[];
+                setClientIpsArray(arr);
+                setClientIpsText(arr.join(' | '));
+            }
+            else
+            {
+                setClientIpsArray([]);
+                setClientIpsText(String(ips || t('tgbot.noIpRecord')));
+            }
         }
-      });
-    }
-  }, [open, dbInbound, clientIndex, remarkModel, nodeAddress, subSettings, ipLimitEnable, t]);
+        finally
+        {
+            setRefreshing(false);
+        }
+    }, [clientStats, t]);
 
-  const isEnable = useMemo(() => {
-    if (clientSettings) return !!clientSettings.enable;
-    return dbInbound?.enable ?? true;
-  }, [clientSettings, dbInbound]);
+    const clearClientIps = useCallback(async () =>
+    {
+        if (!clientStats?.email)
+        {
+            return;
+        }
+        const msg = await HttpUtil.post(`/panel/api/clients/clearIps/${ clientStats.email }`);
+        if (msg?.success)
+        {
+            setClientIpsArray([]);
+            setClientIpsText(t('tgbot.noIpRecord'));
+        }
+    }, [clientStats, t]);
 
-  const isDepleted = useMemo(() => {
-    if (!clientStats || !clientSettings) return false;
-    const total = clientStats.total ?? 0;
-    const used = (clientStats.up ?? 0) + (clientStats.down ?? 0);
-    if (total > 0 && used >= total) return true;
-    const expiry = clientSettings.expiryTime ?? 0;
-    if (expiry > 0 && Date.now() >= expiry) return true;
-    return false;
-  }, [clientStats, clientSettings]);
+    useEffect(() =>
+    {
+        if (!open || !dbInbound)
+        {
+            return;
+        }
+        const info = buildInboundInfo(dbInbound);
+        setInbound(info);
+        setActiveTab(info.clients.length > 0 ? 'client' : 'inbound');
 
-  const remainingStats = useMemo(() => {
-    if (!clientStats || !clientSettings) return '-';
-    const remained = clientStats.total - clientStats.up - clientStats.down;
-    return remained > 0 ? SizeFormatter.sizeFormat(remained) : '-';
-  }, [clientStats, clientSettings]);
+        const idx = clientIndex ?? 0;
+        const clientSet = info.clients.length > 0 ? (info.clients[idx] || null) : null;
+        setClientSettings(clientSet);
+        const stats = clientSet
+            ? (dbInbound.clientStats || []).find((s) => s.email === clientSet.email) || null
+            : null;
+        setClientStats(stats);
 
-  const formatLastOnline = useCallback(
-    (email: string) => {
-      const ts = lastOnlineMap[email];
-      if (!ts) return '-';
-      return IntlUtil.formatDate(ts, datepicker);
-    },
-    [lastOnlineMap, datepicker],
-  );
+        const inboundForLinks = inboundFromDb(dbInbound);
+        const fallbackHostname = preferPublicHost(window.location.hostname, subSettings?.publicHost ?? '');
+        if (info.protocol === Protocols.WIREGUARD)
+        {
+            setWireguardConfigs(
+                genWireguardConfigs({
+                    inbound: inboundForLinks,
+                    remark: dbInbound.remark,
+                    remarkModel: '-io',
+                    hostOverride: nodeAddress,
+                    fallbackHostname
+                }).split('\r\n')
+            );
+            setWireguardLinks(
+                genWireguardLinks({
+                    inbound: inboundForLinks,
+                    remark: dbInbound.remark,
+                    remarkModel: '-io',
+                    hostOverride: nodeAddress,
+                    fallbackHostname
+                }).split('\r\n')
+            );
+            setLinks([]);
+        }
+        else
+        {
+            setLinks(
+                genAllLinks({
+                    inbound: inboundForLinks,
+                    remark: dbInbound.remark,
+                    remarkModel,
+                    client: (clientSet ?? {}) as Parameters<typeof genAllLinks>[0]['client'],
+                    hostOverride: nodeAddress,
+                    fallbackHostname
+                })
+            );
+            setWireguardConfigs([]);
+            setWireguardLinks([]);
+        }
 
-  const networkLabel = inbound?.stream?.network || '';
-  const securityLabel = inbound?.stream?.security || 'none';
-  const securityColor = securityLabel === 'none' ? 'red' : 'green';
-  const encryptionLabel = (inbound?.settings?.encryption as string) || '';
-  const serverNameLabel = inbound?.serverName || '';
-  const showClientTab = !!clientSettings;
-  const showSubscriptionTab = !!(subSettings?.enable && clientSettings?.subId);
+        if (clientSet?.subId)
+        {
+            setSubLink((subSettings?.subURI || '') + clientSet.subId);
+            setSubJsonLink(
+                subSettings?.subJsonEnable ? (subSettings?.subJsonURI || '') + clientSet.subId : ''
+            );
+        }
+        else
+        {
+            setSubLink('');
+            setSubJsonLink('');
+        }
 
-  if (!dbInbound || !inbound) {
-    return (
-      <Modal open={open} onCancel={onClose} title={t('pages.inbounds.inboundInfo')} footer={null} width={640} />
+        setClientIpsArray([]);
+        setClientIpsText('');
+
+        if (ipLimitEnable && (clientSet?.limitIp ?? 0) > 0 && stats?.email)
+        {
+            void HttpUtil.post(`/panel/api/clients/ips/${ stats.email }`).then((msg) =>
+            {
+                if (!msg?.success)
+                {
+                    setClientIpsText((msg?.obj as string) || 'No IP record');
+                    return;
+                }
+                let ips: unknown = msg.obj;
+                if (typeof ips === 'string')
+                {
+                    try
+                    {
+                        ips = JSON.parse(ips);
+                    }
+                    catch
+                    {
+                        setClientIpsText(String(ips));
+                        setClientIpsArray([String(ips)]);
+                        return;
+                    }
+                }
+                if (ips && !Array.isArray(ips) && typeof ips === 'object')
+                {
+                    ips = [ips];
+                }
+                if (Array.isArray(ips) && ips.length > 0)
+                {
+                    const arr = (ips as unknown[]).map(formatIpInfo).filter(Boolean) as string[];
+                    setClientIpsArray(arr);
+                    setClientIpsText(arr.join(' | '));
+                }
+                else
+                {
+                    setClientIpsText(String(ips || t('tgbot.noIpRecord')));
+                }
+            });
+        }
+    }, [open, dbInbound, clientIndex, remarkModel, nodeAddress, subSettings, ipLimitEnable, t]);
+
+    const isEnable = useMemo(() =>
+    {
+        if (clientSettings)
+        {
+            return !!clientSettings.enable;
+        }
+        return dbInbound?.enable ?? true;
+    }, [clientSettings, dbInbound]);
+
+    const isDepleted = useMemo(() =>
+    {
+        if (!clientStats || !clientSettings)
+        {
+            return false;
+        }
+        const total = clientStats.total ?? 0;
+        const used = (clientStats.up ?? 0) + (clientStats.down ?? 0);
+        if (total > 0 && used >= total)
+        {
+            return true;
+        }
+        const expiry = clientSettings.expiryTime ?? 0;
+        if (expiry > 0 && Date.now() >= expiry)
+        {
+            return true;
+        }
+        return false;
+    }, [clientStats, clientSettings]);
+
+    const remainingStats = useMemo(() =>
+    {
+        if (!clientStats || !clientSettings)
+        {
+            return '-';
+        }
+        const remained = clientStats.total - clientStats.up - clientStats.down;
+        return remained > 0 ? SizeFormatter.sizeFormat(remained) : '-';
+    }, [clientStats, clientSettings]);
+
+    const formatLastOnline = useCallback(
+        (email: string) =>
+        {
+            const ts = lastOnlineMap[email];
+            if (!ts)
+            {
+                return '-';
+            }
+            return IntlUtil.formatDate(ts, datepicker);
+        },
+        [lastOnlineMap, datepicker]
     );
-  }
 
-  const clientTab = (
+    const networkLabel = inbound?.stream?.network || '';
+    const securityLabel = inbound?.stream?.security || 'none';
+    const securityVariant: BadgeVariant = securityLabel === 'none' ? 'danger' : 'success';
+    const encryptionLabel = (inbound?.settings?.encryption as string) || '';
+    const serverNameLabel = inbound?.serverName || '';
+    const showClientTab = !!clientSettings;
+    const showSubscriptionTab = !!(subSettings?.enable && clientSettings?.subId);
+
+    if (!dbInbound || !inbound)
+    {
+        return <Modal open={open} onClose={onClose} title={t('pages.inbounds.inboundInfo')} size="lg" />;
+    }
+
+    const clientTab = (
     <>
-      <table className="info-table block">
-        <tbody>
-          <tr>
-            <td>{t('pages.inbounds.email')}</td>
-            <td>
-              {clientSettings?.email ? (
-                <Tag color="green">{clientSettings.email}</Tag>
-              ) : (
-                <Tag color="red">{t('none')}</Tag>
-              )}
-            </td>
-          </tr>
-          {clientSettings?.id && (
-            <tr><td>ID</td><td><Tag>{clientSettings.id}</Tag></td></tr>
+      <div className="flex flex-col">
+        <InfoRow label={t('pages.inbounds.email')}>
+          {clientSettings?.email ? (
+            <Badge variant="success">{clientSettings.email}</Badge>
+          ) : (
+            <Badge variant="danger">{t('none')}</Badge>
           )}
-          {dbInbound.isVMess && (
-            <tr><td>{t('security')}</td><td><Tag>{clientSettings?.security}</Tag></td></tr>
+        </InfoRow>
+        {clientSettings?.id && (
+          <InfoRow label="ID"><Badge variant="neutral">{clientSettings.id}</Badge></InfoRow>
+        )}
+        {dbInbound.isVMess && (
+          <InfoRow label={t('security')}><Badge variant="neutral">{clientSettings?.security}</Badge></InfoRow>
+        )}
+        {inbound.isVlessTlsFlow && (
+          <InfoRow label={t('pages.clients.flow')}>
+            {clientSettings?.flow ? <Badge variant="neutral">{clientSettings.flow}</Badge> : <Badge variant="warning">{t('none')}</Badge>}
+          </InfoRow>
+        )}
+        {clientSettings?.password && (
+          <InfoRow label={t('password')}><Badge variant="neutral" className="max-w-full truncate">{clientSettings.password}</Badge></InfoRow>
+        )}
+        <InfoRow label={t('status')}>
+          {isDepleted ? (
+            <Badge variant="danger">{t('depleted')}</Badge>
+          ) : isEnable ? (
+            <Badge variant="success">{t('enabled')}</Badge>
+          ) : (
+            <Badge variant="neutral">{t('disabled')}</Badge>
           )}
-          {inbound.isVlessTlsFlow && (
-            <tr>
-              <td>{t('pages.clients.flow')}</td>
-              <td>
-                {clientSettings?.flow ? <Tag>{clientSettings.flow}</Tag> : <Tag color="orange">{t('none')}</Tag>}
-              </td>
-            </tr>
-          )}
-          {clientSettings?.password && (
-            <tr>
-              <td>{t('password')}</td>
-              <td><Tag className="info-large-tag">{clientSettings.password}</Tag></td>
-            </tr>
-          )}
-          <tr>
-            <td>{t('status')}</td>
-            <td>
-              {isDepleted ? (
-                <Tag color="red">{t('depleted')}</Tag>
-              ) : isEnable ? (
-                <Tag color="green">{t('enabled')}</Tag>
-              ) : (
-                <Tag>{t('disabled')}</Tag>
-              )}
-            </td>
-          </tr>
-          {clientStats && (
-            <tr>
-              <td>{t('usage')}</td>
-              <td>
-                <Tag color="green">{SizeFormatter.sizeFormat(clientStats.up + clientStats.down)}</Tag>
-                <Tag>
-                  ↑ {SizeFormatter.sizeFormat(clientStats.up)} /
-                  {' '}{SizeFormatter.sizeFormat(clientStats.down)} ↓
-                </Tag>
-              </td>
-            </tr>
-          )}
-          <tr>
-            <td>{t('pages.inbounds.createdAt')}</td>
-            <td>
-              {clientSettings?.created_at ? (
-                <Tag>{IntlUtil.formatDate(clientSettings.created_at, datepicker)}</Tag>
-              ) : <Tag>-</Tag>}
-            </td>
-          </tr>
-          <tr>
-            <td>{t('pages.inbounds.updatedAt')}</td>
-            <td>
-              {clientSettings?.updated_at ? (
-                <Tag>{IntlUtil.formatDate(clientSettings.updated_at, datepicker)}</Tag>
-              ) : <Tag>-</Tag>}
-            </td>
-          </tr>
-          <tr>
-            <td>{t('lastOnline')}</td>
-            <td><Tag>{formatLastOnline(clientSettings?.email || '')}</Tag></td>
-          </tr>
-          {clientSettings?.comment && (
-            <tr><td>{t('comment')}</td><td><Tag className="info-large-tag">{clientSettings.comment}</Tag></td></tr>
-          )}
-          {ipLimitEnable && (
-            <tr><td>{t('pages.inbounds.IPLimit')}</td><td><Tag>{clientSettings?.limitIp ?? 0}</Tag></td></tr>
-          )}
-          {ipLimitEnable && (clientSettings?.limitIp ?? 0) > 0 && (
-            <tr>
-              <td>{t('pages.inbounds.IPLimitlog')}</td>
-              <td>
-                <div className="ip-log">
-                  {clientIpsArray.length > 0 ? (
-                    <div>
-                      {clientIpsArray.map((item, idx) => (
-                        <Tag color="blue" className="ip-log-row" key={idx}>{item}</Tag>
-                      ))}
-                    </div>
-                  ) : (
-                    <Tag>{clientIpsText || t('tgbot.noIpRecord')}</Tag>
-                  )}
-                </div>
-                <div className="ip-log-actions">
-                  <SyncOutlined spin={refreshing} onClick={() => loadClientIps()} />
-                  <Tooltip title={t('pages.inbounds.IPLimitlogclear')}>
-                    <DeleteOutlined onClick={() => clearClientIps()} />
-                  </Tooltip>
-                </div>
-              </td>
-            </tr>
-          )}
-        </tbody>
-      </table>
+        </InfoRow>
+        {clientStats && (
+          <InfoRow label={t('usage')}>
+            <span className="flex flex-wrap gap-1">
+              <Badge variant="success">{SizeFormatter.sizeFormat(clientStats.up + clientStats.down)}</Badge>
+              <Badge variant="neutral">
+                ↑ {SizeFormatter.sizeFormat(clientStats.up)} /
+                {' '}{SizeFormatter.sizeFormat(clientStats.down)} ↓
+              </Badge>
+            </span>
+          </InfoRow>
+        )}
+        <InfoRow label={t('pages.inbounds.createdAt')}>
+          <Badge variant="neutral">{clientSettings?.created_at ? IntlUtil.formatDate(clientSettings.created_at, datepicker) : '-'}</Badge>
+        </InfoRow>
+        <InfoRow label={t('pages.inbounds.updatedAt')}>
+          <Badge variant="neutral">{clientSettings?.updated_at ? IntlUtil.formatDate(clientSettings.updated_at, datepicker) : '-'}</Badge>
+        </InfoRow>
+        <InfoRow label={t('lastOnline')}>
+          <Badge variant="neutral">{formatLastOnline(clientSettings?.email || '')}</Badge>
+        </InfoRow>
+        {clientSettings?.comment && (
+          <InfoRow label={t('comment')}><Badge variant="neutral" className="max-w-full truncate">{clientSettings.comment}</Badge></InfoRow>
+        )}
+        {ipLimitEnable && (
+          <InfoRow label={t('pages.inbounds.IPLimit')}><Badge variant="neutral">{clientSettings?.limitIp ?? 0}</Badge></InfoRow>
+        )}
+        {ipLimitEnable && (clientSettings?.limitIp ?? 0) > 0 && (
+          <InfoRow label={t('pages.inbounds.IPLimitlog')}>
+            <div>
+              <div className="max-h-[150px] overflow-y-auto text-start">
+                {clientIpsArray.length > 0 ? (
+                  <div className="flex flex-col gap-1">
+                    {clientIpsArray.map((item, idx) => (
+                      <Badge variant="primary" className="font-mono text-[11px]" key={idx}>{item}</Badge>
+                    ))}
+                  </div>
+                ) : (
+                  <Badge variant="neutral">{clientIpsText || t('tgbot.noIpRecord')}</Badge>
+                )}
+              </div>
+              <div className="mt-1.5 flex gap-3 text-muted-foreground">
+                <button type="button" aria-label="refresh" onClick={() => loadClientIps()} className="hover:text-foreground">
+                  <RefreshCw className={`h-4 w-4 ${ refreshing ? 'animate-spin' : '' }`} aria-hidden />
+                </button>
+                <Tooltip content={t('pages.inbounds.IPLimitlogclear')}>
+                  <button type="button" aria-label={t('pages.inbounds.IPLimitlogclear')} onClick={() => clearClientIps()} className="hover:text-danger">
+                    <Trash2 className="h-4 w-4" aria-hidden />
+                  </button>
+                </Tooltip>
+              </div>
+            </div>
+          </InfoRow>
+        )}
+      </div>
 
-      <table className="info-table summary-table">
+      <table className="my-3 w-full text-center text-sm">
         <thead>
-          <tr>
-            <th>{t('remained')}</th>
-            <th>{t('pages.inbounds.totalUsage')}</th>
-            <th>{t('pages.inbounds.expireDate')}</th>
+          <tr className="text-muted-foreground">
+            <th className="px-2 py-1 font-medium">{t('remained')}</th>
+            <th className="px-2 py-1 font-medium">{t('pages.inbounds.totalUsage')}</th>
+            <th className="px-2 py-1 font-medium">{t('pages.inbounds.expireDate')}</th>
           </tr>
         </thead>
         <tbody>
           <tr>
-            <td>
+            <td className="px-2 py-1">
               {clientStats && (clientSettings?.totalGB ?? 0) > 0 ? (
-                <Tag color={statsColor(clientStats, trafficDiff)}>{remainingStats}</Tag>
+                <Badge variant={tagVariant(statsColor(clientStats, trafficDiff))}>{remainingStats}</Badge>
               ) : !clientSettings?.totalGB || clientSettings.totalGB <= 0 ? (
-                <Tag color="purple"><InfinityIcon /></Tag>
+                <Badge variant="primary"><InfinityIcon /></Badge>
               ) : null}
             </td>
-            <td>
+            <td className="px-2 py-1">
               {(clientSettings?.totalGB ?? 0) > 0 ? (
-                <Tag color={clientStats ? statsColor(clientStats, trafficDiff) : 'default'}>
+                <Badge variant={clientStats ? tagVariant(statsColor(clientStats, trafficDiff)) : 'neutral'}>
                   {SizeFormatter.sizeFormat(clientSettings!.totalGB!)}
-                </Tag>
+                </Badge>
               ) : (
-                <Tag color="purple"><InfinityIcon /></Tag>
+                <Badge variant="primary"><InfinityIcon /></Badge>
               )}
             </td>
-            <td>
+            <td className="px-2 py-1">
               {(clientSettings?.expiryTime ?? 0) > 0 ? (
-                <Tag color={ColorUtils.usageColor(Date.now(), expireDiff, clientSettings!.expiryTime!)}>
+                <Badge variant={tagVariant(ColorUtils.usageColor(Date.now(), expireDiff, clientSettings!.expiryTime!))}>
                   {IntlUtil.formatDate(clientSettings!.expiryTime!, datepicker)}
-                </Tag>
+                </Badge>
               ) : (clientSettings?.expiryTime ?? 0) < 0 ? (
-                <Tag color="green">{clientSettings!.expiryTime! / -86400000} {t('day')}</Tag>
+                <Badge variant="success">{clientSettings!.expiryTime! / -86400000} {t('day')}</Badge>
               ) : (
-                <Tag color="purple"><InfinityIcon /></Tag>
+                <Badge variant="primary"><InfinityIcon /></Badge>
               )}
             </td>
           </tr>
@@ -389,11 +533,11 @@ export default function InboundInfoModal({
 
       {tgBotEnable && clientSettings?.tgId && (
         <>
-          <Divider>Telegram</Divider>
-          <div className="tg-row">
-            <Tag color="blue">{clientSettings.tgId}</Tag>
-            <Tooltip title={t('copy')}>
-              <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(clientSettings.tgId, t)} />
+          <SectionDivider>Telegram</SectionDivider>
+          <div className="flex items-center gap-1.5">
+            <Badge variant="primary">{clientSettings.tgId}</Badge>
+            <Tooltip content={t('copy')}>
+              <IconButton label={t('copy')} onClick={() => copyText(clientSettings.tgId, t)} icon={<Copy className="h-3.5 w-3.5" aria-hidden />} />
             </Tooltip>
           </div>
         </>
@@ -401,99 +545,48 @@ export default function InboundInfoModal({
 
       {hasShareLink(dbInbound.protocol) && links.length > 0 && (
         <>
-          <Divider>{t('pages.inbounds.copyLink')}</Divider>
+          <SectionDivider>{t('pages.inbounds.copyLink')}</SectionDivider>
           {links.map((link, idx) => (
-            <div key={idx} className="link-panel">
-              <div className="link-panel-header">
-                <Tag color="green">{link.remark || `Link ${idx + 1}`}</Tag>
-                <Tooltip title={t('copy')}>
-                  <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(link.link, t)} />
-                </Tooltip>
-              </div>
-              <code className="link-panel-text">{link.link}</code>
-            </div>
+            <LinkPanel key={idx} title={link.remark || `Link ${ idx + 1 }`} value={link.link} copyLabel={t('copy')} onCopy={() => copyText(link.link, t)} />
           ))}
         </>
       )}
 
       {showSubscriptionTab && (
         <>
-          <Divider>{t('subscription.title')}</Divider>
-          <div className="link-panel">
-            <div className="link-panel-header">
-              <Tag color="green">{t('subscription.title')}</Tag>
-              <Tooltip title={t('copy')}>
-                <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(subLink, t)} />
-              </Tooltip>
-            </div>
-            <a href={subLink} target="_blank" rel="noopener noreferrer" className="link-panel-anchor">{subLink}</a>
-          </div>
+          <SectionDivider>{t('subscription.title')}</SectionDivider>
+          <LinkPanel title={t('subscription.title')} value={subLink} isAnchor copyLabel={t('copy')} onCopy={() => copyText(subLink, t)} />
           {subSettings?.subJsonEnable && subJsonLink && (
-            <div className="link-panel">
-              <div className="link-panel-header">
-                <Tag color="green">JSON</Tag>
-                <Tooltip title={t('copy')}>
-                  <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(subJsonLink, t)} />
-                </Tooltip>
-              </div>
-              <a href={subJsonLink} target="_blank" rel="noopener noreferrer" className="link-panel-anchor">{subJsonLink}</a>
-            </div>
+            <LinkPanel title="JSON" value={subJsonLink} isAnchor copyLabel={t('copy')} onCopy={() => copyText(subJsonLink, t)} />
           )}
         </>
       )}
     </>
-  );
+    );
 
-  const inboundTab = (
+    const inboundTab = (
     <>
-      <dl className="info-list">
-        <div className="info-row">
-          <dt>{t('pages.inbounds.protocol')}</dt>
-          <dd><Tag color="purple">{dbInbound.protocol}</Tag></dd>
-        </div>
-        <div className="info-row">
-          <dt>{t('pages.inbounds.address')}</dt>
-          <dd><Tag className="value-tag">{dbInbound.address}</Tag></dd>
-        </div>
-        <div className="info-row">
-          <dt>{t('pages.inbounds.port')}</dt>
-          <dd><Tag>{dbInbound.port}</Tag></dd>
-        </div>
+      <div className="flex flex-col">
+        <InfoRow label={t('pages.inbounds.protocol')}><Badge variant="primary">{dbInbound.protocol}</Badge></InfoRow>
+        <InfoRow label={t('pages.inbounds.address')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{dbInbound.address}</Badge></InfoRow>
+        <InfoRow label={t('pages.inbounds.port')}><Badge variant="neutral">{dbInbound.port}</Badge></InfoRow>
 
         {(dbInbound.isVMess || dbInbound.isVLess || dbInbound.isTrojan || dbInbound.isSS) && (
           <>
-            <div className="info-row">
-              <dt>{t('transmission')}</dt>
-              <dd><Tag color="green">{networkLabel}</Tag></dd>
-            </div>
+            <InfoRow label={t('transmission')}><Badge variant="success">{networkLabel}</Badge></InfoRow>
             {(inbound.isTcp || inbound.isWs || inbound.isHttpupgrade || inbound.isXHTTP) && (
               <>
-                <div className="info-row">
-                  <dt>{t('host')}</dt>
-                  <dd>{inbound.host ? <Tag className="value-tag">{inbound.host}</Tag> : <Tag color="orange">{t('none')}</Tag>}</dd>
-                </div>
-                <div className="info-row">
-                  <dt>{t('path')}</dt>
-                  <dd>{inbound.path ? <Tag className="value-tag">{inbound.path}</Tag> : <Tag color="orange">{t('none')}</Tag>}</dd>
-                </div>
+                <InfoRow label={t('host')}>{inbound.host ? <Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.host}</Badge> : <Badge variant="warning">{t('none')}</Badge>}</InfoRow>
+                <InfoRow label={t('path')}>{inbound.path ? <Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.path}</Badge> : <Badge variant="warning">{t('none')}</Badge>}</InfoRow>
               </>
             )}
             {inbound.isXHTTP && (
-              <div className="info-row">
-                <dt>{t('pages.inbounds.info.mode')}</dt>
-                <dd><Tag>{inbound.stream?.xhttp?.mode}</Tag></dd>
-              </div>
+              <InfoRow label={t('pages.inbounds.info.mode')}><Badge variant="neutral">{inbound.stream?.xhttp?.mode}</Badge></InfoRow>
             )}
             {inbound.isGrpc && (
               <>
-                <div className="info-row">
-                  <dt>{t('pages.inbounds.info.grpcServiceName')}</dt>
-                  <dd><Tag className="value-tag">{inbound.serviceName}</Tag></dd>
-                </div>
-                <div className="info-row">
-                  <dt>{t('pages.inbounds.info.grpcMultiMode')}</dt>
-                  <dd><Tag>{String(inbound.stream?.grpc?.multiMode)}</Tag></dd>
-                </div>
+                <InfoRow label={t('pages.inbounds.info.grpcServiceName')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.serviceName}</Badge></InfoRow>
+                <InfoRow label={t('pages.inbounds.info.grpcMultiMode')}><Badge variant="neutral">{String(inbound.stream?.grpc?.multiMode)}</Badge></InfoRow>
               </>
             )}
           </>
@@ -501,298 +594,208 @@ export default function InboundInfoModal({
 
         {hasShareLink(dbInbound.protocol) && (
           <>
-            <div className="info-row">
-              <dt>{t('security')}</dt>
-              <dd><Tag color={securityColor}>{securityLabel}</Tag></dd>
-            </div>
+            <InfoRow label={t('security')}><Badge variant={securityVariant}>{securityLabel}</Badge></InfoRow>
             {encryptionLabel && (
-              <div className="info-row">
-                <dt>{t('encryption')}</dt>
-                <dd className="value-block">
-                  <code className="value-code">{encryptionLabel}</code>
-                  <Tooltip title={t('copy')}>
-                    <Button aria-label={t('copy')} size="small" className="value-copy" icon={<CopyOutlined />} onClick={() => copyText(encryptionLabel, t)} />
+              <InfoRow label={t('encryption')}>
+                <span className="flex items-start gap-1.5">
+                  <code className="min-w-0 flex-1 break-all whitespace-pre-wrap rounded-md bg-surface-sunken px-2 py-1 font-mono text-xs select-all">{encryptionLabel}</code>
+                  <Tooltip content={t('copy')}>
+                    <IconButton label={t('copy')} onClick={() => copyText(encryptionLabel, t)} icon={<Copy className="h-3.5 w-3.5" aria-hidden />} />
                   </Tooltip>
-                </dd>
-              </div>
+                </span>
+              </InfoRow>
             )}
             {securityLabel !== 'none' && (
-              <div className="info-row">
-                <dt>{t('domainName')}</dt>
-                <dd>
-                  {serverNameLabel ? (
-                    <Tag color="green" className="value-tag">{serverNameLabel}</Tag>
-                  ) : (
-                    <Tag color="orange">{t('none')}</Tag>
-                  )}
-                </dd>
-              </div>
+              <InfoRow label={t('domainName')}>
+                {serverNameLabel ? (
+                  <Badge variant="success" className="max-w-full whitespace-normal break-all">{serverNameLabel}</Badge>
+                ) : (
+                  <Badge variant="warning">{t('none')}</Badge>
+                )}
+              </InfoRow>
             )}
           </>
         )}
-      </dl>
+      </div>
 
       {dbInbound.isSS && inbound.settings && (
-        <table className="info-table block">
-          <tbody>
-            <tr>
-              <td>{t('encryption')}</td>
-              <td><Tag color="green">{inbound.settings.method as string}</Tag></td>
-            </tr>
-            {inbound.isSS2022 && (
-              <tr>
-                <td>{t('password')}</td>
-                <td><Tag className="info-large-tag">{inbound.settings.password as string}</Tag></td>
-              </tr>
-            )}
-            <tr>
-              <td>{t('pages.inbounds.network')}</td>
-              <td><Tag color="green">{inbound.settings.network as string}</Tag></td>
-            </tr>
-          </tbody>
-        </table>
+        <div className="mt-2.5 flex flex-col">
+          <InfoRow label={t('encryption')}><Badge variant="success">{inbound.settings.method as string}</Badge></InfoRow>
+          {inbound.isSS2022 && (
+            <InfoRow label={t('password')}><Badge variant="neutral" className="max-w-full truncate">{inbound.settings.password as string}</Badge></InfoRow>
+          )}
+          <InfoRow label={t('pages.inbounds.network')}><Badge variant="success">{inbound.settings.network as string}</Badge></InfoRow>
+        </div>
       )}
 
       {inbound.protocol === Protocols.TUN && inbound.settings && (
-        <dl className="info-list info-list-block">
-          <div className="info-row">
-            <dt>{t('pages.inbounds.info.interfaceName')}</dt>
-            <dd><Tag color="green" className="value-tag">{inbound.settings.name as string}</Tag></dd>
-          </div>
-          <div className="info-row">
-            <dt>{t('pages.inbounds.info.mtu')}</dt>
-            <dd><Tag color="green">{inbound.settings.mtu as number}</Tag></dd>
-          </div>
+        <div className="mt-2.5 flex flex-col">
+          <InfoRow label={t('pages.inbounds.info.interfaceName')}><Badge variant="success" className="max-w-full whitespace-normal break-all">{inbound.settings.name as string}</Badge></InfoRow>
+          <InfoRow label={t('pages.inbounds.info.mtu')}><Badge variant="success">{inbound.settings.mtu as number}</Badge></InfoRow>
           {Array.isArray(inbound.settings.gateway) && (inbound.settings.gateway as string[]).length > 0 && (
-            <div className="info-row">
-              <dt>{t('pages.inbounds.info.gateway')}</dt>
-              <dd>
+            <InfoRow label={t('pages.inbounds.info.gateway')}>
+              <span className="flex flex-wrap gap-1">
                 {(inbound.settings.gateway as string[]).map((ip, j) => (
-                  <Tag key={`tun-gw-${j}`} color="green" className="value-tag">{ip}</Tag>
+                  <Badge key={`tun-gw-${ j }`} variant="success" className="max-w-full whitespace-normal break-all">{ip}</Badge>
                 ))}
-              </dd>
-            </div>
+              </span>
+            </InfoRow>
           )}
           {Array.isArray(inbound.settings.dns) && (inbound.settings.dns as string[]).length > 0 && (
-            <div className="info-row">
-              <dt>{t('pages.inbounds.info.dns')}</dt>
-              <dd>
+            <InfoRow label={t('pages.inbounds.info.dns')}>
+              <span className="flex flex-wrap gap-1">
                 {(inbound.settings.dns as string[]).map((ip, j) => (
-                  <Tag key={`tun-dns-${j}`} color="green">{ip}</Tag>
+                  <Badge key={`tun-dns-${ j }`} variant="success">{ip}</Badge>
                 ))}
-              </dd>
-            </div>
+              </span>
+            </InfoRow>
           )}
-          <div className="info-row">
-            <dt>{t('pages.inbounds.info.outboundsInterface')}</dt>
-            <dd><Tag color="green">{(inbound.settings.autoOutboundsInterface as string) || 'auto'}</Tag></dd>
-          </div>
+          <InfoRow label={t('pages.inbounds.info.outboundsInterface')}><Badge variant="success">{(inbound.settings.autoOutboundsInterface as string) || 'auto'}</Badge></InfoRow>
           {Array.isArray(inbound.settings.autoSystemRoutingTable) && (inbound.settings.autoSystemRoutingTable as string[]).length > 0 && (
-            <div className="info-row">
-              <dt>{t('pages.inbounds.info.autoSystemRoutes')}</dt>
-              <dd>
+            <InfoRow label={t('pages.inbounds.info.autoSystemRoutes')}>
+              <span className="flex flex-wrap gap-1">
                 {(inbound.settings.autoSystemRoutingTable as string[]).map((cidr, j) => (
-                  <Tag key={`tun-rt-${j}`} color="green">{cidr}</Tag>
+                  <Badge key={`tun-rt-${ j }`} variant="success">{cidr}</Badge>
                 ))}
-              </dd>
-            </div>
+              </span>
+            </InfoRow>
           )}
-        </dl>
+        </div>
       )}
 
       {inbound.protocol === Protocols.TUNNEL && inbound.settings && (
-        <dl className="info-list info-list-block">
-          <div className="info-row">
-            <dt>{t('pages.inbounds.targetAddress')}</dt>
-            <dd><Tag color="green" className="value-tag">{inbound.settings.rewriteAddress as string}</Tag></dd>
-          </div>
-          <div className="info-row">
-            <dt>{t('pages.inbounds.destinationPort')}</dt>
-            <dd><Tag color="green">{inbound.settings.rewritePort as number}</Tag></dd>
-          </div>
-          <div className="info-row">
-            <dt>{t('pages.inbounds.network')}</dt>
-            <dd><Tag color="green">{inbound.settings.allowedNetwork as string}</Tag></dd>
-          </div>
-          <div className="info-row">
-            <dt>{t('pages.inbounds.info.followRedirect')}</dt>
-            <dd>
-              <Tag color={inbound.settings.followRedirect ? 'green' : 'red'}>
-                {inbound.settings.followRedirect ? t('enabled') : t('disabled')}
-              </Tag>
-            </dd>
-          </div>
-        </dl>
+        <div className="mt-2.5 flex flex-col">
+          <InfoRow label={t('pages.inbounds.targetAddress')}><Badge variant="success" className="max-w-full whitespace-normal break-all">{inbound.settings.rewriteAddress as string}</Badge></InfoRow>
+          <InfoRow label={t('pages.inbounds.destinationPort')}><Badge variant="success">{inbound.settings.rewritePort as number}</Badge></InfoRow>
+          <InfoRow label={t('pages.inbounds.network')}><Badge variant="success">{inbound.settings.allowedNetwork as string}</Badge></InfoRow>
+          <InfoRow label={t('pages.inbounds.info.followRedirect')}>
+            <Badge variant={inbound.settings.followRedirect ? 'success' : 'danger'}>
+              {inbound.settings.followRedirect ? t('enabled') : t('disabled')}
+            </Badge>
+          </InfoRow>
+        </div>
       )}
 
       {dbInbound.isMixed && inbound.settings && (
-        <dl className="info-list info-list-block">
-          <div className="info-row">
-            <dt>{t('pages.inbounds.info.auth')}</dt>
-            <dd>
-              <Tag color={inbound.settings.auth === 'password' ? 'green' : 'orange'}>
-                {inbound.settings.auth as string}
-              </Tag>
-            </dd>
-          </div>
-          <div className="info-row">
-            <dt>UDP</dt>
-            <dd>
-              <Tag color={inbound.settings.udp ? 'green' : 'red'}>
-                {inbound.settings.udp ? t('enabled') : t('disabled')}
-              </Tag>
-            </dd>
-          </div>
+        <div className="mt-2.5 flex flex-col">
+          <InfoRow label={t('pages.inbounds.info.auth')}>
+            <Badge variant={inbound.settings.auth === 'password' ? 'success' : 'warning'}>
+              {inbound.settings.auth as string}
+            </Badge>
+          </InfoRow>
+          <InfoRow label="UDP">
+            <Badge variant={inbound.settings.udp ? 'success' : 'danger'}>
+              {inbound.settings.udp ? t('enabled') : t('disabled')}
+            </Badge>
+          </InfoRow>
           {(inbound.settings.ip as string) && (
-            <div className="info-row">
-              <dt>IP</dt>
-              <dd><Tag className="value-tag">{inbound.settings.ip as string}</Tag></dd>
-            </div>
+            <InfoRow label="IP"><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.settings.ip as string}</Badge></InfoRow>
           )}
           {inbound.settings.auth === 'password' && Array.isArray(inbound.settings.accounts) && (
             <>
               {(inbound.settings.accounts as { user: string; pass: string }[]).map((account, idx) => (
-                <div key={idx} className="info-row">
-                  <dt>{t('username')} #{idx + 1}</dt>
-                  <dd className="account-row">
-                    <Tag color="green" className="value-tag">{account.user}</Tag>
-                    <span className="account-sep">:</span>
-                    <Tag className="value-tag">{account.pass}</Tag>
-                    <Tooltip title={t('copy')}>
-                      <Button aria-label={t('copy')} size="small" type="text" icon={<CopyOutlined />} onClick={() => copyText(`${account.user}:${account.pass}`, t)} />
+                <InfoRow key={idx} label={`${ t('username') } #${ idx + 1 }`}>
+                  <span className="flex flex-wrap items-center gap-1.5">
+                    <Badge variant="success" className="max-w-full whitespace-normal break-all">{account.user}</Badge>
+                    <span className="font-semibold opacity-55">:</span>
+                    <Badge variant="neutral" className="max-w-full whitespace-normal break-all">{account.pass}</Badge>
+                    <Tooltip content={t('copy')}>
+                      <IconButton label={t('copy')} onClick={() => copyText(`${ account.user }:${ account.pass }`, t)} icon={<Copy className="h-3.5 w-3.5" aria-hidden />} />
                     </Tooltip>
-                    <Space size={4} wrap className="share-buttons">
-                      <Tooltip title={`socks5://${account.user}:${account.pass}@${dbInbound.address}:${dbInbound.port}`}>
-                        <Button size="small" onClick={() => copyText(`socks5://${account.user}:${account.pass}@${dbInbound.address}:${dbInbound.port}`, t)}>SOCKS5</Button>
+                    <span className="flex flex-wrap gap-1 border-s border-border ps-2">
+                      <Tooltip content={`socks5://${ account.user }:${ account.pass }@${ dbInbound.address }:${ dbInbound.port }`}>
+                        <Button size="sm" variant="secondary" onClick={() => copyText(`socks5://${ account.user }:${ account.pass }@${ dbInbound.address }:${ dbInbound.port }`, t)}>SOCKS5</Button>
                       </Tooltip>
-                      <Tooltip title={`http://${account.user}:${account.pass}@${dbInbound.address}:${dbInbound.port}`}>
-                        <Button size="small" onClick={() => copyText(`http://${account.user}:${account.pass}@${dbInbound.address}:${dbInbound.port}`, t)}>HTTP</Button>
+                      <Tooltip content={`http://${ account.user }:${ account.pass }@${ dbInbound.address }:${ dbInbound.port }`}>
+                        <Button size="sm" variant="secondary" onClick={() => copyText(`http://${ account.user }:${ account.pass }@${ dbInbound.address }:${ dbInbound.port }`, t)}>HTTP</Button>
                       </Tooltip>
-                      <Tooltip title="https://t.me/socks?server=...&port=...&user=...&pass=...">
-                        <Button size="small" onClick={() => copyText(`https://t.me/socks?server=${encodeURIComponent(dbInbound.address)}&port=${dbInbound.port}&user=${encodeURIComponent(account.user)}&pass=${encodeURIComponent(account.pass)}`, t)}>Telegram</Button>
+                      <Tooltip content="https://t.me/socks?server=...&port=...&user=...&pass=...">
+                        <Button size="sm" variant="secondary" onClick={() => copyText(`https://t.me/socks?server=${ encodeURIComponent(dbInbound.address) }&port=${ dbInbound.port }&user=${ encodeURIComponent(account.user) }&pass=${ encodeURIComponent(account.pass) }`, t)}>Telegram</Button>
                       </Tooltip>
-                    </Space>
-                  </dd>
-                </div>
+                    </span>
+                  </span>
+                </InfoRow>
               ))}
             </>
           )}
           {inbound.settings.auth === 'noauth' && (
-            <div className="info-row">
-              <dt>{t('copy')}</dt>
-              <dd>
-                <Space size={4} wrap className="share-buttons">
-                  <Tooltip title={`socks5://${dbInbound.address}:${dbInbound.port}`}>
-                    <Button size="small" onClick={() => copyText(`socks5://${dbInbound.address}:${dbInbound.port}`, t)}>SOCKS5</Button>
-                  </Tooltip>
-                  <Tooltip title={`http://${dbInbound.address}:${dbInbound.port}`}>
-                    <Button size="small" onClick={() => copyText(`http://${dbInbound.address}:${dbInbound.port}`, t)}>HTTP</Button>
-                  </Tooltip>
-                  <Tooltip title="https://t.me/socks?server=...&port=...">
-                    <Button size="small" onClick={() => copyText(`https://t.me/socks?server=${encodeURIComponent(dbInbound.address)}&port=${dbInbound.port}`, t)}>Telegram</Button>
-                  </Tooltip>
-                </Space>
-              </dd>
-            </div>
+            <InfoRow label={t('copy')}>
+              <span className="flex flex-wrap gap-1">
+                <Tooltip content={`socks5://${ dbInbound.address }:${ dbInbound.port }`}>
+                  <Button size="sm" variant="secondary" onClick={() => copyText(`socks5://${ dbInbound.address }:${ dbInbound.port }`, t)}>SOCKS5</Button>
+                </Tooltip>
+                <Tooltip content={`http://${ dbInbound.address }:${ dbInbound.port }`}>
+                  <Button size="sm" variant="secondary" onClick={() => copyText(`http://${ dbInbound.address }:${ dbInbound.port }`, t)}>HTTP</Button>
+                </Tooltip>
+                <Tooltip content="https://t.me/socks?server=...&port=...">
+                  <Button size="sm" variant="secondary" onClick={() => copyText(`https://t.me/socks?server=${ encodeURIComponent(dbInbound.address) }&port=${ dbInbound.port }`, t)}>Telegram</Button>
+                </Tooltip>
+              </span>
+            </InfoRow>
           )}
-        </dl>
+        </div>
       )}
 
       {dbInbound.isHTTP && Array.isArray(inbound.settings?.accounts) && (inbound.settings!.accounts as unknown[]).length > 0 && (
-        <dl className="info-list info-list-block">
+        <div className="mt-2.5 flex flex-col">
           {(inbound.settings!.accounts as { user: string; pass: string }[]).map((account, idx) => (
-            <div key={idx} className="info-row">
-              <dt>{t('username')} #{idx + 1}</dt>
-              <dd className="account-row">
-                <Tag color="green" className="value-tag">{account.user}</Tag>
-                <span className="account-sep">:</span>
-                <Tag className="value-tag">{account.pass}</Tag>
-                <Tooltip title={t('copy')}>
-                  <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(`${account.user}:${account.pass}`, t)} />
+            <InfoRow key={idx} label={`${ t('username') } #${ idx + 1 }`}>
+              <span className="flex flex-wrap items-center gap-1.5">
+                <Badge variant="success" className="max-w-full whitespace-normal break-all">{account.user}</Badge>
+                <span className="font-semibold opacity-55">:</span>
+                <Badge variant="neutral" className="max-w-full whitespace-normal break-all">{account.pass}</Badge>
+                <Tooltip content={t('copy')}>
+                  <IconButton label={t('copy')} onClick={() => copyText(`${ account.user }:${ account.pass }`, t)} icon={<Copy className="h-3.5 w-3.5" aria-hidden />} />
                 </Tooltip>
-              </dd>
-            </div>
+              </span>
+            </InfoRow>
           ))}
-        </dl>
+        </div>
       )}
 
       {dbInbound.isWireguard && inbound.settings && (
         <>
-          <dl className="info-list info-list-block">
-            <div className="info-row">
-              <dt>{t('pages.xray.wireguard.secretKey')}</dt>
-              <dd><Tag className="value-tag">{inbound.settings.secretKey as string}</Tag></dd>
-            </div>
-            <div className="info-row">
-              <dt>{t('pages.xray.wireguard.publicKey')}</dt>
-              <dd><Tag className="value-tag">{inbound.settings.pubKey as string}</Tag></dd>
-            </div>
-            <div className="info-row">
-              <dt>{t('pages.inbounds.info.mtu')}</dt>
-              <dd><Tag>{inbound.settings.mtu as number}</Tag></dd>
-            </div>
-            <div className="info-row">
-              <dt>{t('pages.inbounds.info.noKernelTun')}</dt>
-              <dd>
-                <Tag color={inbound.settings.noKernelTun ? 'green' : 'default'}>
-                  {String(inbound.settings.noKernelTun)}
-                </Tag>
-              </dd>
-            </div>
-          </dl>
+          <div className="mt-2.5 flex flex-col">
+            <InfoRow label={t('pages.xray.wireguard.secretKey')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.settings.secretKey as string}</Badge></InfoRow>
+            <InfoRow label={t('pages.xray.wireguard.publicKey')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{inbound.settings.pubKey as string}</Badge></InfoRow>
+            <InfoRow label={t('pages.inbounds.info.mtu')}><Badge variant="neutral">{inbound.settings.mtu as number}</Badge></InfoRow>
+            <InfoRow label={t('pages.inbounds.info.noKernelTun')}>
+              <Badge variant={inbound.settings.noKernelTun ? 'success' : 'neutral'}>
+                {String(inbound.settings.noKernelTun)}
+              </Badge>
+            </InfoRow>
+          </div>
           {Array.isArray(inbound.settings.peers) && (inbound.settings.peers as { privateKey: string; publicKey: string; psk: string; allowedIPs?: string[]; keepAlive?: number }[]).map((peer, idx) => (
             <Fragment key={idx}>
-              <Divider>{t('pages.inbounds.info.peerNumber', { n: idx + 1 })}</Divider>
-              <dl className="info-list info-list-block">
-                <div className="info-row">
-                  <dt>{t('pages.xray.wireguard.secretKey')}</dt>
-                  <dd><Tag className="value-tag">{peer.privateKey}</Tag></dd>
-                </div>
-                <div className="info-row">
-                  <dt>{t('pages.xray.wireguard.publicKey')}</dt>
-                  <dd><Tag className="value-tag">{peer.publicKey}</Tag></dd>
-                </div>
-                <div className="info-row">
-                  <dt>PSK</dt>
-                  <dd><Tag className="value-tag">{peer.psk}</Tag></dd>
-                </div>
-                <div className="info-row">
-                  <dt>{t('pages.xray.wireguard.allowedIPs')}</dt>
-                  <dd>
+              <SectionDivider>{t('pages.inbounds.info.peerNumber', { n: idx + 1 })}</SectionDivider>
+              <div className="flex flex-col">
+                <InfoRow label={t('pages.xray.wireguard.secretKey')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{peer.privateKey}</Badge></InfoRow>
+                <InfoRow label={t('pages.xray.wireguard.publicKey')}><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{peer.publicKey}</Badge></InfoRow>
+                <InfoRow label="PSK"><Badge variant="neutral" className="max-w-full whitespace-normal break-all">{peer.psk}</Badge></InfoRow>
+                <InfoRow label={t('pages.xray.wireguard.allowedIPs')}>
+                  <span className="flex flex-wrap gap-1">
                     {(peer.allowedIPs || []).map((ip, j) => (
-                      <Tag key={`wg-ip-${idx}-${j}`} className="value-tag">{ip}</Tag>
+                      <Badge key={`wg-ip-${ idx }-${ j }`} variant="neutral" className="max-w-full whitespace-normal break-all">{ip}</Badge>
                     ))}
-                  </dd>
-                </div>
-                <div className="info-row">
-                  <dt>{t('pages.inbounds.info.keepAlive')}</dt>
-                  <dd><Tag>{peer.keepAlive}</Tag></dd>
-                </div>
-              </dl>
+                  </span>
+                </InfoRow>
+                <InfoRow label={t('pages.inbounds.info.keepAlive')}><Badge variant="neutral">{peer.keepAlive}</Badge></InfoRow>
+              </div>
               {wireguardConfigs[idx] && (
-                <div className="link-panel">
-                  <div className="link-panel-header">
-                    <Tag color="green">{t('pages.inbounds.info.peerNumberConfig', { n: idx + 1 })}</Tag>
-                    <Tooltip title={t('copy')}>
-                      <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(wireguardConfigs[idx], t)} />
+                <LinkPanel
+                  title={t('pages.inbounds.info.peerNumberConfig', { n: idx + 1 })}
+                  value={wireguardConfigs[idx]}
+                  copyLabel={t('copy')}
+                  onCopy={() => copyText(wireguardConfigs[idx], t)}
+                  extra={(
+                    <Tooltip content={t('download')}>
+                      <IconButton label={t('download')} onClick={() => downloadText(wireguardConfigs[idx], `peer-${ idx + 1 }.conf`)} icon={<Download className="h-3.5 w-3.5" aria-hidden />} />
                     </Tooltip>
-                    <Tooltip title={t('download')}>
-                      <Button aria-label={t('download')} size="small" icon={<DownloadOutlined />} onClick={() => downloadText(wireguardConfigs[idx], `peer-${idx + 1}.conf`)} />
-                    </Tooltip>
-                  </div>
-                  <code className="link-panel-text">{wireguardConfigs[idx]}</code>
-                </div>
+                  )}
+                />
               )}
               {wireguardLinks[idx] && (
-                <div className="link-panel">
-                  <div className="link-panel-header">
-                    <Tag color="green">Peer {idx + 1} link</Tag>
-                    <Tooltip title={t('copy')}>
-                      <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(wireguardLinks[idx], t)} />
-                    </Tooltip>
-                  </div>
-                  <code className="link-panel-text">{wireguardLinks[idx]}</code>
-                </div>
+                <LinkPanel title={`Peer ${ idx + 1 } link`} value={wireguardLinks[idx]} copyLabel={t('copy')} onCopy={() => copyText(wireguardLinks[idx], t)} />
               )}
             </Fragment>
           ))}
@@ -801,32 +804,26 @@ export default function InboundInfoModal({
 
       {dbInbound.isSS && !inbound.isSSMultiUser && links.length > 0 && (
         <>
-          <Divider>{t('pages.inbounds.copyLink')}</Divider>
+          <SectionDivider>{t('pages.inbounds.copyLink')}</SectionDivider>
           {links.map((link, idx) => (
-            <div key={idx} className="link-panel">
-              <div className="link-panel-header">
-                <Tag color="green">{link.remark || `Link ${idx + 1}`}</Tag>
-                <Tooltip title={t('copy')}>
-                  <Button aria-label={t('copy')} size="small" icon={<CopyOutlined />} onClick={() => copyText(link.link, t)} />
-                </Tooltip>
-              </div>
-              <code className="link-panel-text">{link.link}</code>
-            </div>
+            <LinkPanel key={idx} title={link.remark || `Link ${ idx + 1 }`} value={link.link} copyLabel={t('copy')} onCopy={() => copyText(link.link, t)} />
           ))}
         </>
       )}
     </>
-  );
+    );
 
-  const tabItems = [];
-  if (showClientTab) {
-    tabItems.push({ key: 'client', label: t('pages.inbounds.client'), children: clientTab });
-  }
-  tabItems.push({ key: 'inbound', label: t('pages.xray.rules.inbound'), children: inboundTab });
+    const tabItems: { key: string; label: string }[] = [];
+    if (showClientTab)
+    {
+        tabItems.push({ key: 'client', label: t('pages.inbounds.client') });
+    }
+    tabItems.push({ key: 'inbound', label: t('pages.xray.rules.inbound') });
 
-  return (
-    <Modal open={open} onCancel={onClose} title={t('pages.inbounds.inboundInfo')} footer={null} width={640} destroyOnHidden>
-      <Tabs activeKey={activeTab} onChange={setActiveTab} items={tabItems} />
+    return (
+    <Modal open={open} onClose={onClose} title={t('pages.inbounds.inboundInfo')} size="lg">
+      <Tabs tabs={tabItems} value={activeTab} onChange={setActiveTab} variant="underline" />
+      <div className="pt-4">{activeTab === 'client' && showClientTab ? clientTab : inboundTab}</div>
     </Modal>
-  );
+    );
 }

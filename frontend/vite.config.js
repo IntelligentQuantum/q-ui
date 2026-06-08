@@ -1,5 +1,6 @@
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import fs from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
@@ -180,7 +181,7 @@ function makeBackendProxy(target) {
 }
 
 export default defineConfig({
-  plugins: [esToolkitCompatEsmResolver(), react(), injectBasePathPlugin()],
+  plugins: [esToolkitCompatEsmResolver(), tailwindcss(), react(), injectBasePathPlugin()],
   resolve: {
     alias: {
       '@': path.resolve(__dirname, 'src'),
@@ -221,17 +222,7 @@ export default defineConfig({
       output: {
         manualChunks(id) {
           if (!id.includes('node_modules')) return undefined;
-          if (id.includes('/node_modules/antd/')) return 'vendor-antd';
-          if (id.includes('/@ant-design/icons/') || id.includes('/@ant-design/icons-svg/')) return 'vendor-icons';
-          if (
-            id.includes('/node_modules/@rc-component/')
-            || id.includes('/node_modules/rc-')
-            || id.includes('/@ant-design/cssinjs')
-            || id.includes('/@ant-design/colors')
-            || id.includes('/@ant-design/fast-color')
-            || id.includes('/@ant-design/react-slick')
-            || id.includes('/@ctrl/tinycolor')
-          ) return 'vendor-antd';
+          if (id.includes('/node_modules/qrcode/') || id.includes('/node_modules/pngjs/')) return 'vendor-qrcode';
           if (
             id.includes('/node_modules/react-i18next/')
             || id.includes('/node_modules/i18next/')

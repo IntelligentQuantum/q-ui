@@ -1,14 +1,30 @@
 import { useMemo, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Col, Form, Input, InputNumber, Modal, Popconfirm, Row, Select, Space, Statistic, Switch, Table } from 'antd';
-import type { ColumnsType } from 'antd/es/table';
-import { AppstoreOutlined, CheckCircleOutlined, PlusOutlined, SearchOutlined, StopOutlined } from '@ant-design/icons';
+import { useForm, Controller } from 'react-hook-form';
+import { LayoutGrid, CircleCheck, CircleX, Plus } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
+import { StatCard, SearchInput } from '@/components/ui';
 
 import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
-import { TableSkeleton, ErrorState } from '@/components/ui';
+import {
+    Button,
+    Card,
+    Checkbox,
+    DropdownMenu,
+    Input,
+    Label,
+    Modal,
+    Select,
+    Switch,
+    Table,
+    TableSkeleton,
+    ErrorState,
+    confirm
+} from '@/components/ui';
+import type { Column } from '@/components/ui';
 
 // The panel's axios defaults to form-urlencoded; backend product/order handlers
 // bind JSON, so these mutations must declare a JSON content-type (matches the
@@ -32,261 +48,356 @@ interface InboundOption {
   port: number;
 }
 
-type ProductForm = Omit<Product, 'id' | 'status'> & { status?: string };
+interface ProductForm {
+  name: string;
+  price: number;
+  trafficLimit: number;
+  durationDays: number;
+  inboundIds: number[];
+  status?: string;
+}
+
+// One labelled form row: label, control, optional hint.
+function Field({
+    label,
+    htmlFor,
+    hint,
+    error,
+    children
+}: {
+  label: ReactNode;
+  htmlFor?: string;
+  hint?: ReactNode;
+  error?: string;
+  children: ReactNode;
+})
+{
+    return (
+    <div className="flex flex-col gap-1.5">
+      <Label htmlFor={htmlFor}>{label}</Label>
+      {children}
+      {error ? (
+        <span className="text-xs text-danger">{error}</span>
+      ) : hint ? (
+        <span className="text-xs text-muted-foreground">{hint}</span>
+      ) : null}
+    </div>
+    );
+}
 
 // ProductsPage is the catalog manager for admin + moderator (gated by
 // product.manage on the backend). Create/edit/delete/activate all hit
 // /panel/api/products/*; the backend re-checks the permission on every call.
-export default function ProductsPage() {
-  const { t } = useTranslation();
-  const qc = useQueryClient();
-  const [form] = Form.useForm<ProductForm>();
-  const [editing, setEditing] = useState<Product | null>(null);
-  const [open, setOpen] = useState(false);
+export default function ProductsPage()
+{
+    const { t } = useTranslation();
+    const qc = useQueryClient();
+    const [editing, setEditing] = useState<Product | null>(null);
+    const [open, setOpen] = useState(false);
 
-  const { data: products, isLoading, isError, refetch } = useQuery({
-    queryKey: ['products', 'manage'],
-    queryFn: async () => {
-      const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
-      if (!msg?.success) throw new Error(msg?.msg || '');
-      return (msg.obj as Product[] | null) ?? [];
-    },
-  });
-
-  // Inbound options drive which inbound a purchased config is provisioned on.
-  const { data: inbounds } = useQuery({
-    queryKey: ['inbounds', 'options'],
-    queryFn: async () => {
-      const msg = await HttpUtil.get('/panel/api/inbounds/options', undefined, { silent: true });
-      return (msg.obj as InboundOption[] | null) ?? [];
-    },
-  });
-  const inboundLabel = (id: number) => {
-    const ib = inbounds?.find((i) => i.id === id);
-    if (!ib) return id ? `#${id}` : '—';
-    return `${ib.remark || `#${ib.id}`} · ${ib.protocol}:${ib.port}`;
-  };
-
-  const list = products ?? [];
-  const [q, setQ] = useState('');
-  const [statusFilter, setStatusFilter] = useState<string | undefined>();
-  const stats = useMemo(() => {
-    const active = list.filter((p) => p.status === 'active').length;
-    return { total: list.length, active, inactive: list.length - active };
-  }, [list]);
-
-  const filtered = useMemo(() => {
-    const s = q.trim().toLowerCase();
-    return list.filter((p) => {
-      if (statusFilter && p.status !== statusFilter) return false;
-      if (!s) return true;
-      return p.name.toLowerCase().includes(s);
+    const {
+        register,
+        handleSubmit,
+        reset,
+        control,
+        formState: { errors }
+    } = useForm<ProductForm>({
+        defaultValues: { name: '', price: 0, trafficLimit: 0, durationDays: 0, inboundIds: [], status: 'active' }
     });
-  }, [list, q, statusFilter]);
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] });
+    const { data: products, isLoading, isError, refetch } = useQuery({
+        queryKey: ['products', 'manage'],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });
+            if (!msg?.success)
+            {
+                throw new Error(msg?.msg || '');
+            }
+            return (msg.obj as Product[] | null) ?? [];
+        }
+    });
 
-  const save = useMutation({
-    mutationFn: async (values: ProductForm) => {
-      const url = editing ? `/panel/api/products/${editing.id}` : '/panel/api/products';
-      return HttpUtil.post(url, values, { ...JSON_HEADERS, silent: true });
-    },
-    onSuccess: (msg) => {
-      if (msg.success) {
-        getMessage().success(t('pages.products.saved'));
-        setOpen(false);
+    // Inbound options drive which inbound a purchased config is provisioned on.
+    const { data: inbounds } = useQuery({
+        queryKey: ['inbounds', 'options'],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get('/panel/api/inbounds/options', undefined, { silent: true });
+            return (msg.obj as InboundOption[] | null) ?? [];
+        }
+    });
+    const inboundLabel = (id: number) =>
+    {
+        const ib = inbounds?.find((i) => i.id === id);
+        if (!ib)
+        {
+            return id ? `#${ id }` : '—';
+        }
+        return `${ ib.remark || `#${ ib.id }` } · ${ ib.protocol }:${ ib.port }`;
+    };
+
+    const list = products ?? [];
+    const [q, setQ] = useState('');
+    const [statusFilter, setStatusFilter] = useState<string | undefined>();
+    const stats = useMemo(() =>
+    {
+        const active = list.filter((p) => p.status === 'active').length;
+        return { total: list.length, active, inactive: list.length - active };
+    }, [list]);
+
+    const filtered = useMemo(() =>
+    {
+        const s = q.trim().toLowerCase();
+        return list.filter((p) =>
+        {
+            if (statusFilter && p.status !== statusFilter)
+            {
+                return false;
+            }
+            if (!s)
+            {
+                return true;
+            }
+            return p.name.toLowerCase().includes(s);
+        });
+    }, [list, q, statusFilter]);
+
+    const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] });
+
+    const save = useMutation({
+        mutationFn: async (values: ProductForm) =>
+        {
+            const url = editing ? `/panel/api/products/${ editing.id }` : '/panel/api/products';
+            return HttpUtil.post(url, values, { ...JSON_HEADERS, silent: true });
+        },
+        onSuccess: (msg) =>
+        {
+            if (msg.success)
+            {
+                getMessage().success(t('pages.products.saved'));
+                setOpen(false);
+                setEditing(null);
+                reset();
+                invalidate();
+            }
+            else
+            {
+                getMessage().error(msg.msg || t('somethingWentWrong'));
+            }
+        }
+    });
+
+    const remove = async (id: number) =>
+    {
+        const ok = await confirm({ title: t('pages.products.confirmDelete'), danger: true });
+        if (!ok)
+        {
+            return;
+        }
+        const msg = await HttpUtil.post(`/panel/api/products/${ id }/del`, undefined, { silent: true });
+        if (msg.success)
+        {
+            getMessage().success(t('pages.products.deleted'));
+            invalidate();
+        }
+        else
+        {
+            getMessage().error(msg.msg || t('somethingWentWrong'));
+        }
+    };
+
+    const toggle = async (p: Product) =>
+    {
+        const msg = await HttpUtil.post(`/panel/api/products/${ p.id }/status`, { active: p.status !== 'active' }, { ...JSON_HEADERS, silent: true });
+        if (msg.success)
+        {
+            getMessage().success(t('pages.products.statusChanged'));
+            invalidate();
+        }
+        else
+        {
+            getMessage().error(msg.msg || t('somethingWentWrong'));
+        }
+    };
+
+    const openCreate = () =>
+    {
         setEditing(null);
-        form.resetFields();
-        invalidate();
-      } else {
-        getMessage().error(msg.msg || t('somethingWentWrong'));
+        reset({ name: '', price: 0, trafficLimit: 0, durationDays: 0, inboundIds: [], status: 'active' });
+        setOpen(true);
+    };
+
+    const openEdit = (p: Product) =>
+    {
+        setEditing(p);
+        reset({
+            name: p.name,
+            price: p.price,
+            trafficLimit: p.trafficLimit,
+            durationDays: p.durationDays,
+            inboundIds: p.inboundIds ?? [],
+            status: p.status
+        });
+        setOpen(true);
+    };
+
+    const columns: Column<Product>[] = [
+        { key: 'name', header: t('pages.products.name'), accessor: (p) => p.name },
+        { key: 'price', header: t('pages.products.price'), cell: (p) => p.price },
+        { key: 'durationDays', header: t('pages.products.durationDays'), hideBelow: 'sm', cell: (p) => p.durationDays },
+        {
+            key: 'inbound',
+            header: t('pages.products.inbound'),
+            hideBelow: 'md',
+            cell: (p) => (p.inboundIds && p.inboundIds.length ? p.inboundIds.map(inboundLabel).join(', ') : '—')
+        },
+        {
+            key: 'status',
+            header: t('pages.products.status'),
+            cell: (p) => <Switch checked={p.status === 'active'} onCheckedChange={() => toggle(p)} aria-label={t('pages.products.status')} />
+        },
+        {
+            key: 'actions',
+            header: '',
+            align: 'end',
+            width: 64,
+            cell: (p) => (
+        <DropdownMenu
+          align="end"
+          items={[
+              { key: 'edit', label: t('edit'), onSelect: () => openEdit(p) },
+              { key: 'delete', label: t('delete'), danger: true, onSelect: () => remove(p.id) }
+          ]}
+        />
+            )
+        }
+    ];
+
+    const submit = handleSubmit((v) => save.mutate(v));
+
+    return (
+    <PageShell
+      name="products-page"
+      actions={
+        <Button onClick={openCreate}>
+          <Plus className="h-4 w-4" aria-hidden />
+          {t('pages.products.create')}
+        </Button>
       }
-    },
-  });
+    >
+      <div className="flex flex-col gap-4">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <StatCard icon={<LayoutGrid className="h-5 w-5" aria-hidden />} label={t('pages.products.total')} value={stats.total} />
+          <StatCard icon={<CircleCheck className="h-5 w-5 text-success" aria-hidden />} label={t('pages.products.activeCount')} value={stats.active} />
+          <StatCard icon={<CircleX className="h-5 w-5 text-danger" aria-hidden />} label={t('pages.products.inactiveCount')} value={stats.inactive} />
+        </div>
 
-  const remove = async (id: number) => {
-    const msg = await HttpUtil.post(`/panel/api/products/${id}/del`, undefined, { silent: true });
-    if (msg.success) {
-      getMessage().success(t('pages.products.deleted'));
-      invalidate();
-    } else {
-      getMessage().error(msg.msg || t('somethingWentWrong'));
-    }
-  };
+        <Card className="p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            <div className="flex flex-wrap items-center gap-2">
+              <Select
+                className="min-w-[130px]"
+                placeholder={t('pages.products.status')}
+                value={statusFilter ?? ''}
+                onChange={(v) => setStatusFilter(v || undefined)}
+                options={[
+                    { value: '', label: t('all') },
+                    { value: 'active', label: t('pages.products.statusActive') },
+                    { value: 'inactive', label: t('pages.products.statusInactive') }
+                ]}
+              />
+              <SearchInput
+                className="w-full sm:w-52"
+                aria-label={t('search')}
+                placeholder={t('search')}
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+              />
+            </div>
+          </div>
 
-  const toggle = async (p: Product) => {
-    const msg = await HttpUtil.post(`/panel/api/products/${p.id}/status`, { active: p.status !== 'active' }, { ...JSON_HEADERS, silent: true });
-    if (msg.success) {
-      getMessage().success(t('pages.products.statusChanged'));
-      invalidate();
-    } else {
-      getMessage().error(msg.msg || t('somethingWentWrong'));
-    }
-  };
-
-  const openCreate = () => {
-    setEditing(null);
-    form.resetFields();
-    form.setFieldsValue({ price: 0, trafficLimit: 0, durationDays: 0, status: 'active' });
-    setOpen(true);
-  };
-
-  const openEdit = (p: Product) => {
-    setEditing(p);
-    form.setFieldsValue(p);
-    setOpen(true);
-  };
-
-  const columns: ColumnsType<Product> = [
-    { title: t('pages.products.name'), dataIndex: 'name' },
-    { title: t('pages.products.price'), dataIndex: 'price' },
-    { title: t('pages.products.durationDays'), dataIndex: 'durationDays' },
-    {
-      title: t('pages.products.inbound'),
-      dataIndex: 'inboundIds',
-      render: (ids: number[]) => (ids && ids.length ? ids.map(inboundLabel).join(', ') : '—'),
-    },
-    {
-      title: t('pages.products.status'),
-      dataIndex: 'status',
-      render: (s: string, p) => <Switch checked={s === 'active'} onChange={() => toggle(p)} />,
-    },
-    {
-      title: '',
-      key: 'actions',
-      width: 160,
-      render: (_, p) => (
-        <Space>
-          <Button size="small" onClick={() => openEdit(p)}>
-            {t('edit')}
-          </Button>
-          <Popconfirm title={t('pages.products.confirmDelete')} onConfirm={() => remove(p.id)}>
-            <Button size="small" danger>
-              {t('delete')}
-            </Button>
-          </Popconfirm>
-        </Space>
-      ),
-    },
-  ];
-
-  return (
-    <PageShell name="products-page">
-      <>
-        <Row gutter={[16, 12]}>
-          <Col span={24}>
-            <Card size="small" hoverable className="summary-card">
-              <Row gutter={[16, 12]}>
-                <Col xs={8}>
-                  <Statistic title={t('pages.products.total')} value={stats.total} prefix={<AppstoreOutlined />} />
-                </Col>
-                <Col xs={8}>
-                  <Statistic
-                    title={t('pages.products.activeCount')}
-                    value={stats.active}
-                    prefix={<CheckCircleOutlined style={{ color: 'var(--ant-color-success)' }} />}
-                  />
-                </Col>
-                <Col xs={8}>
-                  <Statistic
-                    title={t('pages.products.inactiveCount')}
-                    value={stats.inactive}
-                    prefix={<StopOutlined style={{ color: 'var(--ant-color-error)' }} />}
-                  />
-                </Col>
-              </Row>
-            </Card>
-          </Col>
-
-          <Col span={24}>
-            <Card
-              size="small"
-              hoverable
-              title={
-                <Button type="primary" icon={<PlusOutlined />} onClick={openCreate}>
-                  {t('pages.products.create')}
-                </Button>
-              }
-              extra={
-                <Space wrap>
-                  <Select
-                    allowClear
-                    size="small"
-                    style={{ minWidth: 130 }}
-                    placeholder={t('pages.products.status')}
-                    value={statusFilter}
-                    onChange={setStatusFilter}
-                    options={[
-                      { value: 'active', label: t('pages.products.statusActive') },
-                      { value: 'inactive', label: t('pages.products.statusInactive') },
-                    ]}
-                  />
-                  <Input
-                    allowClear
-                    size="small"
-                    style={{ width: 200 }}
-                    prefix={<SearchOutlined />}
-                    aria-label={t('search')}
-                    placeholder={t('search')}
-                    value={q}
-                    onChange={(e) => setQ(e.target.value)}
-                  />
-                </Space>
-              }
-            >
-              {isLoading ? (
-                <TableSkeleton rows={6} />
-              ) : isError ? (
-                <ErrorState onRetry={() => refetch()} />
-              ) : (
-                <Table
-                  rowKey="id"
-                  size="small"
-                  columns={columns}
-                  dataSource={filtered}
-                  scroll={{ x: 'max-content' }}
-                  pagination={{ pageSize: 10, showSizeChanger: true, hideOnSinglePage: true }}
-                />
-              )}
-            </Card>
-          </Col>
-        </Row>
-      </>
+          {isLoading ? (
+            <TableSkeleton rows={6} />
+          ) : isError ? (
+            <ErrorState onRetry={() => refetch()} />
+          ) : (
+            <Table rowKey={(p) => String(p.id)} columns={columns} data={filtered} empty={t('noData')} />
+          )}
+        </Card>
+      </div>
 
       <Modal
         open={open}
+        onClose={() => setOpen(false)}
         title={editing ? t('pages.products.edit') : t('pages.products.create')}
-        onCancel={() => setOpen(false)}
-        onOk={() => form.submit()}
-        confirmLoading={save.isPending}
-        destroyOnClose
+        footer={
+          <>
+            <Button variant="secondary" onClick={() => setOpen(false)}>
+              {t('cancel')}
+            </Button>
+            <Button onClick={submit} loading={save.isPending}>
+              {t('save')}
+            </Button>
+          </>
+        }
       >
-        <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
-          <Form.Item name="name" label={t('pages.products.name')} rules={[{ required: true }]}>
-            <Input />
-          </Form.Item>
-          <Form.Item name="price" label={t('pages.products.price')} rules={[{ required: true }]}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="trafficLimit" label={t('pages.products.trafficLimitBytes')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="durationDays" label={t('pages.products.durationDays')}>
-            <InputNumber min={0} style={{ width: '100%' }} />
-          </Form.Item>
-          <Form.Item name="inboundIds" label={t('pages.products.inbound')} tooltip={t('pages.products.inboundHint')}>
-            <Select
-              mode="multiple"
-              allowClear
-              placeholder={t('pages.products.inboundNone')}
-              options={(inbounds ?? []).map((i) => ({
-                value: i.id,
-                label: `${i.remark || `#${i.id}`} · ${i.protocol}:${i.port}`,
-              }))}
+        <form noValidate onSubmit={submit} className="flex flex-col gap-4">
+          <Field label={t('pages.products.name')} htmlFor="prod-name" error={errors.name?.message}>
+            <Input
+              id="prod-name"
+              aria-invalid={!!errors.name}
+              {...register('name', { required: t('pages.settings.security.apiTokenNameRequired') })}
             />
-          </Form.Item>
-        </Form>
+          </Field>
+
+          <Field label={t('pages.products.price')} htmlFor="prod-price" error={errors.price?.message}>
+            <Input
+              id="prod-price"
+              type="number"
+              min={0}
+              aria-invalid={!!errors.price}
+              {...register('price', { required: true, valueAsNumber: true, min: 0 })}
+            />
+          </Field>
+
+          <Field label={t('pages.products.trafficLimitBytes')} htmlFor="prod-traffic">
+            <Input id="prod-traffic" type="number" min={0} {...register('trafficLimit', { valueAsNumber: true, min: 0 })} />
+          </Field>
+
+          <Field label={t('pages.products.durationDays')} htmlFor="prod-duration">
+            <Input id="prod-duration" type="number" min={0} {...register('durationDays', { valueAsNumber: true, min: 0 })} />
+          </Field>
+
+          <Field label={t('pages.products.inbound')} hint={t('pages.products.inboundHint')}>
+            <Controller
+              control={control}
+              name="inboundIds"
+              render={({ field }) =>
+              {
+                  const selected = field.value ?? [];
+                  const toggleId = (id: number, checked: boolean) =>
+                      field.onChange(checked ? [...selected.filter((x) => x !== id), id] : selected.filter((x) => x !== id));
+                  return (inbounds ?? []).length === 0 ? (
+                  <p className="text-sm text-muted-foreground">{t('pages.products.inboundNone')}</p>
+                  ) : (
+                  <div className="flex max-h-44 flex-col gap-2 overflow-y-auto rounded-md border border-border p-3">
+                    {(inbounds ?? []).map((i) => (
+                      <Checkbox
+                        key={i.id}
+                        checked={selected.includes(i.id)}
+                        onChange={(e) => toggleId(i.id, e.target.checked)}
+                      >
+                        {`${ i.remark || `#${ i.id }` } · ${ i.protocol }:${ i.port }`}
+                      </Checkbox>
+                    ))}
+                  </div>
+                  );
+              }}
+            />
+          </Field>
+        </form>
       </Modal>
     </PageShell>
-  );
+    );
 }

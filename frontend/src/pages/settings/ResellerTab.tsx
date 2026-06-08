@@ -1,8 +1,7 @@
 import { useTranslation } from 'react-i18next';
-import { Input, InputNumber, Select, Space, Switch } from 'antd';
 
 import type { AllSetting } from '@/models/setting';
-import { SettingListItem } from '@/components/ui';
+import { Input, Select, SettingListItem, Switch } from '@/components/ui';
 
 interface ResellerTabProps {
   allSetting: AllSetting;
@@ -25,39 +24,45 @@ interface RoleCostRowProps {
 
 // RoleCostRow renders one cost with a separate input per chargeable role
 // (reseller / member). Admins are always free, so they have no input.
-function RoleCostRow({ title, description, resellerKey, memberKey, allSetting, updateSetting }: RoleCostRowProps) {
-  const { t } = useTranslation();
-  return (
+function RoleCostRow({ title, description, resellerKey, memberKey, allSetting, updateSetting }: RoleCostRowProps)
+{
+    const { t } = useTranslation();
+    return (
     <SettingListItem paddings="small" title={title} description={description}>
-      <Space size="large" wrap>
-        <Space>
-          <span style={{ opacity: 0.7 }}>{t('pages.settings.security.roleReseller')}</span>
-          <InputNumber
+      <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{t('pages.settings.security.roleReseller')}</span>
+          <Input
+            type="number"
             min={0}
+            className="w-28"
             value={allSetting[resellerKey] as number}
-            onChange={(value) => updateSetting({ [resellerKey]: Number(value) || 0 } as Partial<AllSetting>)}
+            onChange={(e) => updateSetting({ [resellerKey]: Number(e.target.value) || 0 } as Partial<AllSetting>)}
           />
-        </Space>
-        <Space>
-          <span style={{ opacity: 0.7 }}>{t('pages.settings.security.roleMember')}</span>
-          <InputNumber
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-sm text-muted-foreground">{t('pages.settings.security.roleMember')}</span>
+          <Input
+            type="number"
             min={0}
+            className="w-28"
             value={allSetting[memberKey] as number}
-            onChange={(value) => updateSetting({ [memberKey]: Number(value) || 0 } as Partial<AllSetting>)}
+            onChange={(e) => updateSetting({ [memberKey]: Number(e.target.value) || 0 } as Partial<AllSetting>)}
           />
-        </Space>
-      </Space>
+        </div>
+      </div>
     </SettingListItem>
-  );
+    );
 }
 
 // ResellerTab groups the reseller economy controls — what creating a client and
 // resetting its traffic costs, priced per role (admins are always free), and the
 // ZarinPal gateway used to top up balances.
-export default function ResellerTab({ allSetting, updateSetting }: ResellerTabProps) {
-  const { t } = useTranslation();
+export default function ResellerTab({ allSetting, updateSetting }: ResellerTabProps)
+{
+    const { t } = useTranslation();
 
-  return (
+    return (
     <>
       <RoleCostRow
         title={t('pages.settings.security.clientCost')}
@@ -102,7 +107,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       >
         <Switch
           checked={allSetting.zarinpalEnable}
-          onChange={(checked) => updateSetting({ zarinpalEnable: checked })}
+          onCheckedChange={(checked) => updateSetting({ zarinpalEnable: checked })}
         />
       </SettingListItem>
 
@@ -112,7 +117,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
         description={t('pages.settings.security.zarinpalMerchantIdDesc')}
       >
         <Input
-          style={{ maxWidth: 340 }}
+          className="max-w-[340px]"
           value={allSetting.zarinpalMerchantId}
           onChange={(e) => updateSetting({ zarinpalMerchantId: e.target.value })}
           placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
@@ -125,12 +130,12 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
         description={t('pages.settings.security.zarinpalCurrencyDesc')}
       >
         <Select
-          style={{ width: 140 }}
+          className="w-36"
           value={allSetting.zarinpalCurrency || 'IRT'}
           onChange={(value) => updateSetting({ zarinpalCurrency: value })}
           options={[
-            { value: 'IRT', label: 'IRT (Toman)' },
-            { value: 'IRR', label: 'IRR (Rial)' },
+              { value: 'IRT', label: 'IRT (Toman)' },
+              { value: 'IRR', label: 'IRR (Rial)' }
           ]}
         />
       </SettingListItem>
@@ -142,9 +147,9 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       >
         <Switch
           checked={allSetting.zarinpalSandbox}
-          onChange={(checked) => updateSetting({ zarinpalSandbox: checked })}
+          onCheckedChange={(checked) => updateSetting({ zarinpalSandbox: checked })}
         />
       </SettingListItem>
     </>
-  );
+    );
 }

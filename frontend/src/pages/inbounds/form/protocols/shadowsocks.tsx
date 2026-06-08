@@ -1,67 +1,65 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, Select, Space, Switch, type FormInstance } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { RefreshCw } from 'lucide-react';
 
 import { RandomUtil } from '@/utils';
 import { SSMethodSchema } from '@/schemas/protocols/shared/shadowsocks';
-import type { InboundFormValues } from '@/schemas/forms/inbound-form';
+import { Button, Input, Select } from '@/components/ui';
+import { RHFSelect, RHFSwitch, RHFField, Field, useFormContext } from '@/components/form/rhf';
 
 interface ShadowsocksFieldsProps {
-  form: FormInstance<InboundFormValues>;
   isSSWith2022: boolean;
 }
 
-export default function ShadowsocksFields({ form, isSSWith2022 }: ShadowsocksFieldsProps) {
-  const { t } = useTranslation();
-  return (
+export default function ShadowsocksFields({ isSSWith2022 }: ShadowsocksFieldsProps)
+{
+    const { t } = useTranslation();
+    const { setValue, getValues, register } = useFormContext();
+    return (
     <>
-      <Form.Item name={['settings', 'method']} label={t('pages.inbounds.form.encryptionMethod')}>
-        <Select
-          onChange={(v) => {
-            form.setFieldValue(
-              ['settings', 'password'],
-              RandomUtil.randomShadowsocksPassword(v as string),
-            );
-          }}
-          options={SSMethodSchema.options.map((m) => ({ value: m, label: m }))}
-        />
-      </Form.Item>
+      <RHFField
+        name="settings.method"
+        label={t('pages.inbounds.form.encryptionMethod')}
+        render={({ value, onChange }) => (
+          <Select
+            value={(value as string) ?? ''}
+            onChange={(v) =>
+            {
+                onChange(v);
+                setValue('settings.password', RandomUtil.randomShadowsocksPassword(v));
+            }}
+            options={SSMethodSchema.options.map((m) => ({ value: m, label: m }))}
+          />
+        )}
+      />
       {isSSWith2022 && (
-        <Form.Item label={t('password')}>
-          <Space.Compact block>
-            <Form.Item name={['settings', 'password']} noStyle>
-              <Input style={{ width: 'calc(100% - 32px)' }} />
-            </Form.Item>
-            <Button aria-label={t('regenerate')}
-              icon={<ReloadOutlined />}
-              onClick={() => {
-                const method = form.getFieldValue(['settings', 'method']);
-                form.setFieldValue(
-                  ['settings', 'password'],
-                  RandomUtil.randomShadowsocksPassword(method as string),
-                );
+        <Field name="settings.password" label={t('password')}>
+          <div className="flex gap-2">
+            <Input className="flex-1" {...register('settings.password')} />
+            <Button
+              variant="secondary"
+              size="icon"
+              aria-label={t('regenerate')}
+              onClick={() =>
+              {
+                  const method = getValues('settings.method');
+                  setValue('settings.password', RandomUtil.randomShadowsocksPassword(method as string));
               }}
-            />
-          </Space.Compact>
-        </Form.Item>
+            >
+              <RefreshCw className="h-4 w-4" />
+            </Button>
+          </div>
+        </Field>
       )}
-      <Form.Item name={['settings', 'network']} label={t('pages.inbounds.network')}>
-        <Select
-          style={{ width: 120 }}
-          options={[
+      <RHFSelect
+        name="settings.network"
+        label={t('pages.inbounds.network')}
+        options={[
             { value: 'tcp,udp', label: 'TCP, UDP' },
             { value: 'tcp', label: 'TCP' },
-            { value: 'udp', label: 'UDP' },
-          ]}
-        />
-      </Form.Item>
-      <Form.Item
-        name={['settings', 'ivCheck']}
-        label="ivCheck"
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
+            { value: 'udp', label: 'UDP' }
+        ]}
+      />
+      <RHFSwitch name="settings.ivCheck" label="ivCheck" />
     </>
-  );
+    );
 }

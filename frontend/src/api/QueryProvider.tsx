@@ -7,13 +7,14 @@ import { queryClient } from '@/queryClient';
 // is guaranteed to be excluded from the production bundle (not merely dead-code
 // behind a flag).
 const ReactQueryDevtools = import.meta.env.DEV
-  ? lazy(() =>
-      import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools })),
+    ? lazy(() =>
+        import('@tanstack/react-query-devtools').then((m) => ({ default: m.ReactQueryDevtools }))
     )
-  : null;
+    : null;
 
-export function QueryProvider({ children }: { children: ReactNode }) {
-  return (
+export function QueryProvider({ children }: { children: ReactNode })
+{
+    return (
     <QueryClientProvider client={queryClient}>
       {children}
       {ReactQueryDevtools && (
@@ -22,5 +23,5 @@ export function QueryProvider({ children }: { children: ReactNode }) {
         </Suspense>
       )}
     </QueryClientProvider>
-  );
+    );
 }

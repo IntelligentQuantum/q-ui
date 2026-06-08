@@ -20,43 +20,49 @@ const OrdersPage = lazy(() => import('@/pages/orders/OrdersPage'));
 const ProductsPage = lazy(() => import('@/pages/products/ProductsPage'));
 const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
 const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
+const ThemePreviewPage = lazy(() => import('@/pages/theme-preview/ThemePreviewPage'));
 
-function withSuspense(node: React.ReactNode) {
-  return <Suspense fallback={null}>{node}</Suspense>;
+function withSuspense(node: React.ReactNode)
+{
+    return <Suspense fallback={null}>{node}</Suspense>;
 }
 
 const routes: RouteObject[] = [
-  {
-    path: '/',
-    element: <PanelLayout />,
-    children: [
-      { index: true, element: withSuspense(<IndexPage />) },
-      { path: 'inbounds', element: withSuspense(<InboundsPage />) },
-      { path: 'clients', element: withSuspense(<ClientsPage />) },
-      { path: 'groups', element: withSuspense(<GroupsPage />) },
-      { path: 'users', element: withSuspense(<UsersPage />) },
-      { path: 'reports', element: withSuspense(<ReportsPage />) },
-      { path: 'profile', element: withSuspense(<ProfilePage />) },
-      { path: 'billing', element: withSuspense(<BillingPage />) },
-      { path: 'nodes', element: withSuspense(<NodesPage />) },
-      { path: 'settings', element: withSuspense(<SettingsPage />) },
-      { path: 'xray', element: withSuspense(<XrayPage />) },
-      { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
-      { path: 'store', element: withSuspense(<StorePage />) },
-      { path: 'orders', element: withSuspense(<OrdersPage />) },
-      { path: 'products', element: withSuspense(<ProductsPage />) },
-      { path: 'customers', element: withSuspense(<CustomersPage />) },
-      { path: 'services', element: withSuspense(<ServicesPage />) },
-    ],
-  },
+    {
+        path: '/',
+        element: <PanelLayout />,
+        children: [
+            { index: true, element: withSuspense(<IndexPage />) },
+            { path: 'inbounds', element: withSuspense(<InboundsPage />) },
+            { path: 'clients', element: withSuspense(<ClientsPage />) },
+            { path: 'groups', element: withSuspense(<GroupsPage />) },
+            { path: 'users', element: withSuspense(<UsersPage />) },
+            { path: 'reports', element: withSuspense(<ReportsPage />) },
+            { path: 'profile', element: withSuspense(<ProfilePage />) },
+            { path: 'billing', element: withSuspense(<BillingPage />) },
+            { path: 'nodes', element: withSuspense(<NodesPage />) },
+            { path: 'settings', element: withSuspense(<SettingsPage />) },
+            { path: 'xray', element: withSuspense(<XrayPage />) },
+            { path: 'api-docs', element: withSuspense(<ApiDocsPage />) },
+            { path: 'store', element: withSuspense(<StorePage />) },
+            { path: 'orders', element: withSuspense(<OrdersPage />) },
+            { path: 'products', element: withSuspense(<ProductsPage />) },
+            { path: 'customers', element: withSuspense(<CustomersPage />) },
+            { path: 'services', element: withSuspense(<ServicesPage />) }
+        ]
+    },
+    // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it
+    // renders without the auth/RBAC gate. Dev/review aid for the theme rebuild.
+    { path: 'theme-preview', element: withSuspense(<ThemePreviewPage />) }
 ];
 
-function computeBasename() {
-  const raw = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '/';
-  const trimmed = raw.replace(/\/+$/, '');
-  return `${trimmed}/panel`;
+function computeBasename()
+{
+    const raw = (typeof window !== 'undefined' && window.Q_UI_BASE_PATH) || '/';
+    const trimmed = raw.replace(/\/+$/, '');
+    return `${ trimmed }/panel`;
 }
 
 export const router = createBrowserRouter(routes, {
-  basename: computeBasename(),
+    basename: computeBasename()
 });

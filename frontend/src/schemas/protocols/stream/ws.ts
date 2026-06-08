@@ -8,10 +8,10 @@ export const WsHeaderMapSchema = z.record(z.string(), z.string());
 export type WsHeaderMap = z.infer<typeof WsHeaderMapSchema>;
 
 export const WsStreamSettingsSchema = z.object({
-  acceptProxyProtocol: z.boolean().default(false),
-  path: z.string().default('/'),
-  host: z.string().default(''),
-  headers: WsHeaderMapSchema.default({}),
-  heartbeatPeriod: z.number().int().min(0).default(0),
+    acceptProxyProtocol: z.boolean().default(false),
+    path: z.string().default('/'),
+    host: z.string().default(''),
+    headers: WsHeaderMapSchema.default({}),
+    heartbeatPeriod: z.number().int().min(0).default(0)
 });
 export type WsStreamSettings = z.infer<typeof WsStreamSettingsSchema>;

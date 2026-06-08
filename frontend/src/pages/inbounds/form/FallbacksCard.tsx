@@ -1,8 +1,8 @@
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Empty, Input, InputNumber, Select, Space } from 'antd';
-import { ArrowDownOutlined, ArrowUpOutlined, DeleteOutlined, PlusOutlined } from '@ant-design/icons';
+import { ArrowUp, ArrowDown, Trash2, Plus } from 'lucide-react';
 
-import { InputAddon } from '@/components/ui';
+import { Button, Card, CardContent, CardHeader, CardTitle, Input, Select } from '@/components/ui';
 import type { FallbackRow } from '@/schemas/forms/inbound-form';
 
 interface FallbacksCardProps {
@@ -15,110 +15,115 @@ interface FallbacksCardProps {
   addAllFallbacks: () => void;
 }
 
+function Addon({ label, children }: { label: ReactNode; children: ReactNode })
+{
+    return (
+    <div className="flex items-center">
+      <span className="grid h-9 shrink-0 place-items-center rounded-s-md border border-e-0 border-border bg-surface-sunken px-2.5 text-xs text-muted-foreground">
+        {label}
+      </span>
+      {children}
+    </div>
+    );
+}
+
 export default function FallbacksCard({
-  fallbacks,
-  fallbackChildOptions,
-  addFallback,
-  updateFallback,
-  removeFallback,
-  moveFallback,
-  addAllFallbacks,
-}: FallbacksCardProps) {
-  const { t } = useTranslation();
-  return (
-    <Card size="small" className="mt-12" title={t('pages.inbounds.fallbacks.title') || 'Fallbacks'}>
-      {fallbacks.length === 0 && (
-        <Empty
-          description={t('pages.inbounds.fallbacks.empty') || 'No fallbacks yet'}
-          styles={{ image: { height: 40 } }}
-          style={{ margin: '8px 0 12px' }}
-        />
-      )}
-      {fallbacks.map((record, idx) => (
-        <div
-          key={record.rowKey}
-          style={{ border: '1px solid var(--app-border-tertiary)', borderRadius: 6, padding: '10px 12px', marginBottom: 8 }}
-        >
-          <Space.Compact block style={{ marginBottom: 6 }}>
-            <Select
-              value={record.childId}
-              options={fallbackChildOptions}
-              placeholder={t('pages.inbounds.fallbacks.pickInbound') || 'Pick an inbound'}
-              allowClear
-              showSearch={{
-                filterOption: (input, option) =>
-                  ((option?.label as string) || '').toLowerCase().includes(input.toLowerCase()),
-              }}
-              style={{ width: '100%' }}
-              onChange={(v) => updateFallback(record.rowKey, { childId: v ?? null })}
-            />
-            <Button
-              disabled={idx === 0}
-              onClick={() => moveFallback(idx, -1)}
-              title={t('pages.inbounds.form.moveUp')}
-            >
-              <ArrowUpOutlined />
-            </Button>
-            <Button
-              disabled={idx === fallbacks.length - 1}
-              onClick={() => moveFallback(idx, 1)}
-              title={t('pages.inbounds.form.moveDown')}
-            >
-              <ArrowDownOutlined />
-            </Button>
-            <Button danger onClick={() => removeFallback(idx)}>
-              <DeleteOutlined />
-            </Button>
-          </Space.Compact>
-          <Space.Compact block>
-            <InputAddon>SNI</InputAddon>
-            <Input
-              placeholder={t('pages.inbounds.fallbacks.matchAny') || 'any'}
-              value={record.name}
-              onChange={(e) => updateFallback(record.rowKey, { name: e.target.value })}
-            />
-            <InputAddon>ALPN</InputAddon>
-            <Input
-              placeholder={t('pages.inbounds.fallbacks.matchAny') || 'any'}
-              value={record.alpn}
-              onChange={(e) => updateFallback(record.rowKey, { alpn: e.target.value })}
-            />
-            <InputAddon>Path</InputAddon>
-            <Input
-              placeholder="/"
-              value={record.path}
-              onChange={(e) => updateFallback(record.rowKey, { path: e.target.value })}
-            />
-            <InputAddon>Dest</InputAddon>
-            <Input
-              placeholder={t('pages.inbounds.fallbacks.destPlaceholder') || 'auto'}
-              value={record.dest}
-              onChange={(e) => updateFallback(record.rowKey, { dest: e.target.value })}
-            />
-            <InputAddon>xver</InputAddon>
-            <InputNumber
-              min={0}
-              max={2}
-              value={record.xver}
-              onChange={(v) => updateFallback(record.rowKey, { xver: Number(v) || 0 })}
-            />
-          </Space.Compact>
+    fallbacks,
+    fallbackChildOptions,
+    addFallback,
+    updateFallback,
+    removeFallback,
+    moveFallback,
+    addAllFallbacks
+}: FallbacksCardProps)
+{
+    const { t } = useTranslation();
+    const any = t('pages.inbounds.fallbacks.matchAny') || 'any';
+    const pick = t('pages.inbounds.fallbacks.pickInbound') || 'Pick an inbound';
+    return (
+    <Card>
+      <CardHeader>
+        <CardTitle>{t('pages.inbounds.fallbacks.title') || 'Fallbacks'}</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-3">
+        {fallbacks.length === 0 && (
+          <div className="rounded-lg border border-dashed border-border py-6 text-center text-sm text-muted-foreground">
+            {t('pages.inbounds.fallbacks.empty') || 'No fallbacks yet'}
+          </div>
+        )}
+        {fallbacks.map((record, idx) => (
+          <div key={record.rowKey} className="flex flex-col gap-2 rounded-lg border border-border p-3">
+            <div className="flex items-center gap-2">
+              <div className="flex-1">
+                <Select
+                  value={record.childId == null ? '' : String(record.childId)}
+                  placeholder={pick}
+                  onChange={(v) => updateFallback(record.rowKey, { childId: v === '' ? null : Number(v) })}
+                  options={[{ value: '', label: pick }, ...fallbackChildOptions.map((o) => ({ value: String(o.value), label: o.label }))]}
+                />
+              </div>
+              <Button variant="secondary" size="icon" disabled={idx === 0} aria-label={t('pages.inbounds.form.moveUp')} onClick={() => moveFallback(idx, -1)}>
+                <ArrowUp className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                disabled={idx === fallbacks.length - 1}
+                aria-label={t('pages.inbounds.form.moveDown')}
+                onClick={() => moveFallback(idx, 1)}
+              >
+                <ArrowDown className="h-4 w-4" />
+              </Button>
+              <Button variant="ghost" size="icon" aria-label={t('delete')} onClick={() => removeFallback(idx)}>
+                <Trash2 className="h-4 w-4 text-danger" />
+              </Button>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Addon label="SNI">
+                <Input className="rounded-s-none" placeholder={any} value={record.name} onChange={(e) => updateFallback(record.rowKey, { name: e.target.value })} />
+              </Addon>
+              <Addon label="ALPN">
+                <Input className="rounded-s-none" placeholder={any} value={record.alpn} onChange={(e) => updateFallback(record.rowKey, { alpn: e.target.value })} />
+              </Addon>
+              <Addon label="Path">
+                <Input className="rounded-s-none" placeholder="/" value={record.path} onChange={(e) => updateFallback(record.rowKey, { path: e.target.value })} />
+              </Addon>
+              <Addon label="Dest">
+                <Input
+                  className="rounded-s-none"
+                  placeholder={t('pages.inbounds.fallbacks.destPlaceholder') || 'auto'}
+                  value={record.dest}
+                  onChange={(e) => updateFallback(record.rowKey, { dest: e.target.value })}
+                />
+              </Addon>
+              <Addon label="xver">
+                <Input
+                  className="rounded-s-none"
+                  type="number"
+                  min={0}
+                  max={2}
+                  value={record.xver}
+                  onChange={(e) => updateFallback(record.rowKey, { xver: Number(e.target.value) || 0 })}
+                />
+              </Addon>
+            </div>
+          </div>
+        ))}
+        <div className="flex flex-wrap gap-2">
+          <Button size="sm" variant="secondary" onClick={addFallback}>
+            <Plus className="h-4 w-4" />
+            {t('pages.inbounds.fallbacks.add') || 'Add fallback'}
+          </Button>
+          <Button
+            size="sm"
+            variant="secondary"
+            onClick={addAllFallbacks}
+            disabled={fallbackChildOptions.length === 0 || fallbacks.length >= fallbackChildOptions.length}
+          >
+            {t('pages.inbounds.form.addAll')}
+          </Button>
         </div>
-      ))}
-      <Space>
-        <Button size="small" onClick={addFallback}>
-          <PlusOutlined /> {t('pages.inbounds.fallbacks.add') || 'Add fallback'}
-        </Button>
-        <Button
-          size="small"
-          onClick={addAllFallbacks}
-          disabled={fallbackChildOptions.length === 0
-            || fallbacks.length >= fallbackChildOptions.length}
-          title={t('pages.inbounds.form.addAllFallbackTooltip')}
-        >
-          {t('pages.inbounds.form.addAll')}
-        </Button>
-      </Space>
+      </CardContent>
     </Card>
-  );
+    );
 }

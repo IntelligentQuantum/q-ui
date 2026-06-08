@@ -1,8 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
-import { Button, Input, Space } from 'antd';
-import { MinusOutlined, PlusOutlined } from '@ant-design/icons';
+import { Plus, Minus } from 'lucide-react';
 
-import { InputAddon } from '@/components/ui';
+import { Button, Input } from '@/components/ui';
 
 // Reusable header-map editor. Handles the two wire shapes Xray uses for
 // HTTP-style header maps:
@@ -39,103 +38,128 @@ interface HeaderMapEditorProps {
   onChange?: (next: Record<string, string> | Record<string, string[]>) => void;
 }
 
-function mapToRows(value: HeaderMapValue): HeaderRow[] {
-  if (!value || typeof value !== 'object') return [];
-  const out: HeaderRow[] = [];
-  for (const [name, raw] of Object.entries(value)) {
-    if (Array.isArray(raw)) {
-      for (const v of raw) {
-        out.push({ name, value: typeof v === 'string' ? v : String(v) });
-      }
-    } else if (typeof raw === 'string') {
-      out.push({ name, value: raw });
+function mapToRows(value: HeaderMapValue): HeaderRow[]
+{
+    if (!value || typeof value !== 'object')
+    {
+        return [];
     }
-  }
-  return out;
+    const out: HeaderRow[] = [];
+    for (const [name, raw] of Object.entries(value))
+    {
+        if (Array.isArray(raw))
+        {
+            for (const v of raw)
+            {
+                out.push({ name, value: typeof v === 'string' ? v : String(v) });
+            }
+        }
+        else if (typeof raw === 'string')
+        {
+            out.push({ name, value: raw });
+        }
+    }
+    return out;
 }
 
-function rowsToMap(rows: HeaderRow[], mode: HeaderMapMode): Record<string, string> | Record<string, string[]> {
-  if (mode === 'v1') {
-    const map: Record<string, string> = {};
-    for (const r of rows) {
-      if (!r.name) continue;
-      map[r.name] = r.value ?? '';
+function rowsToMap(rows: HeaderRow[], mode: HeaderMapMode): Record<string, string> | Record<string, string[]>
+{
+    if (mode === 'v1')
+    {
+        const map: Record<string, string> = {};
+        for (const r of rows)
+        {
+            if (!r.name)
+            {
+                continue;
+            }
+            map[r.name] = r.value ?? '';
+        }
+        return map;
+    }
+    const map: Record<string, string[]> = {};
+    for (const r of rows)
+    {
+        if (!r.name)
+        {
+            continue;
+        }
+        const list = map[r.name] ?? [];
+        list.push(r.value ?? '');
+        map[r.name] = list;
     }
     return map;
-  }
-  const map: Record<string, string[]> = {};
-  for (const r of rows) {
-    if (!r.name) continue;
-    const list = map[r.name] ?? [];
-    list.push(r.value ?? '');
-    map[r.name] = list;
-  }
-  return map;
 }
 
-export default function HeaderMapEditor({ mode, value, onChange }: HeaderMapEditorProps) {
-  // Local state holds rows including blanks. Without it, addRow() would
-  // append a {name:'', value:''} that rowsToMap immediately filters out
-  // before reaching the form, so the new row would never reach UI. The
-  // form-bound map only sees rows with non-empty names; blank rows live
-  // here until the user fills them in.
-  const [rows, setRows] = useState<HeaderRow[]>(() => mapToRows(value));
-  const lastEmittedRef = useRef<string>(JSON.stringify(rowsToMap(rows, mode)));
+export default function HeaderMapEditor({ mode, value, onChange }: HeaderMapEditorProps)
+{
+    // Local state holds rows including blanks. Without it, addRow() would
+    // append a {name:'', value:''} that rowsToMap immediately filters out
+    // before reaching the form, so the new row would never reach UI. The
+    // form-bound map only sees rows with non-empty names; blank rows live
+    // here until the user fills them in.
+    const [rows, setRows] = useState<HeaderRow[]>(() => mapToRows(value));
+    const lastEmittedRef = useRef<string>(JSON.stringify(rowsToMap(rows, mode)));
 
-  // Re-sync local rows when the form value changes from outside (modal
-  // re-open with edit data, JSON tab edits, etc.) but not when it's our
-  // own emission echoing back.
-  useEffect(() => {
-    const incoming = JSON.stringify(value ?? {});
-    if (incoming === lastEmittedRef.current) return;
-    setRows(mapToRows(value));
-    lastEmittedRef.current = incoming;
-  }, [value]);
+    // Re-sync local rows when the form value changes from outside (modal
+    // re-open with edit data, JSON tab edits, etc.) but not when it's our
+    // own emission echoing back.
+    useEffect(() =>
+    {
+        const incoming = JSON.stringify(value ?? {});
+        if (incoming === lastEmittedRef.current)
+        {
+            return;
+        }
+        setRows(mapToRows(value));
+        lastEmittedRef.current = incoming;
+    }, [value]);
 
-  function commit(next: HeaderRow[]) {
-    setRows(next);
-    const map = rowsToMap(next, mode);
-    lastEmittedRef.current = JSON.stringify(map);
-    onChange?.(map);
-  }
+    function commit(next: HeaderRow[])
+    {
+        setRows(next);
+        const map = rowsToMap(next, mode);
+        lastEmittedRef.current = JSON.stringify(map);
+        onChange?.(map);
+    }
 
-  function setRow(index: number, patch: Partial<HeaderRow>) {
-    const next = rows.slice();
-    next[index] = { ...next[index], ...patch };
-    commit(next);
-  }
+    function setRow(index: number, patch: Partial<HeaderRow>)
+    {
+        const next = rows.slice();
+        next[index] = { ...next[index], ...patch };
+        commit(next);
+    }
 
-  function addRow() {
-    commit([...rows, { name: '', value: '' }]);
-  }
+    function addRow()
+    {
+        commit([...rows, { name: '', value: '' }]);
+    }
 
-  function removeRow(index: number) {
-    const next = rows.slice();
-    next.splice(index, 1);
-    commit(next);
-  }
+    function removeRow(index: number)
+    {
+        const next = rows.slice();
+        next.splice(index, 1);
+        commit(next);
+    }
 
-  return (
-    <>
+    return (
+    <div className="flex flex-col gap-2">
       {rows.map((row, idx) => (
-        <Space.Compact key={idx} block className="mb-8">
-          <InputAddon>{`${idx + 1}`}</InputAddon>
-          <Input
-            value={row.name}
-            placeholder="Name"
-            onChange={(e) => setRow(idx, { name: e.target.value })}
-          />
-          <Input
-            value={row.value}
-            placeholder="Value"
-            onChange={(e) => setRow(idx, { value: e.target.value })}
-          />
-          <Button aria-label="Remove" icon={<MinusOutlined />} onClick={() => removeRow(idx)} />
-        </Space.Compact>
+        <div key={idx} className="flex items-center gap-2">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface-sunken text-xs text-muted-foreground">
+            {idx + 1}
+          </span>
+          <Input className="flex-1" value={row.name} placeholder="Name" onChange={(e) => setRow(idx, { name: e.target.value })} />
+          <Input className="flex-1" value={row.value} placeholder="Value" onChange={(e) => setRow(idx, { value: e.target.value })} />
+          <Button variant="ghost" size="icon" aria-label="Remove" onClick={() => removeRow(idx)}>
+            <Minus className="h-4 w-4 text-danger" />
+          </Button>
+        </div>
       ))}
-      <Button size="small" type="primary" icon={<PlusOutlined />} onClick={addRow}>
+      <Button size="sm" variant="secondary" className="self-start" onClick={addRow}>
+        <Plus className="h-4 w-4" />
         Add
       </Button>
-    </>
-  );
+    </div>
+    );
 }

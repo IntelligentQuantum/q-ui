@@ -1,16 +1,22 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Form, Input, InputNumber, Radio, Select, Space, Switch } from 'antd';
-import { MinusOutlined, PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { Plus, Trash2, RefreshCw } from 'lucide-react';
 
+import { ALPN_OPTION, TLS_CIPHER_OPTION, TLS_VERSION_OPTION, USAGE_OPTION, UTLS_FINGERPRINT } from '@/schemas/primitives';
+import { Button, Checkbox, Label, Tabs, Textarea } from '@/components/ui';
 import {
-  ALPN_OPTION,
-  TLS_CIPHER_OPTION,
-  TLS_VERSION_OPTION,
-  USAGE_OPTION,
-  UTLS_FINGERPRINT,
-} from '@/schemas/primitives';
+    RHFText,
+    RHFNumber,
+    RHFSelect,
+    RHFSwitch,
+    RHFTags,
+    RHFField,
+    Field,
+    useFieldArray,
+    useFormContext,
+    useWatch
+} from '@/components/form/rhf';
 
-const { TextArea } = Input;
+const TLS = 'streamSettings.tlsSettings';
 
 interface TlsFormProps {
   saving: boolean;
@@ -21,296 +27,235 @@ interface TlsFormProps {
   clearEchCert: () => void;
 }
 
-export default function TlsForm({
-  saving,
-  setCertFromPanel,
-  clearCertFiles,
-  generateRandomPinHash,
-  getNewEchCert,
-  clearEchCert,
-}: TlsFormProps) {
-  const { t } = useTranslation();
-  return (
-    <>
-      <Form.Item name={['streamSettings', 'tlsSettings', 'serverName']} label="SNI">
-        <Input placeholder={t('pages.inbounds.form.serverNameIndication')} />
-      </Form.Item>
-      <Form.Item name={['streamSettings', 'tlsSettings', 'cipherSuites']} label={t('pages.inbounds.form.cipherSuites')}>
-        <Select
-          options={[
-            { value: '', label: t('pages.inbounds.form.autoOption') },
-            ...Object.entries(TLS_CIPHER_OPTION).map(([k, v]) => ({ value: v, label: k })),
-          ]}
-        />
-      </Form.Item>
-      <Form.Item label={t('pages.inbounds.form.minMaxVersion')}>
-        <Space.Compact block>
-          <Form.Item name={['streamSettings', 'tlsSettings', 'minVersion']} noStyle>
-            <Select
-              style={{ width: '50%' }}
-              options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
-            />
-          </Form.Item>
-          <Form.Item name={['streamSettings', 'tlsSettings', 'maxVersion']} noStyle>
-            <Select
-              style={{ width: '50%' }}
-              options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
-            />
-          </Form.Item>
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'tlsSettings', 'settings', 'fingerprint']}
-        label="uTLS"
-      >
-        <Select
-          options={[
-            { value: '', label: 'None' },
-            ...Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp })),
-          ]}
-        />
-      </Form.Item>
-      <Form.Item name={['streamSettings', 'tlsSettings', 'alpn']} label="ALPN">
-        <Select
-          mode="multiple"
-          tokenSeparators={[',']}
-          style={{ width: '100%' }}
-          options={Object.values(ALPN_OPTION).map((a) => ({ value: a, label: a }))}
-        />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'tlsSettings', 'rejectUnknownSni']}
-        label={t('pages.inbounds.form.rejectUnknownSni')}
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'tlsSettings', 'disableSystemRoot']}
-        label={t('pages.inbounds.form.disableSystemRoot')}
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'tlsSettings', 'enableSessionResumption']}
-        label={t('pages.inbounds.form.sessionResumption')}
-        valuePropName="checked"
-      >
-        <Switch />
-      </Form.Item>
-
-      <Form.List name={['streamSettings', 'tlsSettings', 'certificates']}>
-        {(certFields, { add, remove }) => (
-          <>
-            <Form.Item label={t('certificate')}>
-              <Button
-                type="primary"
-                size="small"
-                onClick={() => add({
-                  useFile: true,
-                  certificateFile: '',
-                  keyFile: '',
-                  certificate: [],
-                  key: [],
-                  ocspStapling: 3600,
-                  oneTimeLoading: false,
-                  usage: 'encipherment',
-                  buildChain: false,
-                })}
-              >
-                <PlusOutlined />
-              </Button>
-            </Form.Item>
-            {certFields.map((certField, idx) => (
-              <div key={certField.key}>
-                <Form.Item
-                  name={[certField.name, 'useFile']}
-                  label={`${t('certificate')} ${idx + 1}`}
-                >
-                  <Radio.Group buttonStyle="solid">
-                    <Radio.Button value={true}>
-                      {t('pages.inbounds.certificatePath')}
-                    </Radio.Button>
-                    <Radio.Button value={false}>
-                      {t('pages.inbounds.certificateContent')}
-                    </Radio.Button>
-                  </Radio.Group>
-                </Form.Item>
-                {certFields.length > 1 && (
-                  <Form.Item label=" ">
-                    <Button
-                      size="small"
-                      danger
-                      onClick={() => remove(certField.name)}
-                    >
-                      <MinusOutlined /> {t('remove')}
-                    </Button>
-                  </Form.Item>
-                )}
-                <Form.Item
-                  noStyle
-                  shouldUpdate={(prev, curr) =>
-                    prev.streamSettings?.tlsSettings?.certificates?.[certField.name]?.useFile
-                    !== curr.streamSettings?.tlsSettings?.certificates?.[certField.name]?.useFile
-                  }
-                >
-                  {({ getFieldValue }) => {
-                    const useFile = getFieldValue([
-                      'streamSettings', 'tlsSettings', 'certificates',
-                      certField.name, 'useFile',
-                    ]);
-                    return useFile ? (
-                      <>
-                        <Form.Item
-                          name={[certField.name, 'certificateFile']}
-                          label={t('pages.inbounds.publicKey')}
-                        >
-                          <Input />
-                        </Form.Item>
-                        <Form.Item
-                          name={[certField.name, 'keyFile']}
-                          label={t('pages.inbounds.privatekey')}
-                        >
-                          <Input />
-                        </Form.Item>
-                        <Form.Item label=" ">
-                          <Space>
-                            <Button
-                              type="primary"
-                              loading={saving}
-                              onClick={() => setCertFromPanel(certField.name)}
-                            >
-                              {t('pages.inbounds.setDefaultCert')}
-                            </Button>
-                            <Button danger onClick={() => clearCertFiles(certField.name)}>
-                              {t('clear')}
-                            </Button>
-                          </Space>
-                        </Form.Item>
-                      </>
-                    ) : (
-                      <>
-                        <Form.Item
-                          name={[certField.name, 'certificate']}
-                          label={t('pages.inbounds.publicKey')}
-                          normalize={(v) => typeof v === 'string'
-                            ? v.split('\n')
-                            : v}
-                          getValueProps={(v) => ({
-                            value: Array.isArray(v) ? v.join('\n') : v,
-                          })}
-                        >
-                          <TextArea autoSize={{ minRows: 3, maxRows: 8 }} />
-                        </Form.Item>
-                        <Form.Item
-                          name={[certField.name, 'key']}
-                          label={t('pages.inbounds.privatekey')}
-                          normalize={(v) => typeof v === 'string'
-                            ? v.split('\n')
-                            : v}
-                          getValueProps={(v) => ({
-                            value: Array.isArray(v) ? v.join('\n') : v,
-                          })}
-                        >
-                          <TextArea autoSize={{ minRows: 3, maxRows: 8 }} />
-                        </Form.Item>
-                      </>
-                    );
-                  }}
-                </Form.Item>
-                <Form.Item
-                  name={[certField.name, 'ocspStapling']}
-                  label="OCSP Stapling"
-                >
-                  <InputNumber min={0} addonAfter="s" style={{ width: '50%' }} />
-                </Form.Item>
-                <Form.Item
-                  name={[certField.name, 'oneTimeLoading']}
-                  label={t('pages.inbounds.form.oneTimeLoading')}
-                  valuePropName="checked"
-                >
-                  <Switch />
-                </Form.Item>
-                <Form.Item
-                  name={[certField.name, 'usage']}
-                  label={t('pages.inbounds.form.usageOption')}
-                >
-                  <Select
-                    style={{ width: '50%' }}
-                    options={Object.values(USAGE_OPTION).map((u) => ({ value: u, label: u }))}
-                  />
-                </Form.Item>
-                <Form.Item
-                  noStyle
-                  shouldUpdate={(prev, curr) =>
-                    prev.streamSettings?.tlsSettings?.certificates?.[certField.name]?.usage
-                    !== curr.streamSettings?.tlsSettings?.certificates?.[certField.name]?.usage
-                  }
-                >
-                  {({ getFieldValue }) => {
-                    const usage = getFieldValue([
-                      'streamSettings', 'tlsSettings', 'certificates',
-                      certField.name, 'usage',
-                    ]);
-                    if (usage !== 'issue') return null;
-                    return (
-                      <Form.Item
-                        name={[certField.name, 'buildChain']}
-                        label={t('pages.inbounds.form.buildChain')}
-                        valuePropName="checked"
-                      >
-                        <Switch />
-                      </Form.Item>
-                    );
-                  }}
-                </Form.Item>
-              </div>
-            ))}
-          </>
-        )}
-      </Form.List>
-
-      <Form.Item name={['streamSettings', 'tlsSettings', 'echServerKeys']} label={t('pages.inbounds.form.echKey')}>
-        <Input />
-      </Form.Item>
-      <Form.Item
-        name={['streamSettings', 'tlsSettings', 'settings', 'echConfigList']}
-        label={t('pages.inbounds.form.echConfig')}
-      >
-        <Input />
-      </Form.Item>
-      <Form.Item
-        label={t('pages.inbounds.form.pinnedPeerCertSha256')}
-        tooltip={t('pages.inbounds.form.pinnedPeerCertSha256Tip')}
-      >
-        <Space.Compact block>
-          <Form.Item
-            name={['streamSettings', 'tlsSettings', 'settings', 'pinnedPeerCertSha256']}
-            noStyle
-          >
-            <Select
-              mode="tags"
-              tokenSeparators={[',', ' ']}
-              placeholder={t('pages.inbounds.form.pinnedPeerCertSha256Placeholder')}
-              style={{ width: 'calc(100% - 32px)' }}
-            />
-          </Form.Item>
-          <Button
-            icon={<ReloadOutlined />}
-            onClick={generateRandomPinHash}
-            title={t('pages.inbounds.form.generateRandomPin')}
+function CertItem({
+    index,
+    canRemove,
+    onRemove,
+    saving,
+    setCertFromPanel,
+    clearCertFiles
+}: {
+  index: number;
+  canRemove: boolean;
+  onRemove: () => void;
+  saving: boolean;
+  setCertFromPanel: (n: number) => void;
+  clearCertFiles: (n: number) => void;
+})
+{
+    const { t } = useTranslation();
+    const base = `${ TLS }.certificates.${ index }`;
+    const useFile = useWatch({ name: `${ base }.useFile` });
+    const usage = useWatch({ name: `${ base }.usage` }) as string | undefined;
+    return (
+    <div className="flex flex-col gap-3 rounded-lg border border-border p-3">
+      <div className="flex items-start justify-between gap-3">
+        <div className="flex flex-1 flex-col gap-1.5">
+          <Label>{`${ t('certificate') } ${ index + 1 }`}</Label>
+          <RHFField
+            name={`${ base }.useFile`}
+            render={({ value, onChange }) => (
+              <Tabs
+                variant="segmented"
+                value={value ? 'path' : 'content'}
+                onChange={(k) => onChange(k === 'path')}
+                tabs={[
+                    { key: 'path', label: t('pages.inbounds.certificatePath') },
+                    { key: 'content', label: t('pages.inbounds.certificateContent') }
+                ]}
+              />
+            )}
           />
-        </Space.Compact>
-      </Form.Item>
-      <Form.Item label=" ">
-        <Space>
-          <Button type="primary" loading={saving} onClick={getNewEchCert}>
-            {t('pages.inbounds.form.getNewEchCert')}
+        </div>
+        {canRemove && (
+          <button
+            type="button"
+            aria-label={t('remove')}
+            onClick={onRemove}
+            className="mt-7 text-muted-foreground transition-colors hover:text-danger"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        )}
+      </div>
+
+      {useFile ? (
+        <>
+          <RHFText name={`${ base }.certificateFile`} label={t('pages.inbounds.publicKey')} />
+          <RHFText name={`${ base }.keyFile`} label={t('pages.inbounds.privatekey')} />
+          <div className="flex gap-2">
+            <Button loading={saving} onClick={() => setCertFromPanel(index)}>
+              {t('pages.inbounds.setDefaultCert')}
+            </Button>
+            <Button variant="danger" onClick={() => clearCertFiles(index)}>
+              {t('clear')}
+            </Button>
+          </div>
+        </>
+      ) : (
+        <>
+          <RHFField
+            name={`${ base }.certificate`}
+            label={t('pages.inbounds.publicKey')}
+            render={({ value, onChange }) => (
+              <Textarea
+                rows={4}
+                value={Array.isArray(value) ? value.join('\n') : ((value as string) ?? '')}
+                onChange={(e) => onChange(e.target.value.split('\n'))}
+              />
+            )}
+          />
+          <RHFField
+            name={`${ base }.key`}
+            label={t('pages.inbounds.privatekey')}
+            render={({ value, onChange }) => (
+              <Textarea
+                rows={4}
+                value={Array.isArray(value) ? value.join('\n') : ((value as string) ?? '')}
+                onChange={(e) => onChange(e.target.value.split('\n'))}
+              />
+            )}
+          />
+        </>
+      )}
+      <RHFNumber name={`${ base }.ocspStapling`} label="OCSP Stapling (s)" min={0} />
+      <RHFSwitch name={`${ base }.oneTimeLoading`} label={t('pages.inbounds.form.oneTimeLoading')} />
+      <RHFSelect
+        name={`${ base }.usage`}
+        label={t('pages.inbounds.form.usageOption')}
+        options={Object.values(USAGE_OPTION).map((u) => ({ value: u, label: u }))}
+      />
+      {usage === 'issue' && <RHFSwitch name={`${ base }.buildChain`} label={t('pages.inbounds.form.buildChain')} />}
+    </div>
+    );
+}
+
+export default function TlsForm({
+    saving,
+    setCertFromPanel,
+    clearCertFiles,
+    generateRandomPinHash,
+    getNewEchCert,
+    clearEchCert
+}: TlsFormProps)
+{
+    const { t } = useTranslation();
+    const { control } = useFormContext();
+    const { fields, append, remove } = useFieldArray({ control, name: `${ TLS }.certificates` });
+    return (
+    <>
+      <RHFText name={`${ TLS }.serverName`} label="SNI" placeholder={t('pages.inbounds.form.serverNameIndication')} />
+      <RHFSelect
+        name={`${ TLS }.cipherSuites`}
+        label={t('pages.inbounds.form.cipherSuites')}
+        options={[
+            { value: '', label: t('pages.inbounds.form.autoOption') },
+            ...Object.entries(TLS_CIPHER_OPTION).map(([k, v]) => ({ value: v, label: k }))
+        ]}
+      />
+      <Field label={t('pages.inbounds.form.minMaxVersion')}>
+        <div className="grid grid-cols-2 gap-3">
+          <RHFSelect
+            name={`${ TLS }.minVersion`}
+            options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
+          />
+          <RHFSelect
+            name={`${ TLS }.maxVersion`}
+            options={Object.values(TLS_VERSION_OPTION).map((v) => ({ value: v, label: v }))}
+          />
+        </div>
+      </Field>
+      <RHFSelect
+        name={`${ TLS }.settings.fingerprint`}
+        label="uTLS"
+        options={[{ value: '', label: 'None' }, ...Object.values(UTLS_FINGERPRINT).map((fp) => ({ value: fp, label: fp }))]}
+      />
+      <RHFField
+        name={`${ TLS }.alpn`}
+        label="ALPN"
+        render={({ value, onChange }) =>
+        {
+            const arr = Array.isArray(value) ? (value as string[]) : [];
+            const toggle = (v: string) => onChange(arr.includes(v) ? arr.filter((x) => x !== v) : [...arr, v]);
+            return (
+            <div className="flex flex-wrap gap-3">
+              {Object.values(ALPN_OPTION).map((a) => (
+                <Checkbox key={a} checked={arr.includes(a)} onChange={() => toggle(a)}>
+                  {a}
+                </Checkbox>
+              ))}
+            </div>
+            );
+        }}
+      />
+      <RHFSwitch name={`${ TLS }.rejectUnknownSni`} label={t('pages.inbounds.form.rejectUnknownSni')} />
+      <RHFSwitch name={`${ TLS }.disableSystemRoot`} label={t('pages.inbounds.form.disableSystemRoot')} />
+      <RHFSwitch name={`${ TLS }.enableSessionResumption`} label={t('pages.inbounds.form.sessionResumption')} />
+
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <Label>{t('certificate')}</Label>
+          <Button
+            size="sm"
+            variant="secondary"
+            aria-label={t('add')}
+            onClick={() =>
+                append({
+                    useFile: true,
+                    certificateFile: '',
+                    keyFile: '',
+                    certificate: [],
+                    key: [],
+                    ocspStapling: 3600,
+                    oneTimeLoading: false,
+                    usage: 'encipherment',
+                    buildChain: false
+                })
+            }
+          >
+            <Plus className="h-4 w-4" />
           </Button>
-          <Button danger onClick={clearEchCert}>{t('clear')}</Button>
-        </Space>
-      </Form.Item>
+        </div>
+        {fields.map((field, idx) => (
+          <CertItem
+            key={field.id}
+            index={idx}
+            canRemove={fields.length > 1}
+            onRemove={() => remove(idx)}
+            saving={saving}
+            setCertFromPanel={setCertFromPanel}
+            clearCertFiles={clearCertFiles}
+          />
+        ))}
+      </div>
+
+      <RHFText name={`${ TLS }.echServerKeys`} label={t('pages.inbounds.form.echKey')} />
+      <RHFText name={`${ TLS }.settings.echConfigList`} label={t('pages.inbounds.form.echConfig')} />
+      <div className="flex flex-col gap-1.5">
+        <div className="flex items-center justify-between">
+          <Label>{t('pages.inbounds.form.pinnedPeerCertSha256')}</Label>
+          <Button
+            variant="secondary"
+            size="icon"
+            aria-label={t('pages.inbounds.form.generateRandomPin')}
+            onClick={generateRandomPinHash}
+          >
+            <RefreshCw className="h-4 w-4" />
+          </Button>
+        </div>
+        <RHFTags
+          name={`${ TLS }.settings.pinnedPeerCertSha256`}
+          placeholder={t('pages.inbounds.form.pinnedPeerCertSha256Placeholder')}
+        />
+      </div>
+      <div className="flex gap-2">
+        <Button loading={saving} onClick={getNewEchCert}>
+          {t('pages.inbounds.form.getNewEchCert')}
+        </Button>
+        <Button variant="danger" onClick={clearEchCert}>
+          {t('clear')}
+        </Button>
+      </div>
     </>
-  );
+    );
 }

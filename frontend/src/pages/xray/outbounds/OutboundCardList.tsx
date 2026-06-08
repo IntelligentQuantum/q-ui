@@ -1,30 +1,13 @@
 import { useTranslation } from 'react-i18next';
-import { Button, Dropdown, Tag, Tooltip } from 'antd';
-import {
-  RetweetOutlined,
-  MoreOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  VerticalAlignTopOutlined,
-  ThunderboltOutlined,
-  CheckCircleFilled,
-  CloseCircleFilled,
-  LoadingOutlined,
-} from '@ant-design/icons';
+import { ArrowUp, Pencil, RefreshCw, Trash2 } from 'lucide-react';
 
+import { DropdownMenu, Tooltip } from '@/components/ui';
 import { SizeFormatter } from '@/utils';
-import { OutboundProtocols as Protocols } from '@/schemas/primitives';
 import type { OutboundTestState, OutboundTrafficRow } from '@/hooks/useXraySetting';
 
 import type { OutboundRow } from './outbounds-tab-types';
-import {
-  isTesting,
-  isUntestable,
-  outboundAddresses,
-  showSecurity,
-  testResult,
-  trafficFor,
-} from './outbounds-tab-helpers';
+import { outboundAddresses, trafficFor } from './outbounds-tab-helpers';
+import { ProtocolTags, TestButton, TestResultCell } from './useOutboundColumns';
 
 interface OutboundCardListProps {
   rows: OutboundRow[];
@@ -39,90 +22,102 @@ interface OutboundCardListProps {
 }
 
 export default function OutboundCardList({
-  rows,
-  testMode,
-  outboundsTraffic,
-  outboundTestStates,
-  setFirst,
-  openEdit,
-  onResetTraffic,
-  confirmDelete,
-  onTest,
-}: OutboundCardListProps) {
-  const { t } = useTranslation();
-  if (rows.length === 0) {
-    return <div className="card-empty">—</div>;
-  }
-  return (
-    <>
-      {rows.map((record, index) => (
-        <div key={record.key} className="outbound-card">
-          <div className="card-head">
-            <div className="card-identity">
-              <span className="card-num">{index + 1}</span>
-              <Tooltip title={record.tag}>
-                <span className="tag-name">{record.tag}</span>
-              </Tooltip>
-              <Tag color="green">{record.protocol}</Tag>
-              {[Protocols.VMess, Protocols.VLESS, Protocols.Trojan, Protocols.Shadowsocks].includes(record.protocol as never) && (
-                <>
-                  <Tag>{record.streamSettings?.network}</Tag>
-                  {showSecurity(record.streamSettings?.security) && <Tag color="purple">{record.streamSettings?.security}</Tag>}
-                </>
-              )}
-            </div>
-            <Dropdown
-              trigger={['click']}
-              menu={{
-                items: [
-                  ...(index > 0
-                    ? [{ key: 'top', label: <VerticalAlignTopOutlined />, onClick: () => setFirst(index) }]
-                    : []),
-                  { key: 'edit', label: <><EditOutlined /> {t('edit')}</>, onClick: () => openEdit(index) },
-                  { key: 'reset', label: <><RetweetOutlined /> {t('pages.inbounds.resetTraffic')}</>, onClick: () => onResetTraffic(record.tag || '') },
-                  { key: 'del', danger: true, label: <><DeleteOutlined /> {t('delete')}</>, onClick: () => confirmDelete(index) },
-                ],
-              }}
-            >
-              <Button aria-label={t('more')} shape="circle" size="small" icon={<MoreOutlined />} />
-            </Dropdown>
-          </div>
-          {outboundAddresses(record).length > 0 && (
-            <div className="address-list">
-              {outboundAddresses(record).map((addr) => (
-                <Tooltip key={addr} title={addr}>
-                  <span className="address-pill">{addr}</span>
+    rows,
+    testMode,
+    outboundsTraffic,
+    outboundTestStates,
+    setFirst,
+    openEdit,
+    onResetTraffic,
+    confirmDelete,
+    onTest
+}: OutboundCardListProps)
+{
+    const { t } = useTranslation();
+    if (rows.length === 0)
+    {
+        return <div className="py-4 text-center text-muted-foreground opacity-60">—</div>;
+    }
+    return (
+    <div className="flex flex-col gap-2">
+      {rows.map((record, index) =>
+      {
+          const tr = trafficFor(outboundsTraffic, record);
+          return (
+          <div
+            key={record.key}
+            className="flex flex-col gap-2 rounded-lg border border-border bg-surface-sunken p-3"
+          >
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                <span className="font-medium text-muted-foreground">{index + 1}</span>
+                <Tooltip content={record.tag}>
+                  <span className="max-w-[180px] truncate font-medium">{record.tag}</span>
                 </Tooltip>
-              ))}
-            </div>
-          )}
-          <div className="card-foot">
-            <span className="traffic-up">↑ {SizeFormatter.sizeFormat(trafficFor(outboundsTraffic, record).up)}</span>
-            <span className="traffic-sep" />
-            <span className="traffic-down">↓ {SizeFormatter.sizeFormat(trafficFor(outboundsTraffic, record).down)}</span>
-            <span className="card-test">
-              {testResult(outboundTestStates, index) ? (
-                <span className={testResult(outboundTestStates, index)!.success ? 'pill-ok' : 'pill-fail'}>
-                  {testResult(outboundTestStates, index)!.success ? <CheckCircleFilled /> : <CloseCircleFilled />}
-                  {testResult(outboundTestStates, index)!.success ? <span>{testResult(outboundTestStates, index)!.delay}&nbsp;ms</span> : <span>failed</span>}
-                </span>
-              ) : isTesting(outboundTestStates, index) ? (
-                <LoadingOutlined />
-              ) : null}
-              <Button
-                type="primary"
-                shape="circle"
-                size="small"
-                aria-label="Test outbound"
-                loading={isTesting(outboundTestStates, index)}
-                disabled={isUntestable(record, testMode) || isTesting(outboundTestStates, index)}
-                icon={<ThunderboltOutlined />}
-                onClick={() => onTest(index, testMode)}
+                <ProtocolTags record={record} />
+              </div>
+              <DropdownMenu
+                align="end"
+                label={t('more')}
+                items={[
+                    ...(index > 0
+                        ? [{
+                            key: 'top',
+                            label: 'Move to top',
+                            icon: <ArrowUp className="h-4 w-4" aria-hidden />,
+                            onSelect: () => setFirst(index)
+                        }]
+                        : []),
+                    {
+                        key: 'edit',
+                        label: t('edit'),
+                        icon: <Pencil className="h-4 w-4" aria-hidden />,
+                        onSelect: () => openEdit(index)
+                    },
+                    {
+                        key: 'reset',
+                        label: t('pages.inbounds.resetTraffic'),
+                        icon: <RefreshCw className="h-4 w-4" aria-hidden />,
+                        onSelect: () => onResetTraffic(record.tag || '')
+                    },
+                    {
+                        key: 'del',
+                        danger: true,
+                        label: t('delete'),
+                        icon: <Trash2 className="h-4 w-4" aria-hidden />,
+                        onSelect: () => confirmDelete(index)
+                    }
+                ]}
               />
-            </span>
+            </div>
+
+            {outboundAddresses(record).length > 0 && (
+              <div className="flex flex-wrap gap-1">
+                {outboundAddresses(record).map((addr) => (
+                  <Tooltip key={addr} content={addr}>
+                    <span className="rounded bg-surface px-1.5 py-0.5 text-[11px] text-foreground">{addr}</span>
+                  </Tooltip>
+                ))}
+              </div>
+            )}
+
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs text-success">↑ {SizeFormatter.sizeFormat(tr.up)}</span>
+              <span className="text-xs text-accent">↓ {SizeFormatter.sizeFormat(tr.down)}</span>
+              <span className="ms-auto inline-flex items-center gap-2">
+                <TestResultCell outboundTestStates={outboundTestStates} index={index} />
+                <TestButton
+                  record={record}
+                  index={index}
+                  testMode={testMode}
+                  outboundTestStates={outboundTestStates}
+                  onTest={onTest}
+                />
+              </span>
+            </div>
           </div>
-        </div>
-      ))}
-    </>
-  );
+          );
+      })}
+    </div>
+    );
 }

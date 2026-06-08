@@ -1,30 +1,23 @@
 import { useTranslation } from 'react-i18next';
-import { Form, Input, InputNumber } from 'antd';
 
 import { HeaderMapEditor } from '@/components/form';
+import { RHFText, RHFNumber, RHFField } from '@/components/form/rhf';
 
-export default function WsForm() {
-  const { t } = useTranslation();
-  return (
+export default function WsForm()
+{
+    const { t } = useTranslation();
+    return (
     <>
-      <Form.Item label={t('host')} name={['streamSettings', 'wsSettings', 'host']}>
-        <Input />
-      </Form.Item>
-      <Form.Item label={t('path')} name={['streamSettings', 'wsSettings', 'path']}>
-        <Input />
-      </Form.Item>
-      <Form.Item
-        label={t('pages.inbounds.form.heartbeatPeriod')}
-        name={['streamSettings', 'wsSettings', 'heartbeatPeriod']}
-      >
-        <InputNumber min={0} />
-      </Form.Item>
-      <Form.Item
+      <RHFText name="streamSettings.wsSettings.host" label={t('host')} />
+      <RHFText name="streamSettings.wsSettings.path" label={t('path')} />
+      <RHFNumber name="streamSettings.wsSettings.heartbeatPeriod" label={t('pages.inbounds.form.heartbeatPeriod')} min={0} />
+      <RHFField
+        name="streamSettings.wsSettings.headers"
         label={t('pages.inbounds.form.headers')}
-        name={['streamSettings', 'wsSettings', 'headers']}
-      >
-        <HeaderMapEditor mode="v1" />
-      </Form.Item>
+        render={({ value, onChange }) => (
+          <HeaderMapEditor mode="v1" value={value as Record<string, string>} onChange={onChange} />
+        )}
+      />
     </>
-  );
+    );
 }

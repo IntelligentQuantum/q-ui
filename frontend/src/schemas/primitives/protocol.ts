@@ -1,16 +1,16 @@
 import { z } from 'zod';
 
 export const ProtocolSchema = z.enum([
-  'vmess',
-  'vless',
-  'trojan',
-  'shadowsocks',
-  'wireguard',
-  'hysteria',
-  'http',
-  'mixed',
-  'tunnel',
-  'tun',
+    'vmess',
+    'vless',
+    'trojan',
+    'shadowsocks',
+    'wireguard',
+    'hysteria',
+    'http',
+    'mixed',
+    'tunnel',
+    'tun'
 ]);
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
@@ -21,14 +21,14 @@ export type Protocol = z.infer<typeof ProtocolSchema>;
 // Go backend's validator no longer accepts it — existing panel deployments
 // may still have TUN inbounds saved that we want to render.
 export const Protocols = Object.freeze({
-  VMESS: 'vmess',
-  VLESS: 'vless',
-  TROJAN: 'trojan',
-  SHADOWSOCKS: 'shadowsocks',
-  WIREGUARD: 'wireguard',
-  HYSTERIA: 'hysteria',
-  HTTP: 'http',
-  MIXED: 'mixed',
-  TUNNEL: 'tunnel',
-  TUN: 'tun',
+    VMESS: 'vmess',
+    VLESS: 'vless',
+    TROJAN: 'trojan',
+    SHADOWSOCKS: 'shadowsocks',
+    WIREGUARD: 'wireguard',
+    HYSTERIA: 'hysteria',
+    HTTP: 'http',
+    MIXED: 'mixed',
+    TUNNEL: 'tunnel',
+    TUN: 'tun'
 });

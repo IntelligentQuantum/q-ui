@@ -7,46 +7,52 @@ import enUS from '../../../web/translation/en-US.json';
 const FALLBACK = 'en-US';
 
 const lazyModules = import.meta.glob([
-  '../../../web/translation/*.json',
-  '!../../../web/translation/en-US.json',
+    '../../../web/translation/*.json',
+    '!../../../web/translation/en-US.json'
 ]);
 
-function moduleKeyFor(code: string): string {
-  return `../../../web/translation/${code}.json`;
+function moduleKeyFor(code: string): string
+{
+    return `../../../web/translation/${ code }.json`;
 }
 
 let active: string = LanguageManager.getLanguage();
-if (active !== FALLBACK && !Object.prototype.hasOwnProperty.call(lazyModules, moduleKeyFor(active))) {
-  active = FALLBACK;
+if (active !== FALLBACK && !Object.prototype.hasOwnProperty.call(lazyModules, moduleKeyFor(active)))
+{
+    active = FALLBACK;
 }
 
 // Reflect the active language on <html> so the document flows in the correct
 // direction (Persian is RTL) and assistive tech announces the right language.
 // AntD components are flipped via the ConfigProvider `direction` prop, which
 // reads this same value.
-if (typeof document !== 'undefined') {
-  document.documentElement.lang = active;
-  document.documentElement.dir = LanguageManager.isRTL(active) ? 'rtl' : 'ltr';
+if (typeof document !== 'undefined')
+{
+    document.documentElement.lang = active;
+    document.documentElement.dir = LanguageManager.isRTL(active) ? 'rtl' : 'ltr';
 }
 
-export async function readyI18n() {
-  await i18next.use(initReactI18next).init({
-    lng: active,
-    fallbackLng: FALLBACK,
-    resources: { [FALLBACK]: { translation: enUS } },
-    interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
-    returnNull: false,
-  });
-  if (active !== FALLBACK) {
-    const loader = lazyModules[moduleKeyFor(active)] as (() => Promise<{ default: Record<string, unknown> }>) | undefined;
-    if (loader) {
-      const mod = await loader();
-      const messages = (mod.default ?? mod) as Record<string, unknown>;
-      i18next.addResourceBundle(active, 'translation', messages, true, true);
-      await i18next.changeLanguage(active);
+export async function readyI18n()
+{
+    await i18next.use(initReactI18next).init({
+        lng: active,
+        fallbackLng: FALLBACK,
+        resources: { [FALLBACK]: { translation: enUS } },
+        interpolation: { escapeValue: false, prefix: '{', suffix: '}' },
+        returnNull: false
+    });
+    if (active !== FALLBACK)
+    {
+        const loader = lazyModules[moduleKeyFor(active)] as (() => Promise<{ default: Record<string, unknown> }>) | undefined;
+        if (loader)
+        {
+            const mod = await loader();
+            const messages = (mod.default ?? mod) as Record<string, unknown>;
+            i18next.addResourceBundle(active, 'translation', messages, true, true);
+            await i18next.changeLanguage(active);
+        }
     }
-  }
-  return i18next;
+    return i18next;
 }
 
 export { i18next as i18n };

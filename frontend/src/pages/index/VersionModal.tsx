@@ -1,12 +1,21 @@
 import { useCallback, useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Alert, Button, Collapse, Modal, Radio, Spin, Tag, Tooltip } from 'antd';
-import { ReloadOutlined } from '@ant-design/icons';
+import { ChevronDown, RefreshCw } from 'lucide-react';
 
 import { HttpUtil } from '@/utils';
 import type { Status } from '@/models/status';
+import {
+    Alert,
+    Badge,
+    Button,
+    Modal,
+    Spinner,
+    Tooltip,
+    cn,
+    confirm
+} from '@/components/ui';
 import CustomGeoSection from './CustomGeoSection';
-import './VersionModal.css';
 
 interface BusyEvent {
   busy: boolean;
@@ -21,152 +30,202 @@ interface VersionModalProps {
 }
 
 const GEOFILES = [
-  'geosite.dat',
-  'geoip.dat',
-  'geosite_IR.dat',
-  'geoip_IR.dat',
-  'geosite_RU.dat',
-  'geoip_RU.dat',
+    'geosite.dat',
+    'geoip.dat',
+    'geosite_IR.dat',
+    'geoip_IR.dat',
+    'geosite_RU.dat',
+    'geoip_RU.dat'
 ];
 
-export default function VersionModal({ open, status, onClose, onBusy }: VersionModalProps) {
-  const { t } = useTranslation();
-  const [modal, modalContextHolder] = Modal.useModal();
-  const [activeKey, setActiveKey] = useState<string | string[]>('1');
-  const [versions, setVersions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(false);
+function AccordionSection({
+    label,
+    expanded,
+    onToggle,
+    children
+}: {
+  label: ReactNode;
+  expanded: boolean;
+  onToggle: () => void;
+  children: ReactNode;
+})
+{
+    return (
+    <div className="overflow-hidden rounded-lg border border-border">
+      <button
+        type="button"
+        onClick={onToggle}
+        aria-expanded={expanded}
+        className="flex w-full items-center justify-between gap-2 bg-surface-sunken px-3 py-2.5 text-start text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.04]"
+      >
+        {label}
+        <ChevronDown className={cn('h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')} aria-hidden />
+      </button>
+      {expanded && <div className="p-3">{children}</div>}
+    </div>
+    );
+}
 
-  const fetchVersions = useCallback(async () => {
-    setLoading(true);
-    try {
-      const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
-      if (msg?.success) setVersions(msg.obj || []);
-    } finally {
-      setLoading(false);
-    }
-  }, []);
+export default function VersionModal({ open, status, onClose, onBusy }: VersionModalProps)
+{
+    const { t } = useTranslation();
+    const [activeKey, setActiveKey] = useState('1');
+    const [versions, setVersions] = useState<string[]>([]);
+    const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    if (open) fetchVersions();
-  }, [open, fetchVersions]);
+    const fetchVersions = useCallback(async () =>
+    {
+        setLoading(true);
+        try
+        {
+            const msg = await HttpUtil.get<string[]>('/panel/api/server/getXrayVersion');
+            if (msg?.success)
+            {
+                setVersions(msg.obj || []);
+            }
+        }
+        finally
+        {
+            setLoading(false);
+        }
+    }, []);
 
-  function switchXrayVersion(version: string) {
-    modal.confirm({
-      title: t('pages.index.xraySwitchVersionDialog'),
-      content: t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
-      okText: t('confirm'),
-      cancelText: t('cancel'),
-      onOk: async () => {
+    useEffect(() =>
+    {
+        if (open)
+        {
+            fetchVersions();
+        }
+    }, [open, fetchVersions]);
+
+    async function switchXrayVersion(version: string)
+    {
+        const ok = await confirm({
+            title: t('pages.index.xraySwitchVersionDialog'),
+            description: t('pages.index.xraySwitchVersionDialogDesc').replace('#version#', version),
+            confirmText: t('confirm'),
+            cancelText: t('cancel')
+        });
+        if (!ok)
+        {
+            return;
+        }
         onClose();
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
-        try {
-          await HttpUtil.post(`/panel/api/server/installXray/${version}`);
-        } finally {
-          onBusy({ busy: false });
+        try
+        {
+            await HttpUtil.post(`/panel/api/server/installXray/${ version }`);
         }
-      },
-    });
-  }
+        finally
+        {
+            onBusy({ busy: false });
+        }
+    }
 
-  function updateGeofile(fileName: string) {
-    const isSingle = !!fileName;
-    modal.confirm({
-      title: t('pages.index.geofileUpdateDialog'),
-      content: isSingle
-        ? t('pages.index.geofileUpdateDialogDesc').replace('#filename#', fileName)
-        : t('pages.index.geofilesUpdateDialogDesc'),
-      okText: t('confirm'),
-      cancelText: t('cancel'),
-      onOk: async () => {
+    async function updateGeofile(fileName: string)
+    {
+        const isSingle = !!fileName;
+        const ok = await confirm({
+            title: t('pages.index.geofileUpdateDialog'),
+            description: isSingle
+                ? t('pages.index.geofileUpdateDialogDesc').replace('#filename#', fileName)
+                : t('pages.index.geofilesUpdateDialogDesc'),
+            confirmText: t('confirm'),
+            cancelText: t('cancel')
+        });
+        if (!ok)
+        {
+            return;
+        }
         onClose();
         onBusy({ busy: true, tip: t('pages.index.dontRefresh') });
         const url = isSingle
-          ? `/panel/api/server/updateGeofile/${fileName}`
-          : '/panel/api/server/updateGeofile';
-        try {
-          await HttpUtil.post(url);
-        } finally {
-          onBusy({ busy: false });
+            ? `/panel/api/server/updateGeofile/${ fileName }`
+            : '/panel/api/server/updateGeofile';
+        try
+        {
+            await HttpUtil.post(url);
         }
-      },
-    });
-  }
+        finally
+        {
+            onBusy({ busy: false });
+        }
+    }
 
-  const activeKeyStr = Array.isArray(activeKey) ? activeKey[0] : activeKey;
+    // Accordion: only one section open at a time.
+    const toggle = (key: string) => setActiveKey((prev) => (prev === key ? '' : key));
 
-  return (
-    <Modal
-      open={open}
-      title={t('pages.index.xrayUpdates')}
-      footer={null}
-      onCancel={onClose}
-    >
-      {modalContextHolder}
-      <Spin spinning={loading}>
-        <Collapse
-          accordion
-          activeKey={activeKey}
-          onChange={setActiveKey}
-          items={[
+    return (
+    <Modal open={open} title={t('pages.index.xrayUpdates')} onClose={onClose}>
+      <div className="relative flex flex-col gap-3">
+        {loading && (
+          <div className="absolute inset-0 z-10 grid place-items-center rounded-lg bg-surface-raised/60">
+            <Spinner />
+          </div>
+        )}
+
+        <AccordionSection label="Xray" expanded={activeKey === '1'} onToggle={() => toggle('1')}>
+          <Alert variant="warning" title={t('pages.index.xraySwitchClickDesk')} className="mb-3" />
+          <div className="flex flex-col gap-1.5">
+            {versions.map((version, index) =>
             {
-              key: '1',
-              label: 'Xray',
-              children: (
-                <>
-                  <Alert
-                    type="warning"
-                    className="mb-12"
-                    title={t('pages.index.xraySwitchClickDesk')}
-                    showIcon
-                  />
-                  <div className="version-list">
-                    {versions.map((version, index) => (
-                      <div key={version} className="version-list-item">
-                        <Tag color={index % 2 === 0 ? 'purple' : 'green'}>{version}</Tag>
-                        <Radio
-                          checked={version === `v${status?.xray?.version}`}
-                          onClick={() => switchXrayVersion(version)}
-                        />
-                      </div>
-                    ))}
-                  </div>
-                </>
-              ),
-            },
-            {
-              key: '2',
-              label: 'Geofiles',
-              children: (
-                <>
-                  <div className="version-list">
-                    {GEOFILES.map((file, index) => (
-                      <div key={file} className="version-list-item">
-                        <Tag color={index % 2 === 0 ? 'purple' : 'green'}>{file}</Tag>
-                        <Tooltip title={t('update')}>
-                          <ReloadOutlined
-                            className="reload-icon"
-                            onClick={() => updateGeofile(file)}
-                          />
-                        </Tooltip>
-                      </div>
-                    ))}
-                  </div>
-                  <div className="actions-row">
-                    <Button onClick={() => updateGeofile('')}>
-                      {t('pages.index.geofilesUpdateAll')}
-                    </Button>
-                  </div>
-                </>
-              ),
-            },
-            {
-              key: '3',
-              label: t('pages.index.customGeoTitle'),
-              children: <CustomGeoSection active={activeKeyStr === '3'} />,
-            },
-          ]}
-        />
-      </Spin>
+                const checked = version === `v${ status?.xray?.version }`;
+                return (
+                <button
+                  key={version}
+                  type="button"
+                  onClick={() => switchXrayVersion(version)}
+                  className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5 text-start transition-colors hover:bg-foreground/[0.04]"
+                >
+                  <Badge variant={index % 2 === 0 ? 'primary' : 'success'}>{version}</Badge>
+                  <span
+                    className={cn(
+                        'grid h-4 w-4 shrink-0 place-items-center rounded-full border',
+                        checked ? 'border-accent' : 'border-border-strong'
+                    )}
+                    aria-hidden
+                  >
+                    {checked && <span className="h-2 w-2 rounded-full bg-accent" />}
+                  </span>
+                </button>
+                );
+            })}
+          </div>
+        </AccordionSection>
+
+        <AccordionSection label="Geofiles" expanded={activeKey === '2'} onToggle={() => toggle('2')}>
+          <div className="flex flex-col gap-1.5">
+            {GEOFILES.map((file, index) => (
+              <div key={file} className="flex items-center justify-between gap-3 rounded-md px-2 py-1.5">
+                <Badge variant={index % 2 === 0 ? 'primary' : 'success'}>{file}</Badge>
+                <Tooltip content={t('update')}>
+                  <Button
+                    aria-label={t('update')}
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => updateGeofile(file)}
+                  >
+                    <RefreshCw className="h-4 w-4" aria-hidden />
+                  </Button>
+                </Tooltip>
+              </div>
+            ))}
+          </div>
+          <div className="mt-3 flex justify-end">
+            <Button variant="secondary" onClick={() => updateGeofile('')}>
+              {t('pages.index.geofilesUpdateAll')}
+            </Button>
+          </div>
+        </AccordionSection>
+
+        <AccordionSection
+          label={t('pages.index.customGeoTitle')}
+          expanded={activeKey === '3'}
+          onToggle={() => toggle('3')}
+        >
+          <CustomGeoSection active={activeKey === '3'} />
+        </AccordionSection>
+      </div>
     </Modal>
-  );
+    );
 }

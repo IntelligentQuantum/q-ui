@@ -1,115 +1,119 @@
 import { ObjectUtil } from '@/utils';
 
-export class AllSetting {
-  webListen = '';
-  webDomain = '';
-  webPort = 2053;
-  webCertFile = '';
-  webKeyFile = '';
-  webBasePath = '/';
-  sessionMaxAge = 360;
-  trustedProxyCIDRs = '127.0.0.1/32,::1/128';
-  panelProxy = '';
-  pageSize = 25;
-  expireDiff = 0;
-  trafficDiff = 0;
-  remarkModel = '-io';
-  datepicker: 'gregorian' | 'jalalian' = 'gregorian';
-  tgBotEnable = false;
-  tgBotToken = '';
-  tgBotProxy = '';
-  tgBotAPIServer = '';
-  tgBotChatId = '';
-  tgRunTime = '@daily';
-  tgBotBackup = false;
-  tgBotLoginNotify = true;
-  tgCpu = 80;
-  tgLang = 'en-US';
-  twoFactorEnable = false;
-  twoFactorToken = '';
-  registrationEnable = false;
-  clientCostReseller = 0;
-  clientCostMember = 0;
-  clientCostPerGBReseller = 0;
-  clientCostPerGBMember = 0;
-  resetTrafficCostReseller = 0;
-  resetTrafficCostMember = 0;
-  resetTrafficCostPerGBReseller = 0;
-  resetTrafficCostPerGBMember = 0;
-  zarinpalEnable = false;
-  zarinpalMerchantId = '';
-  zarinpalSandbox = false;
-  zarinpalCurrency = 'IRT';
-  xrayTemplateConfig = '';
-  subEnable = true;
-  subJsonEnable = false;
-  subTitle = '';
-  subSupportUrl = '';
-  subProfileUrl = '';
-  subAnnounce = '';
-  subEnableRouting = false;
-  subRoutingRules = '';
-  subListen = '';
-  subPort = 2096;
-  subPath = '/sub/';
-  subJsonPath = '/json/';
-  subClashEnable = false;
-  subClashPath = '/clash/';
-  subDomain = '';
-  externalTrafficInformEnable = false;
-  externalTrafficInformURI = '';
-  restartXrayOnClientDisable = true;
-  subCertFile = '';
-  subKeyFile = '';
-  subUpdates = 12;
-  subEncrypt = true;
-  subShowInfo = true;
-  subEmailInRemark = true;
-  subURI = '';
-  subJsonURI = '';
-  subClashURI = '';
-  subClashEnableRouting = false;
-  subClashRules = '';
-  subJsonMux = '';
-  subJsonRules = '';
-  subJsonFinalMask = '';
+export class AllSetting
+{
+    public webListen = '';
+    public webDomain = '';
+    public webPort = 2053;
+    public webCertFile = '';
+    public webKeyFile = '';
+    public webBasePath = '/';
+    public sessionMaxAge = 360;
+    public trustedProxyCIDRs = '127.0.0.1/32,::1/128';
+    public panelProxy = '';
+    public pageSize = 25;
+    public expireDiff = 0;
+    public trafficDiff = 0;
+    public remarkModel = '-io';
+    public datepicker: 'gregorian' | 'jalalian' = 'gregorian';
+    public tgBotEnable = false;
+    public tgBotToken = '';
+    public tgBotProxy = '';
+    public tgBotAPIServer = '';
+    public tgBotChatId = '';
+    public tgRunTime = '@daily';
+    public tgBotBackup = false;
+    public tgBotLoginNotify = true;
+    public tgCpu = 80;
+    public tgLang = 'en-US';
+    public twoFactorEnable = false;
+    public twoFactorToken = '';
+    public registrationEnable = false;
+    public clientCostReseller = 0;
+    public clientCostMember = 0;
+    public clientCostPerGBReseller = 0;
+    public clientCostPerGBMember = 0;
+    public resetTrafficCostReseller = 0;
+    public resetTrafficCostMember = 0;
+    public resetTrafficCostPerGBReseller = 0;
+    public resetTrafficCostPerGBMember = 0;
+    public zarinpalEnable = false;
+    public zarinpalMerchantId = '';
+    public zarinpalSandbox = false;
+    public zarinpalCurrency = 'IRT';
+    public xrayTemplateConfig = '';
+    public subEnable = true;
+    public subJsonEnable = false;
+    public subTitle = '';
+    public subSupportUrl = '';
+    public subProfileUrl = '';
+    public subAnnounce = '';
+    public subEnableRouting = false;
+    public subRoutingRules = '';
+    public subListen = '';
+    public subPort = 2096;
+    public subPath = '/sub/';
+    public subJsonPath = '/json/';
+    public subClashEnable = false;
+    public subClashPath = '/clash/';
+    public subDomain = '';
+    public externalTrafficInformEnable = false;
+    public externalTrafficInformURI = '';
+    public restartXrayOnClientDisable = true;
+    public subCertFile = '';
+    public subKeyFile = '';
+    public subUpdates = 12;
+    public subEncrypt = true;
+    public subShowInfo = true;
+    public subEmailInRemark = true;
+    public subURI = '';
+    public subJsonURI = '';
+    public subClashURI = '';
+    public subClashEnableRouting = false;
+    public subClashRules = '';
+    public subJsonMux = '';
+    public subJsonRules = '';
+    public subJsonFinalMask = '';
 
-  timeLocation = 'Local';
+    public timeLocation = 'Local';
 
-  ldapEnable = false;
-  ldapHost = '';
-  ldapPort = 389;
-  ldapUseTLS = false;
-  ldapBindDN = '';
-  ldapPassword = '';
-  ldapBaseDN = '';
-  ldapUserFilter = '(objectClass=person)';
-  ldapUserAttr = 'mail';
-  ldapVlessField = 'vless_enabled';
-  ldapSyncCron = '@every 1m';
-  ldapFlagField = '';
-  ldapTruthyValues = 'true,1,yes,on';
-  ldapInvertFlag = false;
-  ldapInboundTags = '';
-  ldapAutoCreate = false;
-  ldapAutoDelete = false;
-  ldapDefaultTotalGB = 0;
-  ldapDefaultExpiryDays = 0;
-  ldapDefaultLimitIP = 0;
-  hasTgBotToken = false;
-  hasTwoFactorToken = false;
-  hasLdapPassword = false;
-  hasApiToken = false;
-  hasWarpSecret = false;
-  hasNordSecret = false;
+    public ldapEnable = false;
+    public ldapHost = '';
+    public ldapPort = 389;
+    public ldapUseTLS = false;
+    public ldapBindDN = '';
+    public ldapPassword = '';
+    public ldapBaseDN = '';
+    public ldapUserFilter = '(objectClass=person)';
+    public ldapUserAttr = 'mail';
+    public ldapVlessField = 'vless_enabled';
+    public ldapSyncCron = '@every 1m';
+    public ldapFlagField = '';
+    public ldapTruthyValues = 'true,1,yes,on';
+    public ldapInvertFlag = false;
+    public ldapInboundTags = '';
+    public ldapAutoCreate = false;
+    public ldapAutoDelete = false;
+    public ldapDefaultTotalGB = 0;
+    public ldapDefaultExpiryDays = 0;
+    public ldapDefaultLimitIP = 0;
+    public hasTgBotToken = false;
+    public hasTwoFactorToken = false;
+    public hasLdapPassword = false;
+    public hasApiToken = false;
+    public hasWarpSecret = false;
+    public hasNordSecret = false;
 
-  constructor(data?: unknown) {
-    if (data != null) {
-      ObjectUtil.cloneProps(this, data);
+    constructor(data?: unknown)
+    {
+        if (data != null)
+        {
+            ObjectUtil.cloneProps(this, data);
+        }
     }
-  }
 
-  equals(other: AllSetting): boolean {
-    return ObjectUtil.equals(this, other);
-  }
+    public equals(other: AllSetting): boolean
+    {
+        return ObjectUtil.equals(this, other);
+    }
 }

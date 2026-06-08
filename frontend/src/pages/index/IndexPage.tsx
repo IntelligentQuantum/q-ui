@@ -1,48 +1,45 @@
 import { lazy, useCallback, useEffect, useMemo, useState } from 'react';
+import type { ComponentType, ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import {
-  Button,
-  Card,
-  Col,
-  ConfigProvider,
-  Layout,
-  message,
-  Modal,
-  Result,
-  Row,
-  Space,
-  Spin,
-  Statistic,
-  Tag,
-  Tooltip,
-} from 'antd';
-import {
-  BarsOutlined,
-  ControlOutlined,
-  CloudServerOutlined,
-  CloudDownloadOutlined,
-  CloudUploadOutlined,
-  ArrowUpOutlined,
-  ArrowDownOutlined,
-  AreaChartOutlined,
-  GlobalOutlined,
-  SwapOutlined,
-  EyeOutlined,
-  EyeInvisibleOutlined,
-  ThunderboltOutlined,
-  DesktopOutlined,
-  DatabaseOutlined,
-  ForkOutlined,
-  CopyOutlined,
-} from '@ant-design/icons';
+    ArrowDown,
+    ArrowUp,
+    ChartArea,
+    CloudDownload,
+    CloudUpload,
+    Copy,
+    Database,
+    Eye,
+    EyeOff,
+    Globe,
+    HardDrive,
+    List,
+    Monitor,
+    Server,
+    SlidersHorizontal,
+    Split,
+    Zap
+} from 'lucide-react';
 
 import { HttpUtil, SizeFormatter, TimeFormatter, ClipboardManager, FileManager } from '@/utils';
 import { useTheme } from '@/hooks/useTheme';
 import { useStatusQuery } from '@/api/queries/useStatusQuery';
 import { useMediaQuery } from '@/hooks/useMediaQuery';
-import AppSidebar from '@/layouts/AppSidebar';
+import PageShell from '@/layouts/PageShell';
 import { LazyMount } from '@/components/utility';
 import { setMessageInstance } from '@/utils/messageBus';
+import {
+    Badge,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    Modal,
+    Spinner,
+    Tooltip
+} from '@/components/ui';
+import { message } from '@/components/ui/message';
 import StatusCard from './StatusCard';
 import XrayStatusCard from './XrayStatusCard';
 import type { PanelUpdateInfo } from './PanelUpdateModal';
@@ -54,406 +51,397 @@ const SystemHistoryModal = lazy(() => import('./SystemHistoryModal'));
 const XrayMetricsModal = lazy(() => import('./XrayMetricsModal'));
 const XrayLogModal = lazy(() => import('./XrayLogModal'));
 const VersionModal = lazy(() => import('./VersionModal'));
-import './IndexPage.css';
 
-export default function IndexPage() {
-  const { t } = useTranslation();
-  const { isDark, isUltra, antdThemeConfig } = useTheme();
-  const { status, fetched, fetchError, refresh } = useStatusQuery();
-  const { isMobile } = useMediaQuery();
-  const [messageApi, messageContextHolder] = message.useMessage();
-  useEffect(() => { setMessageInstance(messageApi); }, [messageApi]);
+type IconType = ComponentType<{ className?: string; 'aria-hidden'?: boolean }>;
 
-  const [ipLimitEnable, setIpLimitEnable] = useState(false);
-  const [panelUpdateInfo, setPanelUpdateInfo] = useState<PanelUpdateInfo>({
-    currentVersion: '',
-    latestVersion: '',
-    updateAvailable: false,
-  });
-  // True when the update check itself failed (GitHub unreachable / rate-limited),
-  // as opposed to "checked successfully, already up to date".
-  const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
+// A single metric (icon + label + value) used inside the metric cards' two-up grid.
+function Stat({
+    icon: Icon,
+    title,
+    value,
+    suffix,
+    className
+}: {
+  icon: IconType;
+  title: ReactNode;
+  value: ReactNode;
+  suffix?: ReactNode;
+  className?: string;
+})
+{
+    return (
+    <div className={className}>
+      <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <Icon className="h-3.5 w-3.5" aria-hidden />
+        <span>{title}</span>
+      </div>
+      <div className="mt-1 break-all text-lg font-semibold tabular-nums text-foreground">
+        {value}
+        {suffix ? <span className="text-sm font-normal text-muted-foreground">{suffix}</span> : null}
+      </div>
+    </div>
+    );
+}
 
-  const basePath = window.Q_UI_BASE_PATH || '';
+// An action chip used as a card footer trigger (logs/config/backup/etc).
+function ActionButton({
+    icon: Icon,
+    label,
+    onClick,
+    showLabel,
+    highlight,
+    title
+}: {
+  icon?: IconType;
+  label: ReactNode;
+  onClick: () => void;
+  showLabel: boolean;
+  highlight?: boolean;
+  title?: string;
+})
+{
+    return (
+    <Button
+      variant="ghost"
+      size="sm"
+      onClick={onClick}
+      title={title}
+      className={highlight ? 'text-warning hover:text-warning' : undefined}
+    >
+      {Icon ? <Icon className="h-4 w-4" aria-hidden /> : null}
+      {showLabel && <span className="min-w-0 truncate">{label}</span>}
+    </Button>
+    );
+}
 
-  const [showIp, setShowIp] = useState(false);
-  const [logsOpen, setLogsOpen] = useState(false);
-  const [backupOpen, setBackupOpen] = useState(false);
-  const [panelUpdateOpen, setPanelUpdateOpen] = useState(false);
-  const [sysHistoryOpen, setSysHistoryOpen] = useState(false);
-  const [xrayMetricsOpen, setXrayMetricsOpen] = useState(false);
-  const [xrayLogsOpen, setXrayLogsOpen] = useState(false);
-  const [versionOpen, setVersionOpen] = useState(false);
-  const [configTextOpen, setConfigTextOpen] = useState(false);
-  const [configText, setConfigText] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [loadingTip, setLoadingTip] = useState(t('loading'));
+export default function IndexPage()
+{
+    const { t } = useTranslation();
+    const { isDark } = useTheme();
+    const { status, fetched, fetchError, refresh } = useStatusQuery();
+    const { isMobile } = useMediaQuery();
+    const [messageApi] = message.useMessage();
+    useEffect(() =>
+    {
+        setMessageInstance(messageApi);
+    }, [messageApi]);
 
-  useEffect(() => {
-    HttpUtil.post<{ ipLimitEnable?: boolean }>('/panel/setting/defaultSettings').then((msg) => {
-      if (msg?.success && msg.obj) setIpLimitEnable(!!msg.obj.ipLimitEnable);
+    const [ipLimitEnable, setIpLimitEnable] = useState(false);
+    const [panelUpdateInfo, setPanelUpdateInfo] = useState<PanelUpdateInfo>({
+        currentVersion: '',
+        latestVersion: '',
+        updateAvailable: false
     });
-    HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo').then((msg) => {
-      if (msg?.success && msg.obj) {
-        setPanelUpdateInfo(msg.obj);
-        setUpdateCheckFailed(false);
-      } else {
-        // The check errored (the message is also toasted by HttpUtil); flag it so
-        // the version chip doesn't masquerade as "up to date".
-        setUpdateCheckFailed(true);
-      }
-    });
-  }, []);
+    // True when the update check itself failed (GitHub unreachable / rate-limited),
+    // as opposed to "checked successfully, already up to date".
+    const [updateCheckFailed, setUpdateCheckFailed] = useState(false);
 
-  const displayVersion = useMemo(
-    () => panelUpdateInfo.currentVersion || window.Q_UI_CUR_VER || '?',
-    [panelUpdateInfo.currentVersion],
-  );
+    const basePath = window.Q_UI_BASE_PATH || '';
 
-  const setBusy = useCallback(
-    ({ busy, tip }: { busy: boolean; tip?: string }) => {
-      setLoading(busy);
-      if (tip) setLoadingTip(tip);
-    },
-    [],
-  );
+    const [showIp, setShowIp] = useState(false);
+    const [logsOpen, setLogsOpen] = useState(false);
+    const [backupOpen, setBackupOpen] = useState(false);
+    const [panelUpdateOpen, setPanelUpdateOpen] = useState(false);
+    const [sysHistoryOpen, setSysHistoryOpen] = useState(false);
+    const [xrayMetricsOpen, setXrayMetricsOpen] = useState(false);
+    const [xrayLogsOpen, setXrayLogsOpen] = useState(false);
+    const [versionOpen, setVersionOpen] = useState(false);
+    const [configTextOpen, setConfigTextOpen] = useState(false);
+    const [configText, setConfigText] = useState('');
+    const [loading, setLoading] = useState(false);
+    const [loadingTip, setLoadingTip] = useState(t('loading'));
 
-  const stopXray = useCallback(async () => {
-    await HttpUtil.post('/panel/api/server/stopXrayService');
-    await refresh();
-  }, [refresh]);
+    useEffect(() =>
+    {
+        HttpUtil.post<{ ipLimitEnable?: boolean }>('/panel/setting/defaultSettings').then((msg) =>
+        {
+            if (msg?.success && msg.obj)
+            {
+                setIpLimitEnable(!!msg.obj.ipLimitEnable);
+            }
+        });
+        HttpUtil.get<PanelUpdateInfo>('/panel/api/server/getPanelUpdateInfo').then((msg) =>
+        {
+            if (msg?.success && msg.obj)
+            {
+                setPanelUpdateInfo(msg.obj);
+                setUpdateCheckFailed(false);
+            }
+            else
+            {
+                // The check errored (the message is also toasted by HttpUtil); flag it so
+                // the version chip doesn't masquerade as "up to date".
+                setUpdateCheckFailed(true);
+            }
+        });
+    }, []);
 
-  const restartXray = useCallback(async () => {
-    await HttpUtil.post('/panel/api/server/restartXrayService');
-    await refresh();
-  }, [refresh]);
+    const displayVersion = useMemo(
+        () => panelUpdateInfo.currentVersion || window.Q_UI_CUR_VER || '?',
+        [panelUpdateInfo.currentVersion]
+    );
 
-  function openPanelVersion() {
-    if (panelUpdateInfo.updateAvailable) {
-      setPanelUpdateOpen(true);
-    } else {
-      window.open('https://github.com/IntelligentQuantum/q-ui/releases', '_blank', 'noopener,noreferrer');
+    const setBusy = useCallback(
+        ({ busy, tip }: { busy: boolean; tip?: string }) =>
+        {
+            setLoading(busy);
+            if (tip)
+            {
+                setLoadingTip(tip);
+            }
+        },
+        []
+    );
+
+    const stopXray = useCallback(async () =>
+    {
+        await HttpUtil.post('/panel/api/server/stopXrayService');
+        await refresh();
+    }, [refresh]);
+
+    const restartXray = useCallback(async () =>
+    {
+        await HttpUtil.post('/panel/api/server/restartXrayService');
+        await refresh();
+    }, [refresh]);
+
+    function openPanelVersion()
+    {
+        if (panelUpdateInfo.updateAvailable)
+        {
+            setPanelUpdateOpen(true);
+        }
+        else
+        {
+            window.open('https://github.com/IntelligentQuantum/q-ui/releases', '_blank', 'noopener,noreferrer');
+        }
     }
-  }
 
-  function openTelegram() {
-    window.open('https://t.me/XrayUI', '_blank', 'noopener,noreferrer');
-  }
-
-  async function openConfig() {
-    setLoading(true);
-    try {
-      const msg = await HttpUtil.get('/panel/api/server/getConfigJson');
-      if (!msg?.success) return;
-      setConfigText(JSON.stringify(msg.obj, null, 2));
-      setConfigTextOpen(true);
-    } finally {
-      setLoading(false);
+    function openTelegram()
+    {
+        window.open('https://t.me/XrayUI', '_blank', 'noopener,noreferrer');
     }
-  }
 
-  async function copyConfig() {
-    const ok = await ClipboardManager.copyText(configText || '');
-    if (ok) messageApi.success('Copied');
-  }
+    async function openConfig()
+    {
+        setLoading(true);
+        try
+        {
+            const msg = await HttpUtil.get('/panel/api/server/getConfigJson');
+            if (!msg?.success)
+            {
+                return;
+            }
+            setConfigText(JSON.stringify(msg.obj, null, 2));
+            setConfigTextOpen(true);
+        }
+        finally
+        {
+            setLoading(false);
+        }
+    }
 
-  function downloadConfig() {
-    FileManager.downloadTextFile(configText, 'config.json');
-  }
+    async function copyConfig()
+    {
+        const ok = await ClipboardManager.copyText(configText || '');
+        if (ok)
+        {
+            messageApi.success('Copied');
+        }
+    }
 
-  const pageClass = `index-page ${isDark ? 'is-dark' : ''} ${isUltra ? 'is-ultra' : ''}`.trim();
+    function downloadConfig()
+    {
+        FileManager.downloadTextFile(configText, 'config.json');
+    }
 
-  return (
-    <ConfigProvider theme={antdThemeConfig} direction={document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr'}>
-      {messageContextHolder}
-      <Layout className={pageClass}>
-        <AppSidebar />
+    const pageClass = `index-page ${ isDark ? 'is-dark' : '' }`.trim();
 
-        <Layout className="content-shell">
-          <Layout.Content className="content-area">
-            <Spin
-              spinning={loading || !fetched}
-              delay={200}
-              description={loading ? loadingTip : t('loading')}
-              size="large"
-            >
-              {!fetched ? (
-                <div className="loading-spacer" />
-              ) : fetchError ? (
-                <Result
-                  status="error"
-                  title={t('somethingWentWrong')}
-                  subTitle={fetchError}
-                  extra={<Button type="primary" onClick={refresh}>{t('refresh')}</Button>}
-                />
-              ) : (
-                <Row gutter={[isMobile ? 8 : 16, 12]}>
-                  <Col span={24}>
-                    <StatusCard status={status} isMobile={isMobile} />
-                  </Col>
+    const panelVersionLabel = panelUpdateInfo.updateAvailable
+        ? `${ t('update') } ${ panelUpdateInfo.latestVersion }`
+        : `v${ displayVersion }${ updateCheckFailed ? ' ⚠' : '' }`;
 
-                  <Col xs={24} lg={12}>
-                    <XrayStatusCard
-                      status={status}
-                      isMobile={isMobile}
-                      ipLimitEnable={ipLimitEnable}
-                      onStopXray={stopXray}
-                      onRestartXray={restartXray}
-                      onOpenXrayLogs={() => setXrayLogsOpen(true)}
-                      onOpenLogs={() => setLogsOpen(true)}
-                      onOpenVersionSwitch={() => setVersionOpen(true)}
-                    />
-                  </Col>
+    return (
+    <PageShell name={pageClass}>
+            {!fetched ? (
+              <div className="flex min-h-[40vh] items-center justify-center">
+                <Spinner className="h-8 w-8 text-muted-foreground" />
+              </div>
+            ) : fetchError ? (
+              <div className="flex min-h-[40vh] flex-col items-center justify-center gap-3 text-center">
+                <h2 className="text-lg font-semibold text-foreground">{t('somethingWentWrong')}</h2>
+                <p className="max-w-md text-sm text-muted-foreground">{fetchError}</p>
+                <Button variant="primary" onClick={refresh}>{t('refresh')}</Button>
+              </div>
+            ) : (
+              <div className="relative flex flex-col gap-4">
+                {loading && (
+                  <div className="absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-background/60 backdrop-blur-[1px]">
+                    <div className="flex flex-col items-center gap-2">
+                      <Spinner className="h-7 w-7 text-muted-foreground" />
+                      <span className="text-sm text-muted-foreground">{loadingTip}</span>
+                    </div>
+                  </div>
+                )}
 
-                  <Col xs={24} lg={12}>
-                    <Card
-                      title={t('menu.link')}
-                      hoverable
-                      actions={[
-                        <Space className="action" key="logs" onClick={() => setLogsOpen(true)}>
-                          <BarsOutlined />
-                          {!isMobile && <span>{t('pages.index.logs')}</span>}
-                        </Space>,
-                        <Space className="action" key="config" onClick={openConfig}>
-                          <ControlOutlined />
-                          {!isMobile && <span>{t('pages.index.config')}</span>}
-                        </Space>,
-                        <Space className="action" key="backup" onClick={() => setBackupOpen(true)}>
-                          <CloudServerOutlined />
-                          {!isMobile && <span>{t('pages.index.backupTitle')}</span>}
-                        </Space>,
-                      ]}
-                    />
-                  </Col>
+                <StatusCard status={status} isMobile={isMobile} />
 
-                  <Col xs={24} lg={12}>
-                    <Card
-                      title={
-                        <Space>
-                          <span>Q-UI</span>
-                          {isMobile && displayVersion && (
-                            <Tag
-                              color={panelUpdateInfo.updateAvailable ? 'orange' : updateCheckFailed ? 'red' : 'green'}
-                              title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}
-                            >
-                              {panelUpdateInfo.updateAvailable
-                                ? `v${panelUpdateInfo.latestVersion}`
-                                : `v${displayVersion}${updateCheckFailed ? ' ⚠' : ''}`}
-                            </Tag>
-                          )}
-                        </Space>
-                      }
-                      hoverable
-                      actions={[
-                        <Space className="action" key="tg" onClick={openTelegram}>
-                          <svg
-                            viewBox="0 0 24 24"
-                            width="14"
-                            height="14"
-                            fill="currentColor"
-                            className="tg-icon"
-                            aria-hidden="true"
-                          >
-                            <path d="M21.93 4.34a1.5 1.5 0 0 0-2.05-1.6L2.97 9.6c-.92.36-.91 1.66.02 1.99l4.32 1.53 1.7 5.23a1 1 0 0 0 1.68.36l2.43-2.43 4.36 3.21a1.5 1.5 0 0 0 2.36-.91l3.09-13.86a1.5 1.5 0 0 0 0-.38ZM9.97 14.66l-.55 3.36-1.36-4.2 9.8-7.05-7.89 7.89Z" />
-                          </svg>
-                          {!isMobile && <span>@XrayUI</span>}
-                        </Space>,
-                        <Space
-                          key="panel-version"
-                          className={`action ${panelUpdateInfo.updateAvailable ? 'action-update' : ''}`}
-                          onClick={openPanelVersion}
+                <div className="grid grid-cols-1 gap-3 lg:grid-cols-2">
+                  <XrayStatusCard
+                    status={status}
+                    isMobile={isMobile}
+                    ipLimitEnable={ipLimitEnable}
+                    onStopXray={stopXray}
+                    onRestartXray={restartXray}
+                    onOpenXrayLogs={() => setXrayLogsOpen(true)}
+                    onOpenLogs={() => setLogsOpen(true)}
+                    onOpenVersionSwitch={() => setVersionOpen(true)}
+                  />
+
+                  {/* Panel links / actions */}
+                  <Card className="flex h-full flex-col">
+                    <CardHeader>
+                      <CardTitle>{t('menu.link')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="mt-auto flex flex-wrap gap-2 pt-4">
+                      <ActionButton icon={List} label={t('pages.index.logs')} onClick={() => setLogsOpen(true)} showLabel={!isMobile} />
+                      <ActionButton icon={SlidersHorizontal} label={t('pages.index.config')} onClick={openConfig} showLabel={!isMobile} />
+                      <ActionButton icon={Server} label={t('pages.index.backupTitle')} onClick={() => setBackupOpen(true)} showLabel={!isMobile} />
+                    </CardContent>
+                  </Card>
+
+                  {/* Q-UI / version */}
+                  <Card className="flex h-full flex-col">
+                    <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+                      <CardTitle>Q-UI</CardTitle>
+                      {isMobile && displayVersion && (
+                        <Badge
+                          variant={panelUpdateInfo.updateAvailable ? 'warning' : updateCheckFailed ? 'danger' : 'success'}
+                          title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}
                         >
-                          <CloudDownloadOutlined />
-                          {!isMobile && (
-                            <span title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}>
-                              {panelUpdateInfo.updateAvailable
-                                ? `${t('update')} ${panelUpdateInfo.latestVersion}`
-                                : `v${displayVersion}${updateCheckFailed ? ' ⚠' : ''}`}
-                            </span>
-                          )}
-                        </Space>,
-                      ]}
-                    />
-                  </Col>
+                          {panelUpdateInfo.updateAvailable
+                              ? `v${ panelUpdateInfo.latestVersion }`
+                              : `v${ displayVersion }${ updateCheckFailed ? ' ⚠' : '' }`}
+                        </Badge>
+                      )}
+                    </CardHeader>
+                    <CardContent className="mt-auto flex flex-wrap gap-2 pt-4">
+                      <Button variant="ghost" size="sm" onClick={openTelegram}>
+                        <svg viewBox="0 0 24 24" width="14" height="14" fill="currentColor" aria-hidden="true">
+                          <path d="M21.93 4.34a1.5 1.5 0 0 0-2.05-1.6L2.97 9.6c-.92.36-.91 1.66.02 1.99l4.32 1.53 1.7 5.23a1 1 0 0 0 1.68.36l2.43-2.43 4.36 3.21a1.5 1.5 0 0 0 2.36-.91l3.09-13.86a1.5 1.5 0 0 0 0-.38ZM9.97 14.66l-.55 3.36-1.36-4.2 9.8-7.05-7.89 7.89Z" />
+                        </svg>
+                        {!isMobile && <span>@XrayUI</span>}
+                      </Button>
+                      <ActionButton
+                        icon={CloudDownload}
+                        label={panelVersionLabel}
+                        onClick={openPanelVersion}
+                        showLabel={!isMobile}
+                        highlight={panelUpdateInfo.updateAvailable}
+                        title={updateCheckFailed ? t('pages.index.panelUpdateCheckFailed') : undefined}
+                      />
+                    </CardContent>
+                  </Card>
 
-                  <Col xs={24} lg={12}>
-                    <Card
-                      title={t('pages.index.charts')}
-                      hoverable
-                      actions={[
-                        <Space
-                          className="action"
-                          key="sys-history"
-                          onClick={() => setSysHistoryOpen(true)}
+                  {/* Charts */}
+                  <Card className="flex h-full flex-col">
+                    <CardHeader>
+                      <CardTitle>{t('pages.index.charts')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="mt-auto flex flex-wrap gap-2 pt-4">
+                      <ActionButton icon={ChartArea} label={t('pages.index.systemHistoryTitle')} onClick={() => setSysHistoryOpen(true)} showLabel={!isMobile} />
+                      <ActionButton icon={ChartArea} label={t('pages.index.xrayMetricsTitle')} onClick={() => setXrayMetricsOpen(true)} showLabel={!isMobile} />
+                    </CardContent>
+                  </Card>
+
+                  {/* Operation hours */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('pages.index.operationHours')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                      <Stat icon={Zap} title="Xray" value={TimeFormatter.formatSecond(status.appStats.uptime)} />
+                      <Stat icon={Monitor} title="OS" value={TimeFormatter.formatSecond(status.uptime)} />
+                    </CardContent>
+                  </Card>
+
+                  {/* Usage */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('usage')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                      <Stat icon={Database} title={t('pages.index.memory')} value={SizeFormatter.sizeFormat(status.appStats.mem)} />
+                      <Stat icon={Split} title={t('pages.index.threads')} value={status.appStats.threads} />
+                    </CardContent>
+                  </Card>
+
+                  {/* Overall speed */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('pages.index.overallSpeed')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                      <Stat icon={ArrowUp} title={t('pages.index.upload')} value={SizeFormatter.sizeFormat(status.netIO.up)} suffix="/s" />
+                      <Stat icon={ArrowDown} title={t('pages.index.download')} value={SizeFormatter.sizeFormat(status.netIO.down)} suffix="/s" />
+                    </CardContent>
+                  </Card>
+
+                  {/* Total data */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('pages.index.totalData')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                      <Stat icon={CloudUpload} title={t('pages.index.sent')} value={SizeFormatter.sizeFormat(status.netTraffic.sent)} />
+                      <Stat icon={CloudDownload} title={t('pages.index.received')} value={SizeFormatter.sizeFormat(status.netTraffic.recv)} />
+                    </CardContent>
+                  </Card>
+
+                  {/* IP addresses */}
+                  <Card>
+                    <CardHeader className="flex-row items-center justify-between gap-2 space-y-0">
+                      <CardTitle>{t('pages.index.ipAddresses')}</CardTitle>
+                      <Tooltip content={t('pages.index.toggleIpVisibility')}>
+                        <button
+                          type="button"
+                          onClick={() => setShowIp((v) => !v)}
+                          aria-label={t('pages.index.toggleIpVisibility')}
+                          className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground transition-colors hover:bg-surface-sunken hover:text-foreground"
                         >
-                          <AreaChartOutlined />
-                          {!isMobile && <span>{t('pages.index.systemHistoryTitle')}</span>}
-                        </Space>,
-                        <Space
-                          className="action"
-                          key="xray-metrics"
-                          onClick={() => setXrayMetricsOpen(true)}
-                        >
-                          <AreaChartOutlined />
-                          {!isMobile && <span>{t('pages.index.xrayMetricsTitle')}</span>}
-                        </Space>,
-                      ]}
-                    />
-                  </Col>
+                          {showIp ? <Eye className="h-4 w-4" aria-hidden /> : <EyeOff className="h-4 w-4" aria-hidden />}
+                        </button>
+                      </Tooltip>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-1 gap-4 pt-4 sm:grid-cols-2">
+                      <Stat
+                        icon={Globe}
+                        title="IPv4"
+                        value={status.publicIP.ipv4}
+                        className={showIp ? '' : 'blur-sm transition-[filter]'}
+                      />
+                      <Stat
+                        icon={Globe}
+                        title="IPv6"
+                        value={status.publicIP.ipv6}
+                        className={showIp ? '' : 'blur-sm transition-[filter]'}
+                      />
+                    </CardContent>
+                  </Card>
 
-                  <Col xs={24} lg={12}>
-                    <Card title={t('pages.index.operationHours')} hoverable>
-                      <Row gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={12}>
-                          <Statistic
-                            title="Xray"
-                            value={TimeFormatter.formatSecond(status.appStats.uptime)}
-                            prefix={<ThunderboltOutlined />}
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic
-                            title="OS"
-                            value={TimeFormatter.formatSecond(status.uptime)}
-                            prefix={<DesktopOutlined />}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={12}>
-                    <Card title={t('usage')} hoverable>
-                      <Row gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.memory')}
-                            value={SizeFormatter.sizeFormat(status.appStats.mem)}
-                            prefix={<DatabaseOutlined />}
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.threads')}
-                            value={status.appStats.threads}
-                            prefix={<ForkOutlined />}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={12}>
-                    <Card title={t('pages.index.overallSpeed')} hoverable>
-                      <Row gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.upload')}
-                            value={SizeFormatter.sizeFormat(status.netIO.up)}
-                            prefix={<ArrowUpOutlined />}
-                            suffix="/s"
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.download')}
-                            value={SizeFormatter.sizeFormat(status.netIO.down)}
-                            prefix={<ArrowDownOutlined />}
-                            suffix="/s"
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={12}>
-                    <Card title={t('pages.index.totalData')} hoverable>
-                      <Row gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.sent')}
-                            value={SizeFormatter.sizeFormat(status.netTraffic.sent)}
-                            prefix={<CloudUploadOutlined />}
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic
-                            title={t('pages.index.received')}
-                            value={SizeFormatter.sizeFormat(status.netTraffic.recv)}
-                            prefix={<CloudDownloadOutlined />}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={12}>
-                    <Card
-                      title={t('pages.index.ipAddresses')}
-                      hoverable
-                      extra={
-                        <Tooltip
-                          title={t('pages.index.toggleIpVisibility')}
-                          placement={isMobile ? 'topRight' : 'top'}
-                        >
-                          {showIp ? (
-                            <EyeOutlined
-                              className="ip-toggle-icon"
-                              onClick={() => setShowIp(false)}
-                            />
-                          ) : (
-                            <EyeInvisibleOutlined
-                              className="ip-toggle-icon"
-                              onClick={() => setShowIp(true)}
-                            />
-                          )}
-                        </Tooltip>
-                      }
-                    >
-                      <Row className={showIp ? 'ip-visible' : 'ip-hidden'} gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={isMobile ? 24 : 12}>
-                          <Statistic
-                            title="IPv4"
-                            value={status.publicIP.ipv4}
-                            prefix={<GlobalOutlined />}
-                          />
-                        </Col>
-                        <Col span={isMobile ? 24 : 12}>
-                          <Statistic
-                            title="IPv6"
-                            value={status.publicIP.ipv6}
-                            prefix={<GlobalOutlined />}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-
-                  <Col xs={24} lg={12}>
-                    <Card title={t('pages.index.connectionCount')} hoverable>
-                      <Row gutter={isMobile ? [8, 8] : 0}>
-                        <Col span={12}>
-                          <Statistic
-                            title="TCP"
-                            value={status.tcpCount}
-                            prefix={<SwapOutlined />}
-                          />
-                        </Col>
-                        <Col span={12}>
-                          <Statistic
-                            title="UDP"
-                            value={status.udpCount}
-                            prefix={<SwapOutlined />}
-                          />
-                        </Col>
-                      </Row>
-                    </Card>
-                  </Col>
-                </Row>
-              )}
-            </Spin>
-          </Layout.Content>
-        </Layout>
+                  {/* Connection count */}
+                  <Card>
+                    <CardHeader>
+                      <CardTitle>{t('pages.index.connectionCount')}</CardTitle>
+                    </CardHeader>
+                    <CardContent className="grid grid-cols-2 gap-4 pt-4">
+                      <Stat icon={HardDrive} title="TCP" value={status.tcpCount} />
+                      <Stat icon={HardDrive} title="UDP" value={status.udpCount} />
+                    </CardContent>
+                  </Card>
+                </div>
+              </div>
+            )}
 
         <LazyMount when={panelUpdateOpen}>
           <PanelUpdateModal
@@ -500,30 +488,20 @@ export default function IndexPage() {
           <Modal
             open={configTextOpen}
             title={t('pages.index.config')}
-            width={isMobile ? '100%' : 900}
-            style={isMobile
-              ? { top: 20, maxWidth: 'calc(100vw - 16px)' }
-              : { top: 20 }}
-            onCancel={() => setConfigTextOpen(false)}
-            footer={[
-              <Button
-                key="download"
-                onClick={downloadConfig}
-                size={isMobile ? 'small' : 'middle'}
-                icon={<CloudDownloadOutlined />}
-              >
-                {isMobile ? 'Download' : 'config.json'}
-              </Button>,
-              <Button
-                key="copy"
-                type="primary"
-                onClick={copyConfig}
-                size={isMobile ? 'small' : 'middle'}
-                icon={<CopyOutlined />}
-              >
-                Copy
-              </Button>,
-            ]}
+            size="xl"
+            onClose={() => setConfigTextOpen(false)}
+            footer={
+              <>
+                <Button variant="secondary" size={isMobile ? 'sm' : 'md'} onClick={downloadConfig}>
+                  <CloudDownload className="h-4 w-4" aria-hidden />
+                  {isMobile ? 'Download' : 'config.json'}
+                </Button>
+                <Button variant="primary" size={isMobile ? 'sm' : 'md'} onClick={copyConfig}>
+                  <Copy className="h-4 w-4" aria-hidden />
+                  Copy
+                </Button>
+              </>
+            }
           >
             <JsonEditor
               value={configText}
@@ -534,7 +512,6 @@ export default function IndexPage() {
             />
           </Modal>
         </LazyMount>
-      </Layout>
-    </ConfigProvider>
-  );
+    </PageShell>
+    );
 }

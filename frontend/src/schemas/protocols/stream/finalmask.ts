@@ -14,26 +14,26 @@ export const TcpMaskTypeSchema = z.enum(['fragment', 'sudoku', 'header-custom'])
 export type TcpMaskType = z.infer<typeof TcpMaskTypeSchema>;
 
 export const TcpMaskSchema = z.object({
-  type: TcpMaskTypeSchema,
-  settings: z.record(z.string(), z.unknown()).optional(),
+    type: TcpMaskTypeSchema,
+    settings: z.record(z.string(), z.unknown()).optional()
 });
 export type TcpMask = z.infer<typeof TcpMaskSchema>;
 
 export const UdpMaskTypeSchema = z.enum([
-  'salamander',
-  'mkcp-legacy',
-  'header-custom',
-  'xdns',
-  'xicmp',
-  'noise',
-  'sudoku',
-  'realm',
+    'salamander',
+    'mkcp-legacy',
+    'header-custom',
+    'xdns',
+    'xicmp',
+    'noise',
+    'sudoku',
+    'realm'
 ]);
 export type UdpMaskType = z.infer<typeof UdpMaskTypeSchema>;
 
 export const UdpMaskSchema = z.object({
-  type: UdpMaskTypeSchema,
-  settings: z.record(z.string(), z.unknown()).optional(),
+    type: UdpMaskTypeSchema,
+    settings: z.record(z.string(), z.unknown()).optional()
 });
 export type UdpMask = z.infer<typeof UdpMaskSchema>;
 
@@ -48,31 +48,31 @@ export type BbrProfile = z.infer<typeof BbrProfileSchema>;
 // wire (e.g. '20000-50000', '5-10'). preprocess coerces legacy DB rows
 // where interval was stored as a number (UI bug — see B19 in commit history).
 const StringRangeSchema = z.preprocess(
-  (v) => (typeof v === 'number' ? String(v) : v),
-  z.string(),
+    (v) => (typeof v === 'number' ? String(v) : v),
+    z.string()
 );
 
 export const QuicUdpHopSchema = z.object({
-  ports: StringRangeSchema.default('20000-50000'),
-  interval: StringRangeSchema.default('5-10'),
+    ports: StringRangeSchema.default('20000-50000'),
+    interval: StringRangeSchema.default('5-10')
 });
 export type QuicUdpHop = z.infer<typeof QuicUdpHopSchema>;
 
 export const QuicParamsSchema = z.object({
-  congestion: QuicCongestionSchema.default('bbr'),
-  bbrProfile: BbrProfileSchema.optional(),
-  debug: z.boolean().optional(),
-  brutalUp: z.string().optional(),
-  brutalDown: z.string().optional(),
-  udpHop: QuicUdpHopSchema.optional(),
-  initStreamReceiveWindow: z.number().int().min(0).optional(),
-  maxStreamReceiveWindow: z.number().int().min(0).optional(),
-  initConnectionReceiveWindow: z.number().int().min(0).optional(),
-  maxConnectionReceiveWindow: z.number().int().min(0).optional(),
-  maxIdleTimeout: z.number().int().min(4).max(120).optional(),
-  keepAlivePeriod: z.number().int().min(2).max(60).optional(),
-  disablePathMTUDiscovery: z.boolean().optional(),
-  maxIncomingStreams: z.number().int().min(8).optional(),
+    congestion: QuicCongestionSchema.default('bbr'),
+    bbrProfile: BbrProfileSchema.optional(),
+    debug: z.boolean().optional(),
+    brutalUp: z.string().optional(),
+    brutalDown: z.string().optional(),
+    udpHop: QuicUdpHopSchema.optional(),
+    initStreamReceiveWindow: z.number().int().min(0).optional(),
+    maxStreamReceiveWindow: z.number().int().min(0).optional(),
+    initConnectionReceiveWindow: z.number().int().min(0).optional(),
+    maxConnectionReceiveWindow: z.number().int().min(0).optional(),
+    maxIdleTimeout: z.number().int().min(4).max(120).optional(),
+    keepAlivePeriod: z.number().int().min(2).max(60).optional(),
+    disablePathMTUDiscovery: z.boolean().optional(),
+    maxIncomingStreams: z.number().int().min(8).optional()
 });
 export type QuicParams = z.infer<typeof QuicParamsSchema>;
 
@@ -81,8 +81,8 @@ export type QuicParams = z.infer<typeof QuicParamsSchema>;
 // the parsed-in shape; the shadow harness already treats empty arrays as
 // equivalent to absence so both pipelines converge.
 export const FinalMaskStreamSettingsSchema = z.object({
-  tcp: z.array(TcpMaskSchema).default([]),
-  udp: z.array(UdpMaskSchema).default([]),
-  quicParams: QuicParamsSchema.optional(),
+    tcp: z.array(TcpMaskSchema).default([]),
+    udp: z.array(UdpMaskSchema).default([]),
+    quicParams: QuicParamsSchema.optional()
 });
 export type FinalMaskStreamSettings = z.infer<typeof FinalMaskStreamSettingsSchema>;

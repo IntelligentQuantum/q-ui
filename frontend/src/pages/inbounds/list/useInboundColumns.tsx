@@ -1,21 +1,20 @@
 import { useMemo, type ReactElement } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Popover, Switch, Tag, type TableColumnType } from 'antd';
-import { TeamOutlined } from '@ant-design/icons';
+import { Users } from 'lucide-react';
 
 import { SizeFormatter, IntlUtil, ColorUtils } from '@/utils';
-import { InfinityIcon } from '@/components/ui';
+import { InfinityIcon, Badge, Switch, Tooltip, type Column, type BadgeVariant } from '@/components/ui';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
 import { RowActionsCell } from './RowActions';
 import {
-  readStreamHints,
-  networkLabel,
-  networkL4,
-  shadowsocksNetworkLabel,
-  tunnelNetworkLabel,
-  mixedNetworkLabel,
+    readStreamHints,
+    networkLabel,
+    networkL4,
+    shadowsocksNetworkLabel,
+    tunnelNetworkLabel,
+    mixedNetworkLabel
 } from './helpers';
 import type { ClientCountEntry, DBInboundRecord, RowAction } from './types';
 
@@ -31,241 +30,278 @@ interface UseInboundColumnsParams {
   onSwitchEnable: (dbInbound: DBInboundRecord, next: boolean) => void;
 }
 
-export function useInboundColumns({
-  hasAnyRemark,
-  hasActiveNode,
-  nodesById,
-  clientCount,
-  subEnable,
-  expireDiff,
-  trafficDiff,
-  onRowAction,
-  onSwitchEnable,
-}: UseInboundColumnsParams): TableColumnType<DBInboundRecord>[] {
-  const { t } = useTranslation();
-  const { datepicker } = useDatepicker();
+// Map the legacy AntD usageColor tokens onto Badge variants.
+function usageVariant(color: string): BadgeVariant
+{
+    switch (color)
+    {
+        case 'green':
+        case 'success':
+            return 'success';
+        case 'red':
+        case 'error':
+            return 'danger';
+        case 'orange':
+        case 'warning':
+        case 'gold':
+            return 'warning';
+        case 'blue':
+        case 'purple':
+            return 'primary';
+        default:
+            return 'neutral';
+    }
+}
 
-  return useMemo(() => {
-    const cols: TableColumnType<DBInboundRecord>[] = [
-      {
-        title: 'ID',
-        dataIndex: 'id',
-        key: 'id',
-        align: 'right',
-        width: 30,
-      },
-      {
-        title: t('pages.inbounds.operate'),
-        key: 'action',
-        align: 'center',
-        width: 60,
-        render: (_, record) => (
+export function useInboundColumns({
+    hasAnyRemark,
+    hasActiveNode,
+    nodesById,
+    clientCount,
+    subEnable,
+    expireDiff,
+    trafficDiff,
+    onRowAction,
+    onSwitchEnable
+}: UseInboundColumnsParams): Column<DBInboundRecord>[]
+{
+    const { t } = useTranslation();
+    const { datepicker } = useDatepicker();
+
+    return useMemo(() =>
+    {
+        const cols: Column<DBInboundRecord>[] = [
+            {
+                key: 'id',
+                header: 'ID',
+                align: 'end',
+                width: 48,
+                hideBelow: 'sm',
+                cell: (record) => <span className="tabular-nums text-muted-foreground">{record.id}</span>
+            },
+            {
+                key: 'action',
+                header: t('pages.inbounds.operate'),
+                align: 'center',
+                width: 96,
+                cell: (record) => (
           <RowActionsCell
             record={record}
             subEnable={subEnable}
             hasClients={(clientCount[record.id]?.clients || 0) > 0}
             onClick={(key) => onRowAction({ key, dbInbound: record })}
           />
-        ),
-      },
-      {
-        title: t('pages.inbounds.enable'),
-        key: 'enable',
-        align: 'center',
-        width: 35,
-        render: (_, record) => (
-          <Switch
-            checked={record.enable}
-            onChange={(next) => onSwitchEnable(record, next)}
-          />
-        ),
-      },
-    ];
+                )
+            },
+            {
+                key: 'enable',
+                header: t('pages.inbounds.enable'),
+                align: 'center',
+                width: 64,
+                cell: (record) => (
+          <div className="flex justify-center">
+            <Switch
+              checked={record.enable}
+              onCheckedChange={(next) => onSwitchEnable(record, next)}
+              aria-label={t('pages.inbounds.enable')}
+            />
+          </div>
+                )
+            }
+        ];
 
-    if (hasAnyRemark) {
-      cols.push({
-        title: t('pages.inbounds.remark'),
-        dataIndex: 'remark',
-        key: 'remark',
-        align: 'center',
-        width: 60,
-      });
-    }
+        if (hasAnyRemark)
+        {
+            cols.push({
+                key: 'remark',
+                header: t('pages.inbounds.remark'),
+                align: 'center',
+                cell: (record) => <span className="font-medium">{record.remark}</span>
+            });
+        }
 
-    if (hasActiveNode) {
-      cols.push({
-        title: t('pages.inbounds.node'),
-        key: 'node',
-        align: 'center',
-        width: 60,
-        render: (_, record) => {
-          if (record.nodeId == null) {
-            return <Tag color="default">{t('pages.inbounds.localPanel')}</Tag>;
-          }
-          const node = nodesById.get(record.nodeId);
-          if (!node) {
-            return <Tag color="orange">node #{record.nodeId}</Tag>;
-          }
-          return (
-            <Tag color={node.status === 'online' ? 'blue' : 'red'}>{node.name}</Tag>
-          );
-        },
-      });
-    }
+        if (hasActiveNode)
+        {
+            cols.push({
+                key: 'node',
+                header: t('pages.inbounds.node'),
+                align: 'center',
+                hideBelow: 'lg',
+                cell: (record) =>
+                {
+                    if (record.nodeId == null)
+                    {
+                        return <Badge variant="neutral">{t('pages.inbounds.localPanel')}</Badge>;
+                    }
+                    const node = nodesById.get(record.nodeId);
+                    if (!node)
+                    {
+                        return <Badge variant="warning">node #{record.nodeId}</Badge>;
+                    }
+                    return (
+            <Badge variant={node.status === 'online' ? 'primary' : 'danger'}>{node.name}</Badge>
+                    );
+                }
+            });
+        }
 
-    cols.push(
-      {
-        title: t('pages.inbounds.port'),
-        dataIndex: 'port',
-        key: 'port',
-        align: 'center',
-        width: 40,
-      },
-      {
-        title: t('pages.inbounds.protocol'),
-        key: 'protocol',
-        align: 'left',
-        width: 130,
-        render: (_, record) => {
-          const tags: ReactElement[] = [<Tag key="p" color="purple">{record.protocol}</Tag>];
-          if (record.isWireguard || record.isHysteria) {
-            tags.push(<Tag key="n" color="green">UDP</Tag>);
-          } else if (record.isSS) {
-            const stream = readStreamHints(record.streamSettings);
-            tags.push(<Tag key="n" color="green">{shadowsocksNetworkLabel(record.settings)}</Tag>);
-            if (stream.isTls) tags.push(<Tag key="tls" color="blue">TLS</Tag>);
-          } else if (record.isTunnel) {
-            tags.push(<Tag key="n" color="green">{tunnelNetworkLabel(record.settings)}</Tag>);
-          } else if (record.isMixed) {
-            tags.push(<Tag key="n" color="green">{mixedNetworkLabel(record.settings)}</Tag>);
-          } else if (record.isVMess || record.isVLess || record.isTrojan) {
-            const stream = readStreamHints(record.streamSettings);
-            tags.push(<Tag key="n" color="green">{networkLabel(stream.network)}</Tag>);
-            const l4 = networkL4(stream.network);
-            if (l4) tags.push(<Tag key="l4" color="green">{l4}</Tag>);
-            if (stream.isTls) tags.push(<Tag key="tls" color="blue">TLS</Tag>);
-            if (stream.isReality) tags.push(<Tag key="reality" color="blue">Reality</Tag>);
-          }
-          return <div className="protocol-tags">{tags}</div>;
-        },
-      },
-      {
-        title: t('clients'),
-        key: 'clients',
-        align: 'left',
-        width: 110,
-        render: (_, record) => {
-          const cc = clientCount[record.id];
-          if (!cc) return null;
-          return (
-            <>
-              <Tag className="client-count-tag" style={{ margin: 0, padding: '0 2px' }}>
-                <TeamOutlined /> {cc.clients}
-              </Tag>
+        cols.push(
+            {
+                key: 'port',
+                header: t('pages.inbounds.port'),
+                align: 'center',
+                width: 80,
+                cell: (record) => <span className="tabular-nums">{record.port}</span>
+            },
+            {
+                key: 'protocol',
+                header: t('pages.inbounds.protocol'),
+                align: 'start',
+                hideBelow: 'md',
+                cell: (record) =>
+                {
+                    const tags: ReactElement[] = [<Badge key="p" variant="primary">{record.protocol}</Badge>];
+                    if (record.isWireguard || record.isHysteria)
+                    {
+                        tags.push(<Badge key="n" variant="success">UDP</Badge>);
+                    }
+                    else if (record.isSS)
+                    {
+                        const stream = readStreamHints(record.streamSettings);
+                        tags.push(<Badge key="n" variant="success">{shadowsocksNetworkLabel(record.settings)}</Badge>);
+                        if (stream.isTls)
+                        {
+                            tags.push(<Badge key="tls" variant="primary">TLS</Badge>);
+                        }
+                    }
+                    else if (record.isTunnel)
+                    {
+                        tags.push(<Badge key="n" variant="success">{tunnelNetworkLabel(record.settings)}</Badge>);
+                    }
+                    else if (record.isMixed)
+                    {
+                        tags.push(<Badge key="n" variant="success">{mixedNetworkLabel(record.settings)}</Badge>);
+                    }
+                    else if (record.isVMess || record.isVLess || record.isTrojan)
+                    {
+                        const stream = readStreamHints(record.streamSettings);
+                        tags.push(<Badge key="n" variant="success">{networkLabel(stream.network)}</Badge>);
+                        const l4 = networkL4(stream.network);
+                        if (l4)
+                        {
+                            tags.push(<Badge key="l4" variant="success">{l4}</Badge>);
+                        }
+                        if (stream.isTls)
+                        {
+                            tags.push(<Badge key="tls" variant="primary">TLS</Badge>);
+                        }
+                        if (stream.isReality)
+                        {
+                            tags.push(<Badge key="reality" variant="primary">Reality</Badge>);
+                        }
+                    }
+                    return <div className="flex flex-wrap gap-1">{tags}</div>;
+                }
+            },
+            {
+                key: 'clients',
+                header: t('clients'),
+                align: 'start',
+                hideBelow: 'lg',
+                cell: (record) =>
+                {
+                    const cc = clientCount[record.id];
+                    if (!cc)
+                    {
+                        return null;
+                    }
+                    const emailList = (emails: string[]) => (
+            <div className="max-h-[200px] min-w-[150px] overflow-y-auto">
+              {emails.map((e) => (
+                <div key={e} className="py-0.5 font-mono text-xs">{e}</div>
+              ))}
+            </div>
+                    );
+                    return (
+            <div className="flex flex-wrap items-center gap-1">
+              <Badge variant="neutral" className="tabular-nums">
+                <Users className="h-3 w-3" aria-hidden /> {cc.clients}
+              </Badge>
               {cc.active.length > 0 && (
-                <Popover
-                  title={t('subscription.active')}
-                  content={(
-                    <div className="client-email-list">
-                      {cc.active.map((e) => <div key={e}>{e}</div>)}
-                    </div>
-                  )}
-                >
-                  <Tag color="green" className="client-count-tag" style={{ margin: 0, padding: '0 2px' }}>{cc.active.length}</Tag>
-                </Popover>
+                <Tooltip content={emailList(cc.active)}>
+                  <Badge variant="success" className="tabular-nums">{cc.active.length}</Badge>
+                </Tooltip>
               )}
               {cc.deactive.length > 0 && (
-                <Popover
-                  title={t('disabled')}
-                  content={(
-                    <div className="client-email-list">
-                      {cc.deactive.map((e) => <div key={e}>{e}</div>)}
-                    </div>
-                  )}
-                >
-                  <Tag className="client-count-tag" style={{ margin: 0, padding: '0 2px' }}>{cc.deactive.length}</Tag>
-                </Popover>
+                <Tooltip content={emailList(cc.deactive)}>
+                  <Badge variant="neutral" className="tabular-nums">{cc.deactive.length}</Badge>
+                </Tooltip>
               )}
               {cc.depleted.length > 0 && (
-                <Popover
-                  title={t('depleted')}
-                  content={(
-                    <div className="client-email-list">
-                      {cc.depleted.map((e) => <div key={e}>{e}</div>)}
-                    </div>
-                  )}
-                >
-                  <Tag color="red" className="client-count-tag" style={{ margin: 0, padding: '0 2px' }}>{cc.depleted.length}</Tag>
-                </Popover>
+                <Tooltip content={emailList(cc.depleted)}>
+                  <Badge variant="danger" className="tabular-nums">{cc.depleted.length}</Badge>
+                </Tooltip>
               )}
               {cc.online.length > 0 && (
-                <Popover
-                  title={t('online')}
-                  content={(
-                    <div className="client-email-list">
-                      {cc.online.map((e) => <div key={e}>{e}</div>)}
-                    </div>
-                  )}
-                >
-                  <Tag color="blue" className="client-count-tag" style={{ margin: 0, padding: '0 2px' }}>{cc.online.length}</Tag>
-                </Popover>
+                <Tooltip content={emailList(cc.online)}>
+                  <Badge variant="primary" className="tabular-nums">{cc.online.length}</Badge>
+                </Tooltip>
               )}
-            </>
-          );
-        },
-      },
-      {
-        title: t('pages.inbounds.traffic'),
-        key: 'traffic',
-        align: 'center',
-        width: 90,
-        render: (_, record) => (
-          <Popover
+            </div>
+                    );
+                }
+            },
+            {
+                key: 'traffic',
+                header: t('pages.inbounds.traffic'),
+                align: 'center',
+                cell: (record) => (
+          <Tooltip
             content={(
-              <table cellPadding={2}>
-                <tbody>
-                  <tr>
-                    <td>↑ {SizeFormatter.sizeFormat(record.up)}</td>
-                    <td>↓ {SizeFormatter.sizeFormat(record.down)}</td>
-                  </tr>
-                  {record.total > 0 && record.up + record.down < record.total && (
-                    <tr>
-                      <td>{t('remained')}</td>
-                      <td>{SizeFormatter.sizeFormat(record.total - record.up - record.down)}</td>
-                    </tr>
-                  )}
-                </tbody>
-              </table>
+              <div className="text-xs">
+                <div className="flex gap-3">
+                  <span>↑ {SizeFormatter.sizeFormat(record.up)}</span>
+                  <span>↓ {SizeFormatter.sizeFormat(record.down)}</span>
+                </div>
+                {record.total > 0 && record.up + record.down < record.total && (
+                  <div className="mt-1 flex gap-3">
+                    <span>{t('remained')}</span>
+                    <span>{SizeFormatter.sizeFormat(record.total - record.up - record.down)}</span>
+                  </div>
+                )}
+              </div>
             )}
           >
-            <Tag color={ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total)}>
+            <Badge variant={usageVariant(ColorUtils.usageColor(record.up + record.down, trafficDiff, record.total))}>
               {SizeFormatter.sizeFormat(record.up + record.down)} /
               {' '}
               {record.total > 0 ? SizeFormatter.sizeFormat(record.total) : <InfinityIcon />}
-            </Tag>
-          </Popover>
-        ),
-      },
-      {
-        title: t('pages.inbounds.expireDate'),
-        key: 'expiryTime',
-        align: 'center',
-        width: 40,
-        render: (_, record) => {
-          if (record.expiryTime > 0) {
-            return (
-              <Popover content={IntlUtil.formatDate(record.expiryTime, datepicker)}>
-                <Tag color={ColorUtils.usageColor(Date.now(), expireDiff, record._expiryTime)} style={{ minWidth: 50 }}>
+            </Badge>
+          </Tooltip>
+                )
+            },
+            {
+                key: 'expiryTime',
+                header: t('pages.inbounds.expireDate'),
+                align: 'center',
+                hideBelow: 'md',
+                cell: (record) =>
+                {
+                    if (record.expiryTime > 0)
+                    {
+                        return (
+              <Tooltip content={IntlUtil.formatDate(record.expiryTime, datepicker)}>
+                <Badge variant={usageVariant(ColorUtils.usageColor(Date.now(), expireDiff, record._expiryTime))}>
                   {IntlUtil.formatRelativeTime(record.expiryTime)}
-                </Tag>
-              </Popover>
-            );
-          }
-          return <Tag color="purple"><InfinityIcon /></Tag>;
-        },
-      },
-    );
+                </Badge>
+              </Tooltip>
+                        );
+                    }
+                    return <Badge variant="primary"><InfinityIcon /></Badge>;
+                }
+            }
+        );
 
-    return cols;
-  }, [t, hasAnyRemark, hasActiveNode, nodesById, clientCount, subEnable, expireDiff, trafficDiff, datepicker, onRowAction, onSwitchEnable]);
+        return cols;
+    }, [t, hasAnyRemark, hasActiveNode, nodesById, clientCount, subEnable, expireDiff, trafficDiff, datepicker, onRowAction, onSwitchEnable]);
 }
