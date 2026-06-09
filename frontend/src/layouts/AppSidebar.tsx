@@ -23,6 +23,7 @@ import {
     Plug,
     Server,
     Settings,
+    Share2,
     ShieldCheck,
     ShoppingBag,
     ShoppingCart,
@@ -50,7 +51,7 @@ const LOGOUT_KEY = '__logout__';
 type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
-  | 'orders' | 'products' | 'services' | 'customers';
+  | 'orders' | 'products' | 'services' | 'customers' | 'referral';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -70,7 +71,8 @@ const iconByName: Record<IconName, LucideIcon> = {
     orders: ShoppingCart,
     products: LayoutGrid,
     services: Server,
-    customers: Users
+    customers: Users,
+    referral: Share2
 };
 
 interface NavTab {
@@ -174,6 +176,8 @@ export default function AppSidebar()
         push(me?.isMember === true, '/services', 'services', 'menu.services');    // member's own configs
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
         push(has('customer.view') && !me?.isAdmin, '/customers', 'customers', 'menu.customers'); // mod, reseller
+        // Referral dashboard: resellers (own link/stats) and admins (manage).
+        push(Boolean(me?.isReseller || me?.isAdmin), '/referral', 'referral', 'menu.referral');
 
         // 4) Administration (admin): users, reports, settings, xray, API docs.
         push(has('user.manage'), '/users', 'users', 'menu.users');

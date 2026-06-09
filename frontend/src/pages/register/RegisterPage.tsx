@@ -8,6 +8,7 @@ import type { TFunction } from 'i18next';
 import type { z } from 'zod';
 
 import { HttpUtil, LanguageManager } from '@/utils';
+import { getStoredReferralCode } from '@/utils/referral';
 import { setMessageInstance } from '@/utils/messageBus';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import {
@@ -142,7 +143,10 @@ export default function RegisterPage()
                 email: values.email.trim(),
                 username: values.username.trim(),
                 password: values.password,
-                confirmPassword: values.confirmPassword
+                confirmPassword: values.confirmPassword,
+                // Auto-attached from first-touch capture; never a visible field.
+                // Omitted when absent so the backend treats it as no-referral.
+                ...(getStoredReferralCode() ? { referralCode: getStoredReferralCode() } : {})
             };
             const msg = await HttpUtil.post('/register', payload);
             if (msg.success)

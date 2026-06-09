@@ -20,6 +20,7 @@ const OrdersPage = lazy(() => import('@/pages/orders/OrdersPage'));
 const ProductsPage = lazy(() => import('@/pages/products/ProductsPage'));
 const CustomersPage = lazy(() => import('@/pages/customers/CustomersPage'));
 const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
+const ReferralPage = lazy(() => import('@/pages/referral/ReferralPage'));
 const ThemePreviewPage = lazy(() => import('@/pages/theme-preview/ThemePreviewPage'));
 
 function withSuspense(node: React.ReactNode)
@@ -48,7 +49,8 @@ const routes: RouteObject[] = [
             { path: 'orders', element: withSuspense(<OrdersPage />) },
             { path: 'products', element: withSuspense(<ProductsPage />) },
             { path: 'customers', element: withSuspense(<CustomersPage />) },
-            { path: 'services', element: withSuspense(<ServicesPage />) }
+            { path: 'services', element: withSuspense(<ServicesPage />) },
+            { path: 'referral', element: withSuspense(<ReferralPage />) }
         ]
     },
     // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it

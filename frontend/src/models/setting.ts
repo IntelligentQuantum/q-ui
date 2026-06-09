@@ -37,6 +37,7 @@ export class AllSetting
     public resetTrafficCostMember = 0;
     public resetTrafficCostPerGBReseller = 0;
     public resetTrafficCostPerGBMember = 0;
+    public referralCommissionPercent = 15;
     public zarinpalEnable = false;
     public zarinpalMerchantId = '';
     public zarinpalSandbox = false;

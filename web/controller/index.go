@@ -29,6 +29,7 @@ type RegisterForm struct {
 	Username        string `json:"username" form:"username"`
 	Password        string `json:"password" form:"password"`
 	ConfirmPassword string `json:"confirmPassword" form:"confirmPassword"`
+	ReferralCode string `json:"referralCode" form:"referralCode"`
 }
 
 // IndexController handles the main index and login-related routes.
@@ -207,11 +208,12 @@ func (a *IndexController) register(c *gin.Context) {
 	}
 
 	user, regErr := a.userService.Register(service.RegisterInput{
-		FullName: form.FullName,
-		Phone:    form.Phone,
-		Email:    form.Email,
-		Username: form.Username,
-		Password: form.Password,
+		FullName:     form.FullName,
+		Phone:        form.Phone,
+		Email:        form.Email,
+		Username:     form.Username,
+		Password:     form.Password,
+		ReferralCode: form.ReferralCode,
 	})
 	if regErr != nil {
 		defaultRegisterLimiter.registerFailure(remoteIP, registrationLimitBucket)

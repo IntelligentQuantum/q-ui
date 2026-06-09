@@ -102,6 +102,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// Customer roster (moderator: all, reseller: own) — gated by customer.view.
 	NewCustomerController(api)
 
+	// Referral dashboard (reseller views own code/stats) + admin code management.
+	NewReferralController(api)
+
 	// Identity + wallet snapshot for the current session (any logged-in user).
 	api.GET("/me", a.me)
 	// Self-service profile editing (any logged-in user; never admin-gated).
@@ -152,6 +155,10 @@ func (a *APIController) me(c *gin.Context) {
 		"clientCostPerGB": costPerGB,
 		"zarinpalEnable":  zarinpalEnable,
 		"currency":        currency,
+		// Reseller referral identity, so the SPA can render the share link without
+		// a second round-trip. Empty for non-resellers / before first generation.
+		"referralCode":    user.ReferralCode,
+		"referralEnabled": user.ReferralEnabled,
 	}, nil)
 }
 

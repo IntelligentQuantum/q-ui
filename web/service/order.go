@@ -38,6 +38,38 @@ type OrderService struct {
 	clientService  ClientService
 	inboundService InboundService
 	xrayService    XrayService
+	settingService SettingService
+}
+
+// payReferralCommission credits the referring reseller a configurable percentage
+// of a completed paid order. Best-effort: any problem is logged, never surfaced
+// to the buyer, and never affects the purchase. Guards: the order must have been
+// charged (Amount > 0), the buyer must have a referrer, the referrer must still
+// be a reseller, and the configured percentage must be positive.
+func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Order) {
+	if order == nil || order.Amount <= 0 || buyer == nil || buyer.ReferredByUserId <= 0 {
+		return
+	}
+	percent, err := s.settingService.GetReferralCommissionPercent()
+	if err != nil || percent <= 0 {
+		return
+	}
+	var referrer model.User
+	if err := database.GetDB().Where("id = ?", buyer.ReferredByUserId).First(&referrer).Error; err != nil {
+		return
+	}
+	// Only an account that is still a reseller earns commission.
+	if referrer.CanonicalRole() != model.RoleReseller {
+		return
+	}
+	commission := order.Amount * int64(percent) / 100
+	if commission <= 0 {
+		return
+	}
+	if _, err := s.walletService.Credit(referrer.Id, commission,
+		fmt.Sprintf("referral commission %d%% — %s order #%d", percent, buyer.Username, order.Id)); err != nil {
+		logger.Errorf("order: referral commission of %d to reseller %d failed: %v", commission, referrer.Id, err)
+	}
 }
 
 // Purchase buys a product for the given buyer (taken from the session, never
@@ -91,6 +123,8 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
 		Updates(map[string]any{"status": order.Status, "client_email": order.ClientEmail}).Error; err != nil {
 		logger.Warningf("order %d provisioned but final status update failed: %v", order.Id, err)
 	}
+	// Reward the referring reseller (if any) once the purchase is complete.
+	s.payReferralCommission(buyer, order)
 	return order, nil
 }
 
@@ -148,6 +182,8 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 	order.Status = model.OrderCompleted
 	_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 		Update("status", model.OrderCompleted).Error
+	// Renewals are real purchases too — reward the referring reseller.
+	s.payReferralCommission(buyer, order)
 	return order, nil
 }
 

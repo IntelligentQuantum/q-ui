@@ -39,21 +39,13 @@ type User struct {
 	FullName string `json:"fullName" gorm:"default:''"`
 	Phone    string `json:"phone" gorm:"default:''"`
 	Email    string `json:"email" gorm:"default:''"`
-	// Role gates access: "admin" has unrestricted access, "user" is limited to
-	// the clients page and to clients they own. The column defaults to "user"
-	// (least privilege); the bootstrap admin and all pre-existing users are
-	// promoted to "admin" by initUser / the RoleBalanceBackfill seeder so
-	// existing installs keep working.
 	Role string `json:"role" gorm:"default:'user';index"`
-	// Balance is the user's wallet in integer credits. Clients cost credits to
-	// create; admins top up balances. Integer (not float) to avoid rounding.
 	Balance int64 `json:"balance" gorm:"default:0"`
-	// CostPerGBOverride, when > 0, is this account's per-GB client-creation price
-	// in credits, overriding the role default (clientCostPerGB<Role>). 0 means
-	// "use the role default". Set per account by an admin. Admins are never
-	// charged regardless.
-	CostPerGBOverride int   `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
-	LoginEpoch        int64 `json:"-" gorm:"default:0"`
+	CostPerGBOverride int `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
+	ReferralCode string `json:"referralCode" gorm:"column:referral_code;default:'';index"`
+	ReferralEnabled bool `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
+	ReferredByUserId int   `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
+	LoginEpoch       int64 `json:"-" gorm:"default:0"`
 }
 
 // Role constants for the RBAC system. Four roles, in descending privilege:

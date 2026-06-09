@@ -45,6 +45,10 @@ type RegisterInput struct {
 	Email    string
 	Username string
 	Password string
+	// ReferralCode is the invite code captured by the frontend from the
+	// `?ref=` URL param (the user never types it). It is optional and never
+	// affects whether registration succeeds — see the attribution step below.
+	ReferralCode string
 }
 
 // minPasswordLen is the only password requirement: a basic minimum length. The
@@ -134,6 +138,13 @@ func (s *UserService) Register(input RegisterInput) (*model.User, error) {
 	})
 	if err != nil {
 		return nil, err
+	}
+
+	// First-touch, immutable referral attribution. Done AFTER the user commits
+	// and best-effort by design: a bad/disabled/self/duplicate code is silently
+	// ignored and can never fail the registration (business rule).
+	if strings.TrimSpace(input.ReferralCode) != "" {
+		logAttributeError(user.Id, input.ReferralCode, (&ReferralService{}).Attribute(user.Id, input.ReferralCode))
 	}
 
 	user.Password = ""

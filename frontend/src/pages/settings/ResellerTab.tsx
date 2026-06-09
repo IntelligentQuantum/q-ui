@@ -102,6 +102,30 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
 
       <SettingListItem
         paddings="small"
+        title={t('pages.settings.security.referralCommission', { defaultValue: 'Referral commission' })}
+        description={t('pages.settings.security.referralCommissionDesc', {
+            defaultValue: 'Percentage of a referred user’s store purchase credited to the referring reseller’s wallet. 0 disables payouts.'
+        })}
+      >
+        <div className="flex items-center gap-2">
+          <Input
+            type="number"
+            min={0}
+            max={100}
+            className="w-28"
+            value={allSetting.referralCommissionPercent}
+            onChange={(e) =>
+            {
+                const n = Math.max(0, Math.min(100, Number(e.target.value) || 0));
+                updateSetting({ referralCommissionPercent: n });
+            }}
+          />
+          <span className="text-sm text-muted-foreground">%</span>
+        </div>
+      </SettingListItem>
+
+      <SettingListItem
+        paddings="small"
         title={t('pages.settings.security.zarinpalEnable')}
         description={t('pages.settings.security.zarinpalEnableDesc')}
       >

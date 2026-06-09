@@ -66,6 +66,9 @@ var defaultValueMap = map[string]string{
 	"resetTrafficCostMember":        "0",
 	"resetTrafficCostPerGBReseller": "0",
 	"resetTrafficCostPerGBMember":   "0",
+	// Percentage of a referred user's store purchase credited back to the
+	// referring reseller's wallet as commission (0 disables payouts).
+	"referralCommissionPercent": "15",
 
 	// ZarinPal payment gateway (balance top-up)
 	"zarinpalEnable":              "false",
@@ -518,6 +521,13 @@ func (s *SettingService) GetResetTrafficCostForRole(role string) (int, error) {
 		return 0, nil
 	}
 	return s.getInt("resetTrafficCost" + roleCostSuffix(role))
+}
+
+// GetReferralCommissionPercent returns the percentage of a referred user's
+// store purchase that is credited to the referring reseller's wallet. 0 (or a
+// negative configured value, clamped by validation) disables commission payouts.
+func (s *SettingService) GetReferralCommissionPercent() (int, error) {
+	return s.getInt("referralCommissionPercent")
 }
 
 // GetResetTrafficCostPerGBForRole returns the credits charged per GB of the

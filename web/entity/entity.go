@@ -66,6 +66,7 @@ type AllSetting struct {
 	ResetTrafficCostMember        int `json:"resetTrafficCostMember" form:"resetTrafficCostMember" validate:"gte=0"`               // Flat credits charged to a member per traffic reset
 	ResetTrafficCostPerGBReseller int `json:"resetTrafficCostPerGBReseller" form:"resetTrafficCostPerGBReseller" validate:"gte=0"` // Credits/GB charged to a reseller on traffic reset
 	ResetTrafficCostPerGBMember   int `json:"resetTrafficCostPerGBMember" form:"resetTrafficCostPerGBMember" validate:"gte=0"`     // Credits/GB charged to a member on traffic reset
+	ReferralCommissionPercent     int `json:"referralCommissionPercent" form:"referralCommissionPercent" validate:"gte=0,lte=100"` // % of a referred user's purchase credited to the referrer
 
 	// Reseller / billing (ZarinPal balance top-up)
 	ZarinpalEnable     bool   `json:"zarinpalEnable" form:"zarinpalEnable"`         // Enable ZarinPal balance top-up
