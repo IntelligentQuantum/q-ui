@@ -42,6 +42,7 @@ import {
     HttpFields,
     HysteriaFields,
     MixedFields,
+    MtprotoFields,
     ShadowsocksFields,
     TunFields,
     TunnelFields,
@@ -569,6 +570,7 @@ export default function InboundFormModal({
       {protocol === Protocols.TUNNEL && <TunnelFields />}
       {protocol === Protocols.HTTP && <HttpFields />}
       {protocol === Protocols.MIXED && <MixedFields mixedUdpOn={mixedUdpOn} />}
+      {protocol === Protocols.MTPROTO && <MtprotoFields />}
       {protocol === Protocols.SHADOWSOCKS && <ShadowsocksFields isSSWith2022={isSSWith2022} />}
       {protocol === Protocols.VLESS && (
         <VlessFields
@@ -713,7 +715,7 @@ export default function InboundFormModal({
     );
 
     const showProtocolTab =
-    ([Protocols.VLESS, Protocols.SHADOWSOCKS, Protocols.HTTP, Protocols.MIXED, Protocols.TUNNEL, Protocols.TUN, Protocols.WIREGUARD] as string[]).includes(protocol)
+    ([Protocols.VLESS, Protocols.SHADOWSOCKS, Protocols.HTTP, Protocols.MIXED, Protocols.TUNNEL, Protocols.TUN, Protocols.WIREGUARD, Protocols.MTPROTO] as string[]).includes(protocol)
     || isFallbackHost;
 
     const tabList = useMemo(

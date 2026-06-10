@@ -56,13 +56,16 @@ export default function XrayPage()
         setOutboundTestUrl,
         inboundTags,
         clientReverseTags,
+        subscriptionOutbounds,
         restartResult,
         outboundsTraffic,
         outboundTestStates,
+        subscriptionTestStates,
         testingAll,
         fetchAll,
         resetOutboundsTraffic,
         testOutbound,
+        testSubscriptionOutbound,
         testAllOutbounds,
         saveAll,
         resetToDefault,
@@ -100,6 +103,15 @@ export default function XrayPage()
         if (outbound)
         {
             await testOutbound(idx, outbound, mode);
+        }
+    }
+
+    async function onTestSubscriptionOutbound(outbound: Record<string, unknown>, mode: string)
+    {
+        const tag = typeof outbound?.tag === 'string' ? outbound.tag : '';
+        if (tag)
+        {
+            await testSubscriptionOutbound(tag, outbound, mode);
         }
     }
 
@@ -302,14 +314,18 @@ export default function XrayPage()
             setTemplateSettings={setTemplateSettings}
             outboundsTraffic={outboundsTraffic}
             outboundTestStates={outboundTestStates}
+            subscriptionTestStates={subscriptionTestStates}
             testingAll={testingAll}
             inboundTags={inboundTags}
+            subscriptionOutbounds={subscriptionOutbounds}
             isMobile={isMobile}
             onResetTraffic={resetOutboundsTraffic}
             onTest={onTestOutbound}
+            onTestSubscription={onTestSubscriptionOutbound}
             onTestAll={testAllOutbounds}
             onShowWarp={() => setWarpOpen(true)}
             onShowNord={() => setNordOpen(true)}
+            onRefreshXrayData={fetchAll}
           />
                 );
             case 'balancer':

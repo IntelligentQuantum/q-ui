@@ -1187,6 +1187,34 @@ export interface GenLinkInput {
   externalProxy?: ExternalProxyEntry | null;
 }
 
+export interface GenMtprotoLinkInput {
+  inbound: Inbound;
+  address: string;
+  port?: number;
+}
+
+// Telegram proxy deep link for an mtproto inbound. mtproto is inbound-level
+// (mtg sidecar, no per-client credentials), so the link carries the shared
+// FakeTLS secret rather than a client id/password.
+export function genMtprotoLink(input: GenMtprotoLinkInput): string
+{
+    const { inbound, address, port = inbound.port } = input;
+    if (inbound.protocol !== 'mtproto')
+    {
+        return '';
+    }
+    const secret = (inbound.settings.secret as string | undefined) ?? '';
+    if (secret.length === 0)
+    {
+        return '';
+    }
+    const url = new URL('tg://proxy');
+    url.searchParams.set('server', address);
+    url.searchParams.set('port', String(port));
+    url.searchParams.set('secret', secret);
+    return url.toString();
+}
+
 // Per-protocol dispatcher matching the legacy `genLink` switch. Returns
 // '' for protocols that don't have client-based share links (wireguard
 // goes through genWireguardLinks/Configs separately, http/mixed/tunnel
@@ -1230,6 +1258,8 @@ export function genLink(input: GenLinkInput): string
                 clientAuth: client.auth ?? '',
                 externalProxy
             });
+        case 'mtproto':
+            return genMtprotoLink({ inbound, address, port });
         default:
             return '';
     }

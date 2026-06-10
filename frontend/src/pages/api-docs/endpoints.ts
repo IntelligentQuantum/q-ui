@@ -1228,5 +1228,73 @@ export const sections: readonly Section[] = [
                 response: '{\n  "type": "invalidate",\n  "resource": "inbounds"\n}'
             }
         ]
+    },
+    {
+        id: 'sync-additions',
+        title: 'Outbound Subscriptions & Sync Additions',
+        description:
+      'Routes registered by the upstream sync (outbound-subscription management, node client-IP sync) and the fork\'s crypto-payment webhook. Some of these have no dedicated SPA screen yet, but the API endpoints are live.',
+        endpoints: [
+            {
+                method: 'POST',
+                path: '/plisio/callback',
+                summary: 'Public Plisio crypto-payment webhook. No session/CSRF — authenticity is verified from the HMAC-SHA1 verify_hash. Credits the wallet (deposit + configurable bonus) once a payment is confirmed; idempotent against duplicates/replays.'
+            },
+            {
+                method: 'GET',
+                path: '/panel/api/clients/subscription/:email',
+                summary: 'Return a client\'s subscription URL, per-inbound config links and QR data — used by the post-purchase success modal and the services view.'
+            },
+            {
+                method: 'GET',
+                path: '/panel/api/server/clientIps',
+                summary: 'List the source IP addresses recorded against clients (client-IP synchronization across nodes).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/api/server/clientIps',
+                summary: 'Update or clear the recorded client IP list for a client.'
+            },
+            {
+                method: 'GET',
+                path: '/panel/xray/outbound-subs',
+                summary: 'List configured outbound subscriptions (auto-refreshed proxy outbound feeds).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs',
+                summary: 'Create an outbound subscription.'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs/:id/refresh',
+                summary: 'Force an immediate refresh of one outbound subscription.'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs/:id/move',
+                summary: 'Reorder an outbound subscription within the list.'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs/:id',
+                summary: 'Update an outbound subscription.'
+            },
+            {
+                method: 'DELETE',
+                path: '/panel/xray/outbound-subs/:id',
+                summary: 'Delete an outbound subscription.'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs/:id/del',
+                summary: 'Delete an outbound subscription (POST alias for clients that cannot send DELETE).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/outbound-subs/parse',
+                summary: 'Parse a subscription URL or body into outbound entries without persisting them.'
+            }
+        ]
     }
 ];

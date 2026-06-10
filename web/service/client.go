@@ -65,23 +65,13 @@ func (c ClientWithAttachments) MarshalJSON() ([]byte, error) {
 	return out, nil
 }
 
-func clientKeyForProtocol(p model.Protocol, rec *model.ClientRecord) string {
-	if rec == nil {
-		return ""
-	}
-	switch p {
-	case model.Trojan:
-		return rec.Password
-	case model.Shadowsocks:
-		return rec.Email
-	case model.Hysteria:
-		return rec.Auth
-	default:
-		return rec.UUID
-	}
-}
-
 type ClientService struct{}
+
+// ErrClientNotInInbound is returned (wrapped) when a client cannot be located
+// in an inbound's settings during deletion. Deletion treats it as non-fatal so
+// the operation stays idempotent and tolerant of pre-existing data drift
+// between the clients table and the inbound's settings JSON.
+var ErrClientNotInInbound = errors.New("client not found in inbound")
 
 // Short-lived tombstone of just-deleted client emails so that a node snapshot
 // arriving between delete and node-side processing doesn't resurrect them.
@@ -814,6 +804,20 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		updated.CreatedAt = existing.CreatedAt
 	}
 
+	// Preserve existing credentials when the caller omits them, so a partial
+	// update (e.g. only changing traffic/expiry) doesn't silently rotate the
+	// client's UUID/password/auth via fillProtocolDefaults. Supplying a new
+	// value still rotates it intentionally.
+	if updated.ID == "" {
+		updated.ID = existing.UUID
+	}
+	if updated.Password == "" {
+		updated.Password = existing.Password
+	}
+	if updated.Auth == "" {
+		updated.Auth = existing.Auth
+	}
+
 	if updated.Email != existing.Email {
 		var collisionCount int64
 		if err := database.GetDB().Model(&model.ClientRecord{}).
@@ -857,8 +861,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 			}
 			return needRestart, getErr
 		}
-		oldKey := clientKeyForProtocol(inbound.Protocol, existing)
-		if oldKey == "" {
+		if existing.Email == "" {
 			continue
 		}
 		if err := s.fillProtocolDefaults(&updated, inbound); err != nil {
@@ -871,7 +874,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 		nr, upErr := s.UpdateInboundClient(inboundSvc, &model.Inbound{
 			Id:       ibId,
 			Settings: string(settingsPayload),
-		}, oldKey)
+		}, existing.Email)
 		if upErr != nil {
 			return needRestart, upErr
 		}
@@ -982,19 +985,27 @@ func (s *ClientService) Delete(inboundSvc *InboundService, id int, keepTraffic b
 
 	needRestart := false
 	for _, ibId := range inboundIds {
-		inbound, getErr := inboundSvc.GetInbound(ibId)
-		if getErr != nil {
+		if _, getErr := inboundSvc.GetInbound(ibId); getErr != nil {
 			if errors.Is(getErr, gorm.ErrRecordNotFound) {
 				continue
 			}
 			return needRestart, getErr
 		}
-		key := clientKeyForProtocol(inbound.Protocol, existing)
-		if key == "" {
+
+		// Always delete by email — the client's stable identity. This removes
+		// every matching entry from the inbound's settings even when the stored
+		// credential (UUID/password/auth) drifted from the inbound JSON, or a
+		// duplicate entry with the same email exists.
+		if existing.Email == "" {
 			continue
 		}
-		nr, delErr := s.DelInboundClient(inboundSvc, ibId, key, false)
+		nr, delErr := s.DelInboundClientByEmail(inboundSvc, ibId, existing.Email, false)
 		if delErr != nil {
+			// The client is already absent from this inbound (data drift or a
+			// retried delete). Skip it — deletion stays idempotent.
+			if errors.Is(delErr, ErrClientNotInInbound) {
+				continue
+			}
 			return needRestart, delErr
 		}
 		if nr {
@@ -1309,8 +1320,8 @@ func (s *ClientService) BulkDetach(inboundSvc *InboundService, emails []string, 
 // delInboundClients removes several clients from a single inbound in one pass:
 // one settings rewrite, one runtime sweep, one Save and one SyncInbound for the
 // whole batch, instead of repeating the full per-client cycle. It mirrors the
-// semantics of DelInboundClient for each removed client. needRestart is the OR
-// across all removals.
+// semantics of DelInboundClientByEmail for each removed client. needRestart is
+// the OR across all removals.
 func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId int, recs []*model.ClientRecord, keepTraffic bool) (bool, error) {
 	if len(recs) == 0 {
 		return false, nil
@@ -1328,20 +1339,12 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 		return false, err
 	}
 
-	clientKey := "id"
-	switch oldInbound.Protocol {
-	case "trojan":
-		clientKey = "password"
-	case "shadowsocks":
-		clientKey = "email"
-	case "hysteria":
-		clientKey = "auth"
-	}
-
+	// Match by email — the client's stable identity (see Delete). Removes every
+	// entry carrying a wanted email, independent of credential drift.
 	wanted := make(map[string]struct{}, len(recs))
 	for _, rec := range recs {
-		if k := clientKeyForProtocol(oldInbound.Protocol, rec); k != "" {
-			wanted[k] = struct{}{}
+		if rec.Email != "" {
+			wanted[rec.Email] = struct{}{}
 		}
 	}
 
@@ -1362,9 +1365,8 @@ func (s *ClientService) delInboundClients(inboundSvc *InboundService, inboundId 
 			newClients = append(newClients, client)
 			continue
 		}
-		cid, _ := c[clientKey].(string)
-		if _, hit := wanted[cid]; hit && cid != "" {
-			email, _ := c["email"].(string)
+		email, _ := c["email"].(string)
+		if _, hit := wanted[email]; hit && email != "" {
 			enable, _ := c["enable"].(bool)
 			removed = append(removed, removedClient{email: email, needApiDel: enable})
 			continue
@@ -1506,6 +1508,9 @@ func (s *ClientService) DeleteByEmail(inboundSvc *InboundService, email string, 
 	for _, ibId := range inboundIds {
 		nr, delErr := s.DelInboundClientByEmail(inboundSvc, ibId, email, false)
 		if delErr != nil {
+			if errors.Is(delErr, ErrClientNotInInbound) {
+				continue
+			}
 			return needRestart, delErr
 		}
 		if nr {
@@ -1582,13 +1587,27 @@ func (s *ClientService) ResetTrafficByEmail(inboundSvc *InboundService, email st
 	if err != nil {
 		return false, err
 	}
+
+	needRestart := false
+	if !rec.Enable {
+		updated := rec.ToClient()
+		updated.Enable = true
+		nr, uErr := s.Update(inboundSvc, rec.Id, *updated)
+		if uErr != nil {
+			logger.Warning("Failed to auto-enable client during traffic reset:", uErr)
+		}
+		if nr {
+			needRestart = true
+		}
+	}
+
 	if len(inboundIds) == 0 {
 		if rErr := inboundSvc.ResetClientTrafficByEmail(email); rErr != nil {
 			return false, rErr
 		}
-		return false, nil
+		return needRestart, nil
 	}
-	needRestart := false
+
 	for _, ibId := range inboundIds {
 		nr, rErr := inboundSvc.ResetClientTraffic(ibId, email)
 		if rErr != nil {
@@ -1838,15 +1857,19 @@ func (s *ClientService) ListPaged(inboundSvc *InboundService, settingSvc *Settin
 type GroupSummary struct {
 	Name        string `json:"name"`
 	ClientCount int    `json:"clientCount"`
+	TrafficUsed int64  `json:"trafficUsed"`
 }
 
 func (s *ClientService) ListGroups() ([]GroupSummary, error) {
 	db := database.GetDB()
+	// email is unique in both clients and client_traffics, so the LEFT JOIN
+	// never double-counts a client's traffic.
 	var derived []GroupSummary
-	if err := db.Model(&model.ClientRecord{}).
-		Select("group_name AS name, COUNT(*) AS client_count").
-		Where("group_name <> ''").
-		Group("group_name").
+	if err := db.Table("clients AS c").
+		Select("c.group_name AS name, COUNT(*) AS client_count, COALESCE(SUM(ct.up + ct.down), 0) AS traffic_used").
+		Joins("LEFT JOIN client_traffics ct ON ct.email = c.email").
+		Where("c.group_name <> ''").
+		Group("c.group_name").
 		Scan(&derived).Error; err != nil {
 		return nil, err
 	}
@@ -1854,16 +1877,20 @@ func (s *ClientService) ListGroups() ([]GroupSummary, error) {
 	if err := db.Find(&stored).Error; err != nil {
 		return nil, err
 	}
-	merged := make(map[string]int, len(derived)+len(stored))
+	type groupAgg struct {
+		count   int
+		traffic int64
+	}
+	merged := make(map[string]groupAgg, len(derived)+len(stored))
 	for _, g := range stored {
-		merged[g.Name] = 0
+		merged[g.Name] = groupAgg{}
 	}
 	for _, g := range derived {
-		merged[g.Name] = g.ClientCount
+		merged[g.Name] = groupAgg{count: g.ClientCount, traffic: g.TrafficUsed}
 	}
 	out := make([]GroupSummary, 0, len(merged))
-	for name, count := range merged {
-		out = append(out, GroupSummary{Name: name, ClientCount: count})
+	for name, agg := range merged {
+		out = append(out, GroupSummary{Name: name, ClientCount: agg.count, TrafficUsed: agg.traffic})
 	}
 	sort.Slice(out, func(i, j int) bool {
 		return strings.ToLower(out[i].Name) < strings.ToLower(out[j].Name)
@@ -1909,6 +1936,15 @@ func (s *ClientService) BulkResetTraffic(inboundSvc *InboundService, emails []st
 	}
 	if len(cleanEmails) == 0 {
 		return 0, nil
+	}
+
+	for _, e := range cleanEmails {
+		rec, err := s.GetRecordByEmail(nil, e)
+		if err == nil && !rec.Enable {
+			updated := rec.ToClient()
+			updated.Enable = true
+			s.Update(inboundSvc, rec.Id, *updated)
+		}
 	}
 
 	affected := 0
@@ -2828,29 +2864,15 @@ func (s *ClientService) bulkAdjustInboundClients(
 		return res
 	}
 
-	clientKey := "id"
-	switch oldInbound.Protocol {
-	case model.Trojan:
-		clientKey = "password"
-	case model.Shadowsocks:
-		clientKey = "email"
-	case model.Hysteria:
-		clientKey = "auth"
-	}
-
-	keyToEmail := make(map[string]string, len(emails))
+	// Match by email — the client's stable identity (see Delete). Credentials
+	// can drift from the inbound JSON, so they are never used for matching.
+	wantedEmails := make(map[string]struct{}, len(emails))
 	for _, email := range emails {
-		entry := plan[email]
-		if entry == nil {
+		if plan[email] == nil {
 			res.perEmailSkipped[email] = "client not found"
 			continue
 		}
-		key := clientKeyForProtocol(oldInbound.Protocol, entry.record)
-		if key == "" {
-			res.perEmailSkipped[email] = "missing client key for protocol"
-			continue
-		}
-		keyToEmail[key] = email
+		wantedEmails[email] = struct{}{}
 	}
 
 	interfaceClients, _ := settings["clients"].([]any)
@@ -2861,9 +2883,8 @@ func (s *ClientService) bulkAdjustInboundClients(
 		if !ok {
 			continue
 		}
-		cKey, _ := c[clientKey].(string)
-		targetEmail, found := keyToEmail[cKey]
-		if !found {
+		targetEmail, _ := c["email"].(string)
+		if _, want := wantedEmails[targetEmail]; !want || targetEmail == "" {
 			continue
 		}
 		entry := plan[targetEmail]
@@ -2878,7 +2899,7 @@ func (s *ClientService) bulkAdjustInboundClients(
 		foundEmails[targetEmail] = true
 	}
 
-	for _, email := range keyToEmail {
+	for email := range wantedEmails {
 		if !foundEmails[email] {
 			res.perEmailSkipped[email] = "Client Not Found In Inbound"
 		}
@@ -3139,29 +3160,15 @@ func (s *ClientService) bulkDelInboundClients(
 		return res
 	}
 
-	clientKey := "id"
-	switch oldInbound.Protocol {
-	case model.Trojan:
-		clientKey = "password"
-	case model.Shadowsocks:
-		clientKey = "email"
-	case model.Hysteria:
-		clientKey = "auth"
-	}
-
-	keyToEmail := make(map[string]string, len(emails))
+	// Match by email — the client's stable identity (see Delete). Removes every
+	// entry carrying a wanted email, independent of credential drift.
+	wantedEmails := make(map[string]struct{}, len(emails))
 	for _, email := range emails {
-		rec := records[email]
-		if rec == nil {
+		if records[email] == nil {
 			res.perEmailSkipped[email] = "client not found"
 			continue
 		}
-		key := clientKeyForProtocol(oldInbound.Protocol, rec)
-		if key == "" {
-			res.perEmailSkipped[email] = "missing client key for protocol"
-			continue
-		}
-		keyToEmail[key] = email
+		wantedEmails[email] = struct{}{}
 	}
 
 	interfaceClients, _ := settings["clients"].([]any)
@@ -3174,19 +3181,17 @@ func (s *ClientService) bulkDelInboundClients(
 			newClients = append(newClients, client)
 			continue
 		}
-		cKey, _ := c[clientKey].(string)
-		if targetEmail, found := keyToEmail[cKey]; found {
-			foundEmails[targetEmail] = true
-			if em, _ := c["email"].(string); em != "" {
-				en, _ := c["enable"].(bool)
-				enableByEmail[em] = en
-			}
+		em, _ := c["email"].(string)
+		if _, found := wantedEmails[em]; found && em != "" {
+			foundEmails[em] = true
+			en, _ := c["enable"].(bool)
+			enableByEmail[em] = en
 			continue
 		}
 		newClients = append(newClients, client)
 	}
 
-	for _, email := range keyToEmail {
+	for email := range wantedEmails {
 		if !foundEmails[email] {
 			res.perEmailSkipped[email] = "Client Not Found In Inbound"
 		}
@@ -3655,16 +3660,18 @@ func (s *ClientService) Detach(inboundSvc *InboundService, id int, inboundIds []
 		if _, attached := have[ibId]; !attached {
 			continue
 		}
-		inbound, getErr := inboundSvc.GetInbound(ibId)
-		if getErr != nil {
+		if _, getErr := inboundSvc.GetInbound(ibId); getErr != nil {
 			return needRestart, getErr
 		}
-		key := clientKeyForProtocol(inbound.Protocol, existing)
-		if key == "" {
+		// Detach by email — the client's stable identity (see Delete).
+		if existing.Email == "" {
 			continue
 		}
-		nr, delErr := s.DelInboundClient(inboundSvc, ibId, key, true)
+		nr, delErr := s.DelInboundClientByEmail(inboundSvc, ibId, existing.Email, true)
 		if delErr != nil {
+			if errors.Is(delErr, ErrClientNotInInbound) {
+				continue
+			}
 			return needRestart, delErr
 		}
 		if nr {
@@ -3890,7 +3897,7 @@ func (s *ClientService) addInboundClient(inboundSvc *InboundService, data *model
 	return needRestart, nil
 }
 
-func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, clientId string) (bool, error) {
+func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *model.Inbound, oldEmail string) (bool, error) {
 	defer lockInbound(data.Id).Unlock()
 
 	clients, err := inboundSvc.GetClients(data)
@@ -3916,53 +3923,27 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 		return false, err
 	}
 
-	oldEmail := ""
 	newClientId := ""
+	switch oldInbound.Protocol {
+	case "trojan":
+		newClientId = clients[0].Password
+	case "shadowsocks":
+		newClientId = clients[0].Email
+	case "hysteria":
+		newClientId = clients[0].Auth
+	default:
+		newClientId = clients[0].ID
+	}
+
+	// Locate the client to replace by email — the client's stable identity.
+	// Credentials (uuid/password/auth) can drift from the inbound JSON, so they
+	// are never used for matching.
 	clientIndex := -1
 	for index, oldClient := range oldClients {
-		oldClientId := ""
-		switch oldInbound.Protocol {
-		case "trojan":
-			oldClientId = oldClient.Password
-			newClientId = clients[0].Password
-		case "shadowsocks":
-			oldClientId = oldClient.Email
-			newClientId = clients[0].Email
-		case "hysteria":
-			oldClientId = oldClient.Auth
-			newClientId = clients[0].Auth
-		default:
-			oldClientId = oldClient.ID
-			newClientId = clients[0].ID
-		}
-		if clientId == oldClientId {
+		if strings.EqualFold(oldClient.Email, oldEmail) {
 			oldEmail = oldClient.Email
 			clientIndex = index
 			break
-		}
-	}
-
-	if clientIndex == -1 {
-		var rec model.ClientRecord
-		var lookupErr error
-		switch oldInbound.Protocol {
-		case "trojan":
-			lookupErr = database.GetDB().Where("password = ?", clientId).First(&rec).Error
-		case "shadowsocks":
-			lookupErr = database.GetDB().Where("email = ?", clientId).First(&rec).Error
-		case "hysteria":
-			lookupErr = database.GetDB().Where("auth = ?", clientId).First(&rec).Error
-		default:
-			lookupErr = database.GetDB().Where("uuid = ?", clientId).First(&rec).Error
-		}
-		if lookupErr == nil && rec.Email != "" {
-			for index, oldClient := range oldClients {
-				if oldClient.Email == rec.Email {
-					oldEmail = oldClient.Email
-					clientIndex = index
-					break
-				}
-			}
 		}
 	}
 
@@ -4188,145 +4169,6 @@ func (s *ClientService) UpdateInboundClient(inboundSvc *InboundService, data *mo
 	return needRestart, nil
 }
 
-func (s *ClientService) DelInboundClient(inboundSvc *InboundService, inboundId int, clientId string, keepTraffic bool) (bool, error) {
-	defer lockInbound(inboundId).Unlock()
-
-	oldInbound, err := inboundSvc.GetInbound(inboundId)
-	if err != nil {
-		logger.Error("Load Old Data Error")
-		return false, err
-	}
-	var settings map[string]any
-	err = json.Unmarshal([]byte(oldInbound.Settings), &settings)
-	if err != nil {
-		return false, err
-	}
-
-	email := ""
-	client_key := "id"
-	switch oldInbound.Protocol {
-	case "trojan":
-		client_key = "password"
-	case "shadowsocks":
-		client_key = "email"
-	case "hysteria":
-		client_key = "auth"
-	}
-
-	interfaceClients := settings["clients"].([]any)
-	var newClients []any
-	needApiDel := false
-	clientFound := false
-	for _, client := range interfaceClients {
-		c := client.(map[string]any)
-		c_id := c[client_key].(string)
-		if c_id == clientId {
-			clientFound = true
-			email, _ = c["email"].(string)
-			needApiDel, _ = c["enable"].(bool)
-		} else {
-			newClients = append(newClients, client)
-		}
-	}
-
-	if !clientFound {
-		return false, common.NewError("Client Not Found In Inbound For ID:", clientId)
-	}
-
-	db := database.GetDB()
-	newClients = compactOrphans(db, newClients)
-	if newClients == nil {
-		newClients = []any{}
-	}
-	settings["clients"] = newClients
-	newSettings, err := json.MarshalIndent(settings, "", "  ")
-	if err != nil {
-		return false, err
-	}
-
-	oldInbound.Settings = string(newSettings)
-
-	emailShared, err := inboundSvc.emailUsedByOtherInbounds(email, inboundId)
-	if err != nil {
-		return false, err
-	}
-
-	if !emailShared && !keepTraffic {
-		err = inboundSvc.DelClientIPs(db, email)
-		if err != nil {
-			logger.Error("Error in delete client IPs")
-			return false, err
-		}
-	}
-	needRestart := false
-	markDirty := false
-
-	if len(email) > 0 {
-		var enables []bool
-		err = db.Model(xray.ClientTraffic{}).Where("email = ?", email).Limit(1).Pluck("enable", &enables).Error
-		if err != nil {
-			logger.Error("Get stats error")
-			return false, err
-		}
-		notDepleted := len(enables) > 0 && enables[0]
-		if !emailShared && !keepTraffic {
-			err = inboundSvc.DelClientStat(db, email)
-			if err != nil {
-				logger.Error("Delete stats Data Error")
-				return false, err
-			}
-		}
-		if needApiDel && notDepleted && oldInbound.NodeID == nil {
-			rt, rterr := inboundSvc.runtimeFor(oldInbound)
-			if rterr != nil {
-				needRestart = true
-			} else {
-				err1 := rt.RemoveUser(context.Background(), oldInbound, email)
-				if err1 == nil {
-					logger.Debug("Client deleted on", rt.Name(), ":", email)
-					needRestart = false
-				} else if strings.Contains(err1.Error(), fmt.Sprintf("User %s not found.", email)) {
-					logger.Debug("User is already deleted. Nothing to do more...")
-				} else {
-					logger.Debug("Error in deleting client on", rt.Name(), ":", err1)
-					needRestart = true
-				}
-			}
-		}
-	}
-	if oldInbound.NodeID != nil && len(email) > 0 {
-		rt, push, dirty, perr := inboundSvc.nodePushPlan(oldInbound)
-		if perr != nil {
-			return false, perr
-		}
-		if dirty {
-			markDirty = true
-		}
-		if push {
-			if err1 := rt.DeleteUser(context.Background(), oldInbound, email); err1 != nil {
-				logger.Warning("Error in deleting client on", rt.Name(), ":", err1)
-				markDirty = true
-			}
-		}
-	}
-	if err := db.Save(oldInbound).Error; err != nil {
-		return false, err
-	}
-	finalClients, gcErr := inboundSvc.GetClients(oldInbound)
-	if gcErr != nil {
-		return false, gcErr
-	}
-	if err := s.SyncInbound(db, inboundId, finalClients); err != nil {
-		return false, err
-	}
-	if markDirty && oldInbound.NodeID != nil {
-		if dErr := (&NodeService{}).MarkNodeDirty(*oldInbound.NodeID); dErr != nil {
-			logger.Warning("mark node dirty failed:", dErr)
-		}
-	}
-	return needRestart, nil
-}
-
 func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inboundId int, email string, keepTraffic bool) (bool, error) {
 	defer lockInbound(inboundId).Unlock()
 
@@ -4364,7 +4206,7 @@ func (s *ClientService) DelInboundClientByEmail(inboundSvc *InboundService, inbo
 	}
 
 	if !found {
-		return false, common.NewError(fmt.Sprintf("client with email %s not found", email))
+		return false, fmt.Errorf("%w for email: %s", ErrClientNotInInbound, email)
 	}
 	db := database.GetDB()
 	newClients = compactOrphans(db, newClients)
@@ -4471,23 +4313,15 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 		return false, err
 	}
 
-	clientId := ""
-
+	found := false
 	for _, oldClient := range oldClients {
 		if oldClient.Email == clientEmail {
-			switch inbound.Protocol {
-			case "trojan":
-				clientId = oldClient.Password
-			case "shadowsocks":
-				clientId = oldClient.Email
-			default:
-				clientId = oldClient.ID
-			}
+			found = true
 			break
 		}
 	}
 
-	if len(clientId) == 0 {
+	if !found {
 		return false, common.NewError("Client Not Found For Email:", clientEmail)
 	}
 
@@ -4512,7 +4346,7 @@ func (s *ClientService) SetClientTelegramUserID(inboundSvc *InboundService, traf
 		return false, err
 	}
 	inbound.Settings = string(modifiedSettings)
-	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientId)
+	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientEmail)
 	return needRestart, err
 }
 
@@ -4556,25 +4390,18 @@ func (s *ClientService) ToggleClientEnableByEmail(inboundSvc *InboundService, cl
 		return false, false, err
 	}
 
-	clientId := ""
+	found := false
 	clientOldEnabled := false
 
 	for _, oldClient := range oldClients {
 		if oldClient.Email == clientEmail {
-			switch inbound.Protocol {
-			case "trojan":
-				clientId = oldClient.Password
-			case "shadowsocks":
-				clientId = oldClient.Email
-			default:
-				clientId = oldClient.ID
-			}
+			found = true
 			clientOldEnabled = oldClient.Enable
 			break
 		}
 	}
 
-	if len(clientId) == 0 {
+	if !found {
 		return false, false, common.NewError("Client Not Found For Email:", clientEmail)
 	}
 
@@ -4600,7 +4427,7 @@ func (s *ClientService) ToggleClientEnableByEmail(inboundSvc *InboundService, cl
 	}
 	inbound.Settings = string(modifiedSettings)
 
-	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientId)
+	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientEmail)
 	if err != nil {
 		return false, needRestart, err
 	}
@@ -4637,23 +4464,15 @@ func (s *ClientService) ResetClientIpLimitByEmail(inboundSvc *InboundService, cl
 		return false, err
 	}
 
-	clientId := ""
-
+	found := false
 	for _, oldClient := range oldClients {
 		if oldClient.Email == clientEmail {
-			switch inbound.Protocol {
-			case "trojan":
-				clientId = oldClient.Password
-			case "shadowsocks":
-				clientId = oldClient.Email
-			default:
-				clientId = oldClient.ID
-			}
+			found = true
 			break
 		}
 	}
 
-	if len(clientId) == 0 {
+	if !found {
 		return false, common.NewError("Client Not Found For Email:", clientEmail)
 	}
 
@@ -4678,7 +4497,7 @@ func (s *ClientService) ResetClientIpLimitByEmail(inboundSvc *InboundService, cl
 		return false, err
 	}
 	inbound.Settings = string(modifiedSettings)
-	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientId)
+	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientEmail)
 	return needRestart, err
 }
 
@@ -4696,23 +4515,15 @@ func (s *ClientService) ResetClientExpiryTimeByEmail(inboundSvc *InboundService,
 		return false, err
 	}
 
-	clientId := ""
-
+	found := false
 	for _, oldClient := range oldClients {
 		if oldClient.Email == clientEmail {
-			switch inbound.Protocol {
-			case "trojan":
-				clientId = oldClient.Password
-			case "shadowsocks":
-				clientId = oldClient.Email
-			default:
-				clientId = oldClient.ID
-			}
+			found = true
 			break
 		}
 	}
 
-	if len(clientId) == 0 {
+	if !found {
 		return false, common.NewError("Client Not Found For Email:", clientEmail)
 	}
 
@@ -4737,7 +4548,7 @@ func (s *ClientService) ResetClientExpiryTimeByEmail(inboundSvc *InboundService,
 		return false, err
 	}
 	inbound.Settings = string(modifiedSettings)
-	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientId)
+	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientEmail)
 	return needRestart, err
 }
 
@@ -4758,23 +4569,15 @@ func (s *ClientService) ResetClientTrafficLimitByEmail(inboundSvc *InboundServic
 		return false, err
 	}
 
-	clientId := ""
-
+	found := false
 	for _, oldClient := range oldClients {
 		if oldClient.Email == clientEmail {
-			switch inbound.Protocol {
-			case "trojan":
-				clientId = oldClient.Password
-			case "shadowsocks":
-				clientId = oldClient.Email
-			default:
-				clientId = oldClient.ID
-			}
+			found = true
 			break
 		}
 	}
 
-	if len(clientId) == 0 {
+	if !found {
 		return false, common.NewError("Client Not Found For Email:", clientEmail)
 	}
 
@@ -4799,6 +4602,6 @@ func (s *ClientService) ResetClientTrafficLimitByEmail(inboundSvc *InboundServic
 		return false, err
 	}
 	inbound.Settings = string(modifiedSettings)
-	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientId)
+	needRestart, err := s.UpdateInboundClient(inboundSvc, inbound, clientEmail)
 	return needRestart, err
 }

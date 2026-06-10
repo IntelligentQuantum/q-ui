@@ -10,7 +10,8 @@ export const ProtocolSchema = z.enum([
     'http',
     'mixed',
     'tunnel',
-    'tun'
+    'tun',
+    'mtproto'
 ]);
 export type Protocol = z.infer<typeof ProtocolSchema>;
 
@@ -30,5 +31,6 @@ export const Protocols = Object.freeze({
     HTTP: 'http',
     MIXED: 'mixed',
     TUNNEL: 'tunnel',
-    TUN: 'tun'
+    TUN: 'tun',
+    MTPROTO: 'mtproto'
 });

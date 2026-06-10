@@ -86,6 +86,10 @@
     {
       "name": "WebSocket",
       "description": "Real-time status updates via WebSocket. Connect once at <code>ws://<panel>/ws</code> to receive a stream of JSON messages without polling. Requires an authenticated session cookie (Bearer token auth is not supported). Each message has a <code>type</code> field that identifies the payload shape."
+    },
+    {
+      "name": "Outbound Subscriptions & Sync Additions",
+      "description": "Routes registered by the upstream sync (outbound-subscription management, node client-IP sync) and the fork's crypto-payment webhook. Some of these have no dedicated SPA screen yet, but the API endpoints are live."
     }
   ],
   "paths": {
@@ -6393,6 +6397,426 @@
                 "example": {
                   "type": "invalidate",
                   "resource": "inbounds"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/plisio/callback": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Public Plisio crypto-payment webhook. No session/CSRF — authenticity is verified from the HMAC-SHA1 verify_hash. Credits the wallet (deposit + configurable bonus) once a payment is confirmed; idempotent against duplicates/replays.",
+        "operationId": "post_plisio_callback",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clients/subscription/{email}": {
+      "get": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Return a client's subscription URL, per-inbound config links and QR data — used by the post-purchase success modal and the services view.",
+        "operationId": "get_panel_api_clients_subscription_email",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/server/clientIps": {
+      "get": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "List the source IP addresses recorded against clients (client-IP synchronization across nodes).",
+        "operationId": "get_panel_api_server_clientIps",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Update or clear the recorded client IP list for a client.",
+        "operationId": "post_panel_api_server_clientIps",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs": {
+      "get": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "List configured outbound subscriptions (auto-refreshed proxy outbound feeds).",
+        "operationId": "get_panel_xray_outbound_subs",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Create an outbound subscription.",
+        "operationId": "post_panel_xray_outbound_subs",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs/{id}/refresh": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Force an immediate refresh of one outbound subscription.",
+        "operationId": "post_panel_xray_outbound_subs_id_refresh",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs/{id}/move": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Reorder an outbound subscription within the list.",
+        "operationId": "post_panel_xray_outbound_subs_id_move",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs/{id}": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Update an outbound subscription.",
+        "operationId": "post_panel_xray_outbound_subs_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Delete an outbound subscription.",
+        "operationId": "delete_panel_xray_outbound_subs_id",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs/{id}/del": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Delete an outbound subscription (POST alias for clients that cannot send DELETE).",
+        "operationId": "post_panel_xray_outbound_subs_id_del",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "description": "",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/outbound-subs/parse": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Parse a subscription URL or body into outbound entries without persisting them.",
+        "operationId": "post_panel_xray_outbound_subs_parse",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
                 }
               }
             }

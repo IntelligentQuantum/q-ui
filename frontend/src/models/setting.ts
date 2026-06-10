@@ -84,6 +84,7 @@ export class AllSetting
     public subJsonMux = '';
     public subJsonRules = '';
     public subJsonFinalMask = '';
+    public subThemeDir = ''; // upstream: custom subscription page template path
 
     public timeLocation = 'Local';
 

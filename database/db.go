@@ -79,6 +79,7 @@ func initModels() error {
 		&model.Order{},
 		&model.Referral{},
 		&model.SyncAudit{},
+		&model.OutboundSubscription{},
 	}
 	for _, mdl := range models {
 		if err := db.AutoMigrate(mdl); err != nil {
