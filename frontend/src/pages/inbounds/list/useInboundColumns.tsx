@@ -216,7 +216,7 @@ export function useInboundColumns({
                         return null;
                     }
                     const emailList = (emails: string[]) => (
-            <div className="max-h-[200px] min-w-[150px] overflow-y-auto">
+            <div className="max-h-[min(60vh,360px)] min-w-[150px] overflow-y-auto pe-1">
               {emails.map((e) => (
                 <div key={e} className="py-0.5 font-mono text-xs">{e}</div>
               ))}

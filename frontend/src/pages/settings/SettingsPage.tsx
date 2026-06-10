@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useLocation } from 'react-router-dom';
 import { message } from '@/components/ui/message';
-import { ArrowUp, TriangleAlert, X } from 'lucide-react';
+import { ArrowUp, X } from 'lucide-react';
 
 import { HttpUtil, PromiseUtil } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
@@ -289,28 +289,26 @@ export default function SettingsPage()
                 )}
 
                 {confAlerts.length > 0 && alertVisible && (
-                  <Alert variant="danger" title={t('pages.settings.securityWarnings')}>
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="flex flex-col gap-1">
-                        <b className="text-foreground">{t('pages.settings.panelExposed')}</b>
-                        <ul className="list-disc ps-5">
-                          {confAlerts.map((msg, i) => <li key={i}>{msg}</li>)}
-                        </ul>
-                      </div>
-                      <button
-                        type="button"
-                        aria-label={t('cancel')}
-                        onClick={() => setAlertVisible(false)}
-                        className="-me-1 grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
-                      >
-                        <X className="h-4 w-4" aria-hidden />
-                      </button>
+                  <Alert variant="danger" className="relative pe-11" title={t('pages.settings.securityWarnings')}>
+                    <div className="flex flex-col gap-1">
+                      <b className="text-foreground">{t('pages.settings.panelExposed')}</b>
+                      <ul className="list-disc ps-5">
+                        {confAlerts.map((msg, i) => <li key={i}>{msg}</li>)}
+                      </ul>
                     </div>
+                    <button
+                      type="button"
+                      aria-label={t('cancel')}
+                      onClick={() => setAlertVisible(false)}
+                      className="absolute end-2 top-2 grid h-7 w-7 shrink-0 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <X className="h-4 w-4" aria-hidden />
+                    </button>
                   </Alert>
                 )}
 
                 <Card>
-                  <CardContent className="flex flex-col gap-4 p-5 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex flex-col gap-4 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
                     <div className="flex flex-wrap items-center gap-2">
                       <Button disabled={saveDisabled} onClick={onSave}>
                         {t('pages.settings.save')}
@@ -319,11 +317,12 @@ export default function SettingsPage()
                         {t('pages.settings.restartPanel')}
                       </Button>
                     </div>
-                    <div className="flex items-start gap-2 text-sm text-warning sm:max-w-md">
-                      <TriangleAlert className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                      <span>{t('pages.settings.infoDesc')}</span>
-                    </div>
-                  </CardContent>
+                    <Alert
+                      variant="warning"
+                      title={t('pages.settings.infoDesc')}
+                      className="w-full sm:w-auto sm:flex-1 sm:max-w-md"
+                    />
+                  </div>
                 </Card>
 
                 <Card>

@@ -1,12 +1,12 @@
 import { useId, useRef, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { cn } from './cn';
 
 export type TooltipSide = 'top' | 'bottom' | 'start' | 'end';
 
-// Anchor position per side, kept separate from the hover gap: an interactive
-// tooltip drops the gap so the cursor can travel onto the popover (which lives
-// inside the wrapper) without firing mouseleave, making its content scrollable.
+// Anchor position per side for the default (non-interactive) tooltip, which is
+// absolutely positioned relative to its inline wrapper. Kept separate from the
+// hover gap below.
 const sidePos: Record<TooltipSide, string> = {
     top: 'bottom-full left-1/2 -translate-x-1/2',
     bottom: 'top-full left-1/2 -translate-x-1/2',
@@ -21,6 +21,27 @@ const sideGap: Record<TooltipSide, string> = {
     end: 'ms-2'
 };
 
+// Fixed-position coordinates per side for an INTERACTIVE tooltip. Anchored to
+// the trigger's viewport rect so the popover escapes any overflow-clipped /
+// scrollable ancestor (e.g. a data table), which plain z-index cannot do. No
+// gap is left, so the cursor can travel from the trigger onto the popover (a
+// DOM descendant) without firing mouseleave — keeping its content scrollable.
+function fixedStyleFor(sideValue: TooltipSide, rect: DOMRect): CSSProperties
+{
+    switch (sideValue)
+    {
+        case 'top':
+            return { top: rect.top, left: rect.left + rect.width / 2, transform: 'translate(-50%, -100%)' };
+        case 'start':
+            return { top: rect.top + rect.height / 2, left: rect.left, transform: 'translate(-100%, -50%)' };
+        case 'end':
+            return { top: rect.top + rect.height / 2, left: rect.right, transform: 'translateY(-50%)' };
+        case 'bottom':
+        default:
+            return { top: rect.bottom, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' };
+    }
+}
+
 export interface TooltipProps {
   content: ReactNode;
   side?: TooltipSide;
@@ -31,27 +52,37 @@ export interface TooltipProps {
    *  the wrapped element isn't shrunk to content width. Off by default to keep
    *  the inline behaviour every existing call site relies on. */
   block?: boolean;
-  /** Make the popover hoverable: pointer events are enabled and the hover gap
-   *  is removed so the cursor can reach it. Use for data-heavy tooltips whose
-   *  content is taller than `max-h-*` and needs to be scrolled. */
+  /** Make the popover hoverable AND lift it out of clipping ancestors: it is
+   *  rendered position:fixed at the trigger's rect with pointer events enabled,
+   *  so it sits above (and is never clipped by) a scrollable table. Use for
+   *  data-heavy tooltips whose content is taller than `max-h-*` and must scroll. */
   interactive?: boolean;
 }
 
 /**
- * Lightweight hover/focus tooltip (CSS-positioned relative to an inline wrapper).
- * Shows on pointer-enter and keyboard focus; respects reduced-motion via the
- * global guard. Token-only, RTL-safe (logical start/end placement).
+ * Lightweight hover/focus tooltip. The default variant is CSS-positioned
+ * relative to an inline wrapper; the `interactive` variant is fixed-positioned
+ * (escapes table overflow) and hoverable/scrollable. Token-only, RTL-safe.
  */
 export function Tooltip({ content, side = 'top', delay = 150, children, className, block, interactive }: TooltipProps)
 {
     const [open, setOpen] = useState(false);
+    const [pos, setPos] = useState<CSSProperties | null>(null);
     const timer = useRef<number | undefined>(undefined);
+    const wrapRef = useRef<HTMLSpanElement>(null);
     const id = useId();
 
     const show = () =>
     {
         window.clearTimeout(timer.current);
-        timer.current = window.setTimeout(() => setOpen(true), delay);
+        timer.current = window.setTimeout(() =>
+        {
+            if (interactive && wrapRef.current)
+            {
+                setPos(fixedStyleFor(side, wrapRef.current.getBoundingClientRect()));
+            }
+            setOpen(true);
+        }, delay);
     };
     const hide = () =>
     {
@@ -61,6 +92,7 @@ export function Tooltip({ content, side = 'top', delay = 150, children, classNam
 
     return (
     <span
+      ref={wrapRef}
       className={cn('relative inline-flex', block && 'w-full')}
       onMouseEnter={show}
       onMouseLeave={hide}
@@ -72,12 +104,13 @@ export function Tooltip({ content, side = 'top', delay = 150, children, classNam
         <span
           role="tooltip"
           id={id}
+          style={interactive ? (pos ?? undefined) : undefined}
           className={cn(
-              'absolute z-[var(--z-popover)] rounded-md border border-border bg-surface-raised px-2 py-1 text-xs font-medium text-foreground shadow-md',
+              'z-[var(--z-popover)] rounded-md border border-border bg-surface-raised px-2 py-1 text-xs font-medium text-foreground shadow-md',
               'motion-safe:animate-[fade-in_120ms_ease-out]',
-              interactive ? 'pointer-events-auto whitespace-normal' : 'pointer-events-none whitespace-nowrap',
-              sidePos[side],
-              !interactive && sideGap[side],
+              interactive
+                  ? 'fixed pointer-events-auto whitespace-normal'
+                  : cn('absolute pointer-events-none whitespace-nowrap', sidePos[side], sideGap[side]),
               className
           )}
         >
