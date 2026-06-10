@@ -174,7 +174,7 @@ export default function AppSidebar()
         // 3) Commerce: catalog -> store -> my services -> orders -> customers.
         push(has('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator
         push(has('product.purchase'), '/store', 'store', 'menu.store');           // admin, reseller, member
-        push(me?.isMember === true, '/services', 'services', 'menu.services');    // member's own configs
+        push(has('product.purchase'), '/services', 'services', 'menu.services');  // own configs — admin, reseller, member
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
         push(has('customer.view') && !me?.isAdmin, '/customers', 'customers', 'menu.customers'); // mod, reseller
         // Referral dashboard: resellers (own link/stats) and admins (manage).

@@ -107,7 +107,9 @@ export default function ServicesPage()
         queryKey: ['clients', 'mine'],
         queryFn: async () =>
         {
-            const msg = await HttpUtil.get('/panel/api/clients/list/paged?pageSize=200', undefined, { silent: true });
+            // owner=self scopes to the caller's own configs for every role, so an
+            // admin sees their own purchased services here (not the whole panel).
+            const msg = await HttpUtil.get('/panel/api/clients/list/paged?pageSize=200&owner=self', undefined, { silent: true });
             if (!msg?.success)
             {
                 throw new Error(msg?.msg || '');

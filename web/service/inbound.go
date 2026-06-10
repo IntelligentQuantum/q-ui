@@ -280,6 +280,25 @@ func (s *InboundService) GetInboundsSlim(userId int) ([]*model.Inbound, error) {
 	return inbounds, nil
 }
 
+// GetAllInboundsSlim is the panel-wide (all-owners) variant of GetInboundsSlim.
+// Inbounds are admin-managed and panel-wide, so the admin-only list endpoint
+// uses this to ensure every admin sees every inbound regardless of who created
+// it (not just the ones owned by their own user id).
+func (s *InboundService) GetAllInboundsSlim() ([]*model.Inbound, error) {
+	db := database.GetDB()
+	var inbounds []*model.Inbound
+	err := db.Model(model.Inbound{}).Preload("ClientStats").Order("id ASC").Find(&inbounds).Error
+	if err != nil && err != gorm.ErrRecordNotFound {
+		return nil, err
+	}
+	s.annotateFallbackParents(db, inbounds)
+	s.annotateLocalOriginGuid(inbounds)
+	for _, ib := range inbounds {
+		ib.Settings = slimSettingsClients(ib.Settings)
+	}
+	return inbounds, nil
+}
+
 // slimSettingsClients rewrites the inbound settings JSON so settings.clients[]
 // keeps only the fields the list view actually reads. Returns the input
 // unchanged when the JSON can't be parsed or has no clients array.

@@ -162,11 +162,16 @@ func (a *ClientController) listPaged(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
 	}
-	// Non-admins are scoped to clients they own; admins see everything.
+	// Non-admins are scoped to clients they own; admins see everything — unless
+	// the caller explicitly asks for their own configs via ?owner=self (the
+	// "My Services" page), which scopes to the logged-in user for every role so
+	// an admin sees their own purchased services rather than the whole panel.
 	var ownerFilter *int
-	if user := session.GetLoginUser(c); user != nil && !user.IsAdmin() {
-		id := user.Id
-		ownerFilter = &id
+	if user := session.GetLoginUser(c); user != nil {
+		if !user.IsAdmin() || c.Query("owner") == "self" {
+			id := user.Id
+			ownerFilter = &id
+		}
 	}
 	resp, err := a.clientService.ListPaged(&a.inboundService, &a.settingService, params, ownerFilter)
 	if err != nil {

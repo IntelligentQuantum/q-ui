@@ -23,7 +23,6 @@ type InboundController struct {
 	fallbackService service.FallbackService
 }
 
-
 // NewInboundController creates a new InboundController and sets up its routes.
 func NewInboundController(g *gin.RouterGroup) *InboundController {
 	a := &InboundController{}
@@ -87,10 +86,20 @@ func (a *InboundController) initRouter(g *gin.RouterGroup) {
 	g.POST("/:id/fallbacks", admin, a.setFallbacks)
 }
 
-// getInbounds retrieves the list of inbounds for the logged-in user.
+// getInbounds retrieves the inbound list. Inbounds are admin-managed and
+// panel-wide, so an admin sees every inbound regardless of which admin created
+// it; a (future) non-admin caller is scoped to their own user id.
 func (a *InboundController) getInbounds(c *gin.Context) {
 	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInbounds(user.Id)
+	var (
+		inbounds []*model.Inbound
+		err      error
+	)
+	if user != nil && !user.IsAdmin() {
+		inbounds, err = a.inboundService.GetInbounds(user.Id)
+	} else {
+		inbounds, err = a.inboundService.GetAllInbounds()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -100,9 +109,18 @@ func (a *InboundController) getInbounds(c *gin.Context) {
 
 // getInboundsSlim is the list-page variant that strips full client
 // payloads from settings.clients[]. Detail-view flows still use /get/:id.
+// Admins see every inbound (panel-wide); see getInbounds.
 func (a *InboundController) getInboundsSlim(c *gin.Context) {
 	user := session.GetLoginUser(c)
-	inbounds, err := a.inboundService.GetInboundsSlim(user.Id)
+	var (
+		inbounds []*model.Inbound
+		err      error
+	)
+	if user != nil && !user.IsAdmin() {
+		inbounds, err = a.inboundService.GetInboundsSlim(user.Id)
+	} else {
+		inbounds, err = a.inboundService.GetAllInboundsSlim()
+	}
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -110,23 +128,17 @@ func (a *InboundController) getInboundsSlim(c *gin.Context) {
 	jsonObj(c, inbounds, nil)
 }
 
-// getInboundOptions returns a lightweight projection of the user's inbounds
+// getInboundOptions returns a lightweight projection of every inbound
 // (id, remark, protocol, port, tlsFlowCapable) for pickers in the clients UI.
 // Avoids shipping per-client settings and traffic stats just to fill a dropdown.
+//
+// Inbounds are admin-managed and panel-wide, so the picker lists ALL inbounds
+// for every role: a non-admin attaches clients to admin-created inbounds, and an
+// admin who didn't personally create them must still see them. Scoping by the
+// caller's own user_id is always wrong here (it returns nothing for a second
+// admin / for any user who created no inbounds).
 func (a *InboundController) getInboundOptions(c *gin.Context) {
-	user := session.GetLoginUser(c)
-	// Inbounds are admin-managed and panel-wide. A non-admin user attaches their
-	// clients to inbounds the admin created, so they must see the full list;
-	// scoping by their own user_id would return nothing.
-	var (
-		options []service.InboundOption
-		err     error
-	)
-	if user != nil && !user.IsAdmin() {
-		options, err = a.inboundService.GetAllInboundOptions()
-	} else {
-		options, err = a.inboundService.GetInboundOptions(user.Id)
-	}
+	options, err := a.inboundService.GetAllInboundOptions()
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
