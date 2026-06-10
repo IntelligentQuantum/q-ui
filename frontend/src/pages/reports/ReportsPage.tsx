@@ -304,7 +304,7 @@ export default function ReportsPage()
                         columns={resellerColumns}
                         data={report?.topResellers ?? []}
                         rowKey={(row) => String(row.userId)}
-                        pageSize={0}
+                        pageSize={10}
                         empty={
                           <div className={cn('flex flex-col items-center gap-2 py-6 text-muted-foreground')}>
                             <Crown className="h-7 w-7 opacity-50" aria-hidden />

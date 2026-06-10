@@ -55,7 +55,7 @@ export default function ReferralPage()
         {
             return '';
         }
-        return `${window.location.origin}${basePath}${data.registerPath}`;
+        return `${ window.location.origin }${ basePath }${ data.registerPath }`;
     }, [data?.registerPath]);
 
     const copyLink = async () =>
@@ -138,7 +138,7 @@ export default function ReferralPage()
         {/* Stats */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3">
           {isLoading || !stats ? (
-            Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-[72px] w-full rounded-xl" />)
+              Array.from({ length: 7 }).map((_, i) => <Skeleton key={i} className="h-[72px] w-full rounded-xl" />)
           ) : (
             <>
               <StatCard icon={<Users className="h-5 w-5" />} label={t('pages.referral.totalReferrals', { defaultValue: 'Total referrals' })} value={stats.totalReferrals} />
@@ -146,7 +146,7 @@ export default function ReferralPage()
               <StatCard icon={<Share2 className="h-5 w-5" />} label={t('pages.referral.active', { defaultValue: 'Active users' })} value={stats.activeUsers} />
               <StatCard icon={<ShoppingBag className="h-5 w-5" />} label={t('pages.referral.purchased', { defaultValue: 'Purchased users' })} value={stats.purchasedUsers} />
               <StatCard icon={<Wallet className="h-5 w-5" />} label={t('pages.referral.revenue', { defaultValue: 'Generated revenue' })} value={stats.revenue.toLocaleString()} />
-              <StatCard icon={<BadgePercent className="h-5 w-5" />} label={t('pages.referral.commissionRate', { defaultValue: 'Commission rate' })} value={`${data?.commissionPercent ?? 0}%`} />
+              <StatCard icon={<BadgePercent className="h-5 w-5" />} label={t('pages.referral.commissionRate', { defaultValue: 'Commission rate' })} value={`${ data?.commissionPercent ?? 0 }%`} />
               <StatCard icon={<Coins className="h-5 w-5 text-success" />} label={t('pages.referral.earned', { defaultValue: 'Commission earned' })} value={(data?.commissionEarned ?? 0).toLocaleString()} />
             </>
           )}

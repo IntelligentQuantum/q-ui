@@ -288,6 +288,10 @@ func (s *Server) startTask(restartXray bool) {
 
 	s.cron.AddJob("@every 5s", job.NewNodeTrafficSyncJob())
 
+	// Reconcile product-sold configs to their product's current inbounds, repairing
+	// any client that drifted (missed an update / node outage / partial sync).
+	s.cron.AddJob("@every 10m", job.NewProductReconcileJob())
+
 	// check client ips from log file every day
 	s.cron.AddJob("@daily", job.NewClearLogsJob())
 

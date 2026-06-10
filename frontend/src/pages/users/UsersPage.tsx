@@ -180,34 +180,49 @@ export default function UsersPage()
     const users = useMemo(() => usersQuery.data ?? [], [usersQuery.data]);
 
     const [search, setSearch] = useState('');
+    const [roleFilter, setRoleFilter] = useState('all');
     const filteredUsers = useMemo(() =>
     {
         const needle = search.trim().toLowerCase();
-        if (!needle)
-        {
-            return users;
-        }
         return users.filter((u) =>
-            [u.username, u.email, u.fullName, u.phone, u.role]
-                .some((v) => (v || '').toLowerCase().includes(needle))
-        );
-    }, [users, search]);
+        {
+            if (roleFilter !== 'all' && normalizeRole(u.role) !== roleFilter)
+            {
+                return false;
+            }
+            if (!needle)
+            {
+                return true;
+            }
+            return [u.username, u.email, u.fullName, u.phone, u.role]
+                .some((v) => (v || '').toLowerCase().includes(needle));
+        });
+    }, [users, search, roleFilter]);
     const fetched = usersQuery.data !== undefined || usersQuery.isError;
     const fetchError = usersQuery.error ? (usersQuery.error as Error).message : '';
 
     const stats = useMemo(() =>
     {
+        // Count each role explicitly (normalizing legacy "user" -> reseller).
+        // The old code derived resellers as total - admins, which wrongly counted
+        // moderators and members as resellers.
         let admins = 0;
+        let resellers = 0;
         let totalBalance = 0;
         for (const u of users)
         {
-            if (u.role === 'admin')
+            const role = normalizeRole(u.role);
+            if (role === 'admin')
             {
                 admins += 1;
             }
+            else if (role === 'reseller')
+            {
+                resellers += 1;
+            }
             totalBalance += u.balance || 0;
         }
-        return { total: users.length, admins, resellers: users.length - admins, totalBalance };
+        return { total: users.length, admins, resellers, totalBalance };
     }, [users]);
 
     const invalidate = () =>
@@ -500,6 +515,16 @@ export default function UsersPage()
 
                 <Card className="p-4 sm:p-5">
                   <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+                    <Select
+                      className="w-full sm:w-44"
+                      aria-label={t('pages.users.roleFilter', { defaultValue: 'Filter by role' })}
+                      value={roleFilter}
+                      onChange={setRoleFilter}
+                      options={[
+                          { value: 'all', label: t('pages.users.allRoles', { defaultValue: 'All roles' }) },
+                          ...roleOptions
+                      ]}
+                    />
                     <SearchInput
                       className="w-full max-w-[280px] sm:w-auto"
                       aria-label={t('pages.users.searchPlaceholder')}

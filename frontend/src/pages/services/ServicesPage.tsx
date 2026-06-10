@@ -239,8 +239,12 @@ export default function ServicesPage()
             if (res.success)
             {
                 getMessage().success(t('pages.services.renewed'));
+                // Surface the updated connection details right away (reusing the
+                // existing config/QR modal) — no need to hunt for them afterward.
+                const renewed = renewing;
                 setRenewing(null);
                 invalidate();
+                setQrClient(renewed);
             }
             else
             {

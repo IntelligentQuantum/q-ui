@@ -733,6 +733,8 @@ export default function ClientsPage()
         ))}
         {overflow.length > 0 && (
           <Tooltip
+            interactive
+            side="bottom"
             content={
               <div className="flex max-h-64 max-w-[260px] flex-col gap-1 overflow-y-auto">
                 {overflow.map((id) => (
@@ -1046,6 +1048,7 @@ export default function ClientsPage()
                   {
                       const card = (
                       <StatCard
+                        className="h-full w-full"
                         icon={<span className={cn('h-3 w-3 rounded-full', s.dot)} />}
                         label={s.label}
                         value={s.value}
@@ -1056,17 +1059,20 @@ export default function ClientsPage()
                           return (
                         <Tooltip
                           key={s.key}
+                          block
+                          interactive
+                          side="bottom"
                           content={
                             <div className="flex max-h-64 min-w-[140px] flex-col gap-0.5 overflow-y-auto">
                               {s.list.map((e) => <span key={e} className="truncate text-xs">{e}</span>)}
                             </div>
                           }
                         >
-                          <div>{card}</div>
+                          <div className="h-full">{card}</div>
                         </Tooltip>
                           );
                       }
-                      return <div key={s.key}>{card}</div>;
+                      return <div key={s.key} className="h-full">{card}</div>;
                   })}
                 </div>
 

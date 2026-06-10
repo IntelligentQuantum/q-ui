@@ -200,11 +200,11 @@ export function useOutboundColumns({
                 header: '#',
                 align: 'center',
                 width: 110,
-                cell: (_record, index) => (
+                cell: (record) => (
           <div className="flex items-center justify-center gap-1.5">
-            <span className="font-medium text-muted-foreground">{index + 1}</span>
+            <span className="font-medium text-muted-foreground">{record.key + 1}</span>
             <Tooltip content={t('edit')}>
-              <Button aria-label={t('edit')} variant="ghost" size="icon" onClick={() => openEdit(index)}>
+              <Button aria-label={t('edit')} variant="ghost" size="icon" onClick={() => openEdit(record.key)}>
                 <Pencil className="h-4 w-4" aria-hidden />
               </Button>
             </Tooltip>
@@ -212,39 +212,39 @@ export function useOutboundColumns({
               align="end"
               label={t('more')}
               items={[
-                  ...(index > 0
+                  ...(record.key > 0
                       ? [{
                           key: 'top',
                           label: 'Move to top',
                           icon: <ArrowUp className="h-4 w-4" aria-hidden />,
-                          onSelect: () => setFirst(index)
+                          onSelect: () => setFirst(record.key)
                       }]
                       : []),
                   {
                       key: 'up',
                       label: 'Move up',
                       icon: <ArrowUp className="h-4 w-4" aria-hidden />,
-                      disabled: index === 0,
-                      onSelect: () => moveUp(index)
+                      disabled: record.key === 0,
+                      onSelect: () => moveUp(record.key)
                   },
                   {
                       key: 'down',
                       label: 'Move down',
                       icon: <ArrowDown className="h-4 w-4" aria-hidden />,
-                      disabled: index === rows.length - 1,
-                      onSelect: () => moveDown(index)
+                      disabled: record.key === rows.length - 1,
+                      onSelect: () => moveDown(record.key)
                   },
                   {
                       key: 'reset',
                       label: 'Reset traffic',
                       icon: <RefreshCw className="h-4 w-4" aria-hidden />,
-                      onSelect: () => onResetTraffic(rows[index].tag || '')
+                      onSelect: () => onResetTraffic(record.tag || '')
                   },
                   {
                       key: 'del',
                       danger: true,
                       label: 'Delete',
-                      onSelect: () => confirmDelete(index)
+                      onSelect: () => confirmDelete(record.key)
                   }
               ]}
             />
@@ -282,8 +282,8 @@ export function useOutboundColumns({
                 header: t('pages.nodes.latency'),
                 align: 'start',
                 width: 140,
-                cell: (_record, index) => (
-          <TestResultCell outboundTestStates={outboundTestStates} index={index} />
+                cell: (record) => (
+          <TestResultCell outboundTestStates={outboundTestStates} index={record.key} />
                 )
             },
             {
@@ -291,10 +291,10 @@ export function useOutboundColumns({
                 header: t('check'),
                 align: 'center',
                 width: 80,
-                cell: (record, index) => (
+                cell: (record) => (
           <TestButton
             record={record}
-            index={index}
+            index={record.key}
             testMode={testMode}
             outboundTestStates={outboundTestStates}
             onTest={onTest}

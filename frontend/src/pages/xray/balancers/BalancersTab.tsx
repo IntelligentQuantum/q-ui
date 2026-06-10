@@ -6,6 +6,7 @@ import {
     Badge,
     Button,
     DropdownMenu,
+    SearchInput,
     Table,
     Tabs,
     Tooltip,
@@ -133,6 +134,20 @@ export default function BalancersTab({
             settings: b.strategy?.settings
         }));
     }, [templateSettings?.routing?.balancers]);
+
+    const [search, setSearch] = useState('');
+    const filteredRows = useMemo(() =>
+    {
+        const needle = search.trim().toLowerCase();
+        if (!needle)
+        {
+            return rows;
+        }
+        return rows.filter((r) =>
+            [r.tag, r.strategy, r.fallbackTag, ...(r.selector || [])]
+                .some((v) => String(v || '').toLowerCase().includes(needle))
+        );
+    }, [rows, search]);
 
     const outboundTags = useMemo(() =>
     {
@@ -271,12 +286,12 @@ export default function BalancersTab({
             header: '#',
             align: 'center',
             width: 110,
-            cell: (_record, index) => (
+            cell: (record) => (
         <div className="flex items-center justify-center gap-1.5">
-          <span className="min-w-[18px] text-end font-medium text-muted-foreground">{index + 1}</span>
+          <span className="min-w-[18px] text-end font-medium text-muted-foreground">{record.key + 1}</span>
           {!isMobile && (
             <Tooltip content={t('edit')}>
-              <Button aria-label={t('edit')} variant="ghost" size="icon" onClick={() => openEdit(index)}>
+              <Button aria-label={t('edit')} variant="ghost" size="icon" onClick={() => openEdit(record.key)}>
                 <Pencil className="h-4 w-4" aria-hidden />
               </Button>
             </Tooltip>
@@ -290,14 +305,14 @@ export default function BalancersTab({
                         key: 'edit',
                         label: t('edit'),
                         icon: <Pencil className="h-4 w-4" aria-hidden />,
-                        onSelect: () => openEdit(index)
+                        onSelect: () => openEdit(record.key)
                     }]
                     : []),
                 {
                     key: 'del',
                     danger: true,
                     label: t('delete'),
-                    onSelect: () => confirmDelete(index)
+                    onSelect: () => confirmDelete(record.key)
                 }
             ]}
           />
@@ -397,16 +412,25 @@ export default function BalancersTab({
           </div>
         ) : (
           <>
-            <Button onClick={openAdd} className="self-start">
-              <Plus className="h-4 w-4" aria-hidden />
-              {t('pages.xray.Balancers')}
-            </Button>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <Button onClick={openAdd}>
+                <Plus className="h-4 w-4" aria-hidden />
+                {t('pages.xray.Balancers')}
+              </Button>
+              <SearchInput
+                className="w-full max-w-[260px] sm:w-auto"
+                aria-label={t('search')}
+                placeholder={t('search')}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
 
             <Table
               columns={columns}
-              data={rows}
+              data={filteredRows}
               rowKey={(r) => String(r.key)}
-              pageSize={0}
+              pageSize={15}
             />
 
             {showObsEditor && (

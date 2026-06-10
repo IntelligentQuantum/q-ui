@@ -23,6 +23,7 @@ import {
     Modal,
     Skeleton
 } from '@/components/ui';
+import SubscriptionDetailsModal, { type PurchaseSubscription } from '@/components/SubscriptionDetailsModal';
 
 interface Product {
   id: number;
@@ -49,6 +50,10 @@ export default function StorePage()
     const [buying, setBuying] = useState<Product | null>(null);
     const [name, setName] = useState('');
     const [busy, setBusy] = useState(false);
+    // Post-purchase success modal: the subscription/connection details returned
+    // by the purchase call, plus the product that was bought (for the summary).
+    const [successSub, setSuccessSub] = useState<PurchaseSubscription | null>(null);
+    const [successProduct, setSuccessProduct] = useState<Product | null>(null);
 
     const { data: products, isLoading, isError, refetch } = useQuery({
         queryKey: ['products', 'store'],
@@ -87,7 +92,12 @@ export default function StorePage()
             );
             if (msg.success)
             {
-                getMessage().success(t('pages.store.purchased'));
+                // Show the connection details immediately — no navigation needed.
+                const data = (msg.obj ?? {}) as { subscription?: PurchaseSubscription };
+                setSuccessProduct(buying);
+                setSuccessSub(
+                    data.subscription ?? { email: '', subId: '', subUrl: '', links: [], partial: false }
+                );
                 setBuying(null);
                 qc.invalidateQueries({ queryKey: ME_QUERY_KEY });
                 qc.invalidateQueries({ queryKey: ['orders'] });
@@ -249,6 +259,25 @@ export default function StorePage()
           </div>
         )}
       </Modal>
+
+      {/* Post-purchase success: subscription URL + configs + QR + summary */}
+      <SubscriptionDetailsModal
+        open={!!successSub}
+        onClose={() => setSuccessSub(null)}
+        subscription={successSub}
+        summary={
+          successProduct
+              ? {
+                  name: successProduct.name,
+                  active: true,
+                  trafficLabel: formatTraffic(successProduct.trafficLimit),
+                  expiryLabel: successProduct.durationDays > 0
+                      ? new Date(Date.now() + successProduct.durationDays * 86400000).toLocaleDateString()
+                      : '∞'
+              }
+              : null
+        }
+      />
     </PageShell>
     );
 }

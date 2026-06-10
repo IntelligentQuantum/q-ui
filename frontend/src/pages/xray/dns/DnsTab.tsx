@@ -14,6 +14,7 @@ import {
 import {
     Button,
     Input,
+    SearchInput,
     Select,
     SettingListItem,
     Switch,
@@ -195,6 +196,17 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
         const list = dns?.servers || [];
         return list.map((server, idx) => ({ key: idx, server }));
     }, [dns?.servers]);
+
+    const [serverSearch, setServerSearch] = useState('');
+    const filteredDnsServers = useMemo(() =>
+    {
+        const needle = serverSearch.trim().toLowerCase();
+        if (!needle)
+        {
+            return dnsServers;
+        }
+        return dnsServers.filter((r) => JSON.stringify(r.server).toLowerCase().includes(needle));
+    }, [dnsServers, serverSearch]);
 
     const dnsColumns = useDnsServerColumns({ openEditServer, deleteServer });
 
@@ -518,8 +530,15 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
           <Trash2 className="h-4 w-4" aria-hidden />
           {t('pages.xray.dns.clearAll')}
         </Button>
+        <SearchInput
+          className="w-full max-w-[260px] sm:ms-auto sm:w-auto"
+          aria-label={t('search')}
+          placeholder={t('search')}
+          value={serverSearch}
+          onChange={(e) => setServerSearch(e.target.value)}
+        />
       </div>
-      <Table columns={dnsColumns} data={dnsServers} rowKey={(r) => String(r.key)} pageSize={0} />
+      <Table columns={dnsColumns} data={filteredDnsServers} rowKey={(r) => String(r.key)} pageSize={15} />
     </div>
     );
 
@@ -538,7 +557,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
           {t('pages.xray.fakedns.add')}
         </Button>
       </div>
-      <Table columns={fakednsColumns} data={fakeDnsList} rowKey={(r) => String(r.key)} pageSize={0} />
+      <Table columns={fakednsColumns} data={fakeDnsList} rowKey={(r) => String(r.key)} pageSize={15} />
     </div>
     );
 

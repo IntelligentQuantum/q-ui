@@ -21,75 +21,106 @@ export interface StoredReferral {
   expiresAt: number;
 }
 
-function readRaw(): StoredReferral | null {
-  try {
-    const raw = window.localStorage.getItem(STORAGE_KEY);
-    if (!raw) return null;
-    const parsed = JSON.parse(raw) as Partial<StoredReferral>;
-    if (
-      typeof parsed?.referralCode !== 'string' ||
+function readRaw(): StoredReferral | null
+{
+    try
+    {
+        const raw = window.localStorage.getItem(STORAGE_KEY);
+        if (!raw)
+        {
+            return null;
+        }
+        const parsed = JSON.parse(raw) as Partial<StoredReferral>;
+        if (
+            typeof parsed?.referralCode !== 'string' ||
       typeof parsed?.expiresAt !== 'number' ||
       !CODE_RE.test(parsed.referralCode)
-    ) {
-      return null;
+        )
+        {
+            return null;
+        }
+        if (parsed.expiresAt <= Date.now())
+        {
+            window.localStorage.removeItem(STORAGE_KEY);
+            return null;
+        }
+        return parsed as StoredReferral;
     }
-    if (parsed.expiresAt <= Date.now()) {
-      window.localStorage.removeItem(STORAGE_KEY);
-      return null;
+    catch
+    {
+        return null;
     }
-    return parsed as StoredReferral;
-  } catch {
-    return null;
-  }
 }
 
 /**
  * Read `?ref=` from the URL (or a provided search string), validate its format,
  * and store it under first-touch rules. Safe to call on every public page load.
  */
-export function captureReferralFromUrl(search: string = window.location.search): void {
-  let code: string | null = null;
-  try {
-    code = new URLSearchParams(search).get('ref');
-  } catch {
-    return;
-  }
-  if (!code) return;
+export function captureReferralFromUrl(search: string = window.location.search): void
+{
+    let code: string | null;
+    try
+    {
+        code = new URLSearchParams(search).get('ref');
+    }
+    catch
+    {
+        return;
+    }
+    if (!code)
+    {
+        return;
+    }
 
-  const normalized = code.trim().toUpperCase();
-  if (!CODE_RE.test(normalized)) return; // spoofed / malformed -> ignore silently
+    const normalized = code.trim().toUpperCase();
+    if (!CODE_RE.test(normalized))
+    {
+        return;
+    } // spoofed / malformed -> ignore silently
 
-  // FIRST TOUCH: never overwrite a still-valid referral.
-  if (readRaw()) return;
+    // FIRST TOUCH: never overwrite a still-valid referral.
+    if (readRaw())
+    {
+        return;
+    }
 
-  const now = Date.now();
-  const record: StoredReferral = {
-    referralCode: normalized,
-    capturedAt: now,
-    expiresAt: now + NINETY_DAYS_MS
-  };
-  try {
-    window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
-  } catch {
+    const now = Date.now();
+    const record: StoredReferral = {
+        referralCode: normalized,
+        capturedAt: now,
+        expiresAt: now + NINETY_DAYS_MS
+    };
+    try
+    {
+        window.localStorage.setItem(STORAGE_KEY, JSON.stringify(record));
+    }
+    catch
+    {
     /* storage unavailable (private mode / quota) — attribution is best-effort */
-  }
+    }
 }
 
 /** The stored, unexpired referral code, or undefined. Used by the register form. */
-export function getStoredReferralCode(): string | undefined {
-  return readRaw()?.referralCode ?? undefined;
+export function getStoredReferralCode(): string | undefined
+{
+    return readRaw()?.referralCode ?? undefined;
 }
 
 /** The full stored record (code + timestamps), or null. */
-export function getStoredReferral(): StoredReferral | null {
-  return readRaw();
+export function getStoredReferral(): StoredReferral | null
+{
+    return readRaw();
 }
 
 /** Clear the stored referral (e.g. after a successful, attributed sign-up). */
-export function clearStoredReferral(): void {
-  try {
-    window.localStorage.removeItem(STORAGE_KEY);
-  } catch {
+export function clearStoredReferral(): void
+{
+    try
+    {
+        window.localStorage.removeItem(STORAGE_KEY);
+    }
+    catch
+    {
     /* ignore */
-  }
+    }
 }

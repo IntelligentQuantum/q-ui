@@ -105,6 +105,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// Referral dashboard (reseller views own code/stats) + admin code management.
 	NewReferralController(api)
 
+	// Synchronization audit trail (admin-only).
+	NewSyncController(api)
+
 	// Identity + wallet snapshot for the current session (any logged-in user).
 	api.GET("/me", a.me)
 	// Self-service profile editing (any logged-in user; never admin-gated).

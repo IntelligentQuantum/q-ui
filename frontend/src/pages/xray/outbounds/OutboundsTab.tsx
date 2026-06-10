@@ -260,7 +260,7 @@ export default function OutboundsTab({
             onTest={onTest}
           />
         ) : (
-          <Table columns={columns} data={rows} rowKey={(r) => String(r.key)} pageSize={0} />
+          <Table columns={columns} data={rows} rowKey={(r) => String(r.key)} pageSize={15} />
         )}
 
         <OutboundFormModal

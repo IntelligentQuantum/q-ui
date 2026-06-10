@@ -26,9 +26,9 @@ export function useDnsServerColumns({
                 header: '#',
                 align: 'center',
                 width: 80,
-                cell: (_row, index) => (
+                cell: (row) => (
           <div className="flex items-center justify-center gap-1.5">
-            <span className="font-medium text-muted-foreground">{index + 1}</span>
+            <span className="font-medium text-muted-foreground">{row.key + 1}</span>
             <DropdownMenu
               align="end"
               label={t('more')}
@@ -37,14 +37,14 @@ export function useDnsServerColumns({
                       key: 'edit',
                       label: t('edit'),
                       icon: <Pencil className="h-4 w-4" aria-hidden />,
-                      onSelect: () => openEditServer(index)
+                      onSelect: () => openEditServer(row.key)
                   },
                   {
                       key: 'del',
                       danger: true,
                       label: t('delete'),
                       icon: <Trash2 className="h-4 w-4" aria-hidden />,
-                      onSelect: () => deleteServer(index)
+                      onSelect: () => deleteServer(row.key)
                   }
               ]}
             />
@@ -90,13 +90,13 @@ export function useFakednsColumns({
                 header: '#',
                 align: 'center',
                 width: 80,
-                cell: (_row, index) => (
+                cell: (row) => (
           <div className="flex items-center justify-center gap-1.5">
-            <span className="font-medium text-muted-foreground">{index + 1}</span>
+            <span className="font-medium text-muted-foreground">{row.key + 1}</span>
             <button
               type="button"
               aria-label={t('delete')}
-              onClick={() => deleteFakedns(index)}
+              onClick={() => deleteFakedns(row.key)}
               className="grid h-8 w-8 place-items-center rounded-md text-danger outline-none transition-colors hover:bg-danger-subtle focus-visible:ring-2 focus-visible:ring-ring"
             >
               <Trash2 className="h-4 w-4" aria-hidden />
@@ -108,10 +108,10 @@ export function useFakednsColumns({
                 key: 'ipPool',
                 header: 'IP pool',
                 align: 'start',
-                cell: (row, index) => (
+                cell: (row) => (
           <Input
             value={row.ipPool}
-            onChange={(e) => updateFakednsField(index, 'ipPool', e.target.value)}
+            onChange={(e) => updateFakednsField(row.key, 'ipPool', e.target.value)}
           />
                 )
             },
@@ -120,13 +120,13 @@ export function useFakednsColumns({
                 header: 'Pool size',
                 align: 'end',
                 width: 140,
-                cell: (row, index) => (
+                cell: (row) => (
           <Input
             type="number"
             min={1}
             value={row.poolSize}
             className="text-end"
-            onChange={(e) => updateFakednsField(index, 'poolSize', Number(e.target.value) || 0)}
+            onChange={(e) => updateFakednsField(row.key, 'poolSize', Number(e.target.value) || 0)}
           />
                 )
             }

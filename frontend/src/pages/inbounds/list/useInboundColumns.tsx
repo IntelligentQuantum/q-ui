@@ -228,22 +228,22 @@ export function useInboundColumns({
                 <Users className="h-3 w-3" aria-hidden /> {cc.clients}
               </Badge>
               {cc.active.length > 0 && (
-                <Tooltip content={emailList(cc.active)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.active)}>
                   <Badge variant="success" className="tabular-nums">{cc.active.length}</Badge>
                 </Tooltip>
               )}
               {cc.deactive.length > 0 && (
-                <Tooltip content={emailList(cc.deactive)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.deactive)}>
                   <Badge variant="neutral" className="tabular-nums">{cc.deactive.length}</Badge>
                 </Tooltip>
               )}
               {cc.depleted.length > 0 && (
-                <Tooltip content={emailList(cc.depleted)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.depleted)}>
                   <Badge variant="danger" className="tabular-nums">{cc.depleted.length}</Badge>
                 </Tooltip>
               )}
               {cc.online.length > 0 && (
-                <Tooltip content={emailList(cc.online)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.online)}>
                   <Badge variant="primary" className="tabular-nums">{cc.online.length}</Badge>
                 </Tooltip>
               )}

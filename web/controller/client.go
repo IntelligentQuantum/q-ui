@@ -11,6 +11,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/database/model"
 	"github.com/mhsanaei/3x-ui/v3/logger"
+	"github.com/mhsanaei/3x-ui/v3/util/random"
 	"github.com/mhsanaei/3x-ui/v3/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/web/service"
 	"github.com/mhsanaei/3x-ui/v3/web/session"
@@ -44,6 +45,7 @@ type ClientController struct {
 	xrayService    service.XrayService
 	settingService service.SettingService
 	walletService  service.WalletService
+	orderService   service.OrderService
 }
 
 func NewClientController(g *gin.RouterGroup) *ClientController {
@@ -62,6 +64,9 @@ func (a *ClientController) initRouter(g *gin.RouterGroup) {
 	g.GET("/traffic/:email", a.getTrafficByEmail)
 	g.GET("/subLinks/:subId", a.getSubLinks)
 	g.GET("/links/:email", a.getClientLinks)
+	// Full connection details (sub URL + sub id + config links) for one owned
+	// config — powers the "connection details" modal on Store and Services.
+	g.GET("/subscription/:email", a.getSubscriptionDetails)
 	g.POST("/add", a.create)
 	g.POST("/update/:email", a.update)
 	g.POST("/del/:email", a.delete)
@@ -210,6 +215,21 @@ func (a *ClientController) create(c *gin.Context) {
 	// a caller cannot spoof this — it is only ever set here, server-side.)
 	payload.OwnerId = user.Id
 
+	// Advanced fields (subscription id, protocol secrets, comment, auto-renew
+	// period) are admin-only. For everyone else the server owns them: secrets are
+	// regenerated (so a crafted payload can never choose/hijack a subId or set a
+	// known password/auth), and comment/reset are cleared. This is the
+	// authoritative enforcement — the reseller UI also hides these, but the
+	// backend never trusts the client.
+	if !user.IsAdmin() {
+		payload.Client.SubID = random.NumLower(16)
+		payload.Client.Password = random.NumLower(16)
+		payload.Client.Auth = random.NumLower(16)
+		payload.Client.Comment = ""
+		payload.Client.Reset = 0
+		payload.Client.Group = ""
+	}
+
 	// Cost system: non-admins are charged clientCost credits per client. The
 	// debit, client creation and (on failure) the refund are sequenced so a
 	// failed creation never leaves the user out of pocket and an unpaid client
@@ -264,6 +284,19 @@ func (a *ClientController) update(c *gin.Context) {
 	if err := c.ShouldBindJSON(&updated); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
+	}
+	// Advanced fields are admin-only (see create). A non-admin can never change
+	// the subscription id, protocol secrets, comment or auto-renew period — we
+	// restore the stored values, so any supplied values are silently ignored.
+	if user := session.GetLoginUser(c); user != nil && !user.IsAdmin() {
+		if rec, rerr := a.clientService.GetRecordByEmail(nil, email); rerr == nil {
+			updated.SubID = rec.SubID
+			updated.Password = rec.Password
+			updated.Auth = rec.Auth
+			updated.Comment = rec.Comment
+			updated.Reset = rec.Reset
+			updated.Group = rec.Group
+		}
 	}
 	inboundFilter := parseInboundIdsQuery(c.Query("inboundIds"))
 	needRestart, err := a.clientService.UpdateByEmail(&a.inboundService, email, updated, inboundFilter...)
@@ -668,6 +701,18 @@ func (a *ClientController) getClientLinks(c *gin.Context) {
 		return
 	}
 	jsonObj(c, links, nil)
+}
+
+// getSubscriptionDetails returns the subscription URL + sub id + config links
+// for one OWNED config (ownership enforced). Best-effort: link-generation
+// failure is reported via the `partial` flag, never as an error, so the modal
+// can show the subscription and offer a retry.
+func (a *ClientController) getSubscriptionDetails(c *gin.Context) {
+	if !a.requireOwnership(c, c.Param("email")) {
+		return
+	}
+	details := a.orderService.SubscriptionDetails(resolveHost(c), c.Param("email"))
+	jsonObj(c, details, nil)
 }
 
 func (a *ClientController) detach(c *gin.Context) {

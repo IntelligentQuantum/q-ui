@@ -182,6 +182,17 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 	order.Status = model.OrderCompleted
 	_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 		Update("status", model.OrderCompleted).Error
+	// Change-plan / renew may target a product with a DIFFERENT inbound set than
+	// the config currently sits on. Converge the config onto the new product's
+	// inbounds (additive + idempotent; node push handled by AttachByEmail) so a
+	// plan switch doesn't leave the client stuck on the old product's inbounds.
+	if len(product.InboundIds) > 0 {
+		if nr, aerr := s.clientService.AttachByEmail(&s.inboundService, email, []int(product.InboundIds)); aerr != nil {
+			logger.Warningf("renew: sync inbounds for %s to product %d failed: %v", email, product.Id, aerr)
+		} else if nr {
+			s.xrayService.SetToNeedRestart()
+		}
+	}
 	// Renewals are real purchases too — reward the referring reseller.
 	s.payReferralCommission(buyer, order)
 	return order, nil
@@ -218,6 +229,71 @@ func (s *OrderService) applyPlan(email string, product *model.Product) error {
 		s.xrayService.SetToNeedRestart()
 	}
 	return nil
+}
+
+// SubscriptionDetails is the connection info the Store's post-purchase success
+// modal needs: the subscription URL and the per-inbound config links for the
+// provisioned config. Assembled best-effort — if link generation fails, Partial
+// is set and the (already-completed) purchase is unaffected; the client can
+// retry from the modal.
+type SubscriptionDetails struct {
+	Email   string   `json:"email"`
+	SubId   string   `json:"subId"`
+	SubUrl  string   `json:"subUrl"`
+	Links   []string `json:"links"`
+	Partial bool     `json:"partial"`
+}
+
+// SubscriptionDetails builds the connection info for a provisioned config by its
+// email. `host` is the request host (so the sub URL is correct behind any
+// proxy). An empty email returns an empty, non-partial result. Shared by the
+// Store success modal (right after purchase) and the Services "connection
+// details" action (anytime retrieval) so both render identical information.
+func (s *OrderService) SubscriptionDetails(host string, email string) SubscriptionDetails {
+	d := SubscriptionDetails{}
+	if email == "" {
+		return d
+	}
+	d.Email = email
+
+	if links, err := s.inboundService.GetAllClientLinks(host, email); err != nil {
+		d.Partial = true
+		logger.Warningf("subscription details: links for %s failed: %v", email, err)
+	} else {
+		d.Links = links
+	}
+
+	if rec, err := s.clientService.GetRecordByEmail(nil, email); err == nil {
+		d.SubId = rec.SubID
+		if rec.SubID != "" {
+			d.SubUrl = s.subURIBase(host) + rec.SubID
+		}
+	} else {
+		d.Partial = true
+		logger.Warningf("subscription details: record for %s failed: %v", email, err)
+	}
+	return d
+}
+
+// subURIBase returns the resolved subscription URL base (ending in the sub path).
+// Mirrors the resolution in SettingService.GetDefaultSettings: a configured
+// subURI is used verbatim; otherwise it is derived from the request host + path.
+func (s *OrderService) subURIBase(host string) string {
+	if base, _ := s.settingService.GetSubURI(); base != "" {
+		return base
+	}
+	base := s.settingService.BuildSubURIBase(host)
+	subPath, _ := s.settingService.GetSubPath()
+	if subPath == "" {
+		subPath = "/sub/"
+	}
+	if !strings.HasPrefix(subPath, "/") {
+		subPath = "/" + subPath
+	}
+	if !strings.HasSuffix(subPath, "/") {
+		subPath += "/"
+	}
+	return base + subPath
 }
 
 func (s *OrderService) refund(userId int, amount int64, product *model.Product) {
@@ -277,37 +353,13 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 // of this product is attached to the newly-added inbounds and detached from the
 // removed ones — the same per-client inbound management the Clients page offers.
 // Best-effort per client (one failure is logged and skipped, not fatal).
+// SyncProductInbounds re-syncs every already-sold config to a product's inbound
+// change. It now delegates to the centralized SyncService (diff-based attach/
+// detach with retry + audit + node convergence). Kept for back-compat callers;
+// the product controller calls SyncService directly so it can record the actor.
 func (s *OrderService) SyncProductInbounds(productId int, added, removed []int) (bool, error) {
-	if len(added) == 0 && len(removed) == 0 {
-		return false, nil
-	}
-	var emails []string
-	if err := database.GetDB().Model(&model.Order{}).
-		Where("product_id = ? AND client_email <> ?", productId, "").
-		Distinct().Pluck("client_email", &emails).Error; err != nil {
-		return false, err
-	}
-	needRestart := false
-	for _, email := range emails {
-		if len(added) > 0 {
-			if nr, err := s.clientService.AttachByEmail(&s.inboundService, email, added); err != nil {
-				logger.Warningf("sync product %d inbounds: attach %s: %v", productId, email, err)
-			} else if nr {
-				needRestart = true
-			}
-		}
-		if len(removed) > 0 {
-			if nr, err := s.clientService.DetachByEmailMany(&s.inboundService, email, removed); err != nil {
-				logger.Warningf("sync product %d inbounds: detach %s: %v", productId, email, err)
-			} else if nr {
-				needRestart = true
-			}
-		}
-	}
-	if needRestart {
-		s.xrayService.SetToNeedRestart()
-	}
-	return needRestart, nil
+	report, err := (&SyncService{}).ReconcileProductClients("system", productId, added, removed)
+	return report.NeedRestart, err
 }
 
 // randSecret returns a random hex token (a UUID with dashes stripped) used to

@@ -123,7 +123,11 @@ func (a *OrderController) purchase(c *gin.Context) {
 		}
 		return
 	}
-	jsonObj(c, order, nil)
+	// Return the order PLUS the connection details (subscription URL + config
+	// links), so the Store can show everything in a success modal with no
+	// second request and no navigation to the Clients page.
+	subscription := a.orderService.SubscriptionDetails(resolveHost(c), order.ClientEmail)
+	jsonObj(c, gin.H{"order": order, "subscription": subscription}, nil)
 }
 
 type renewForm struct {

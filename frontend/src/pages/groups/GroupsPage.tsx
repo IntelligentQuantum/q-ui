@@ -1,6 +1,6 @@
 import { lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { StatCard } from '@/components/ui';
+import { SearchInput, StatCard } from '@/components/ui';
 import {
     Clock,
     Link as LinkIcon,
@@ -102,6 +102,16 @@ export default function GroupsPage()
         queryFn: fetchGroups
     });
     const groups = useMemo(() => groupsQuery.data ?? [], [groupsQuery.data]);
+    const [search, setSearch] = useState('');
+    const filteredGroups = useMemo(() =>
+    {
+        const needle = search.trim().toLowerCase();
+        if (!needle)
+        {
+            return groups;
+        }
+        return groups.filter((g) => g.name.toLowerCase().includes(needle));
+    }, [groups, search]);
     const loading = groupsQuery.isFetching;
     const fetched = groupsQuery.data !== undefined || groupsQuery.isError;
     const fetchError = groupsQuery.error ? (groupsQuery.error as Error).message : '';
@@ -539,12 +549,21 @@ export default function GroupsPage()
                 </div>
 
                 <Card className="p-4 sm:p-5">
+                  <div className="mb-3 flex justify-end">
+                    <SearchInput
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
+                      aria-label={t('pages.groups.searchPlaceholder', { defaultValue: 'Search groups…' })}
+                      placeholder={t('pages.groups.searchPlaceholder', { defaultValue: 'Search groups…' })}
+                      className="w-full max-w-[280px] sm:w-auto"
+                    />
+                  </div>
                   <Table<GroupSummary>
                     columns={columns}
-                    data={groups}
+                    data={filteredGroups}
                     rowKey={(row) => row.name}
                     loading={loading}
-                    pageSize={0}
+                    pageSize={10}
                     empty={
                       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
                         <Tags className="h-8 w-8 opacity-50" aria-hidden />

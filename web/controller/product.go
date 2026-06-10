@@ -21,21 +21,7 @@ type ProductController struct {
 	BaseController
 	productService service.ProductService
 	orderService   service.OrderService
-}
-
-// intsNotIn returns the elements of a that are not present in b.
-func intsNotIn(a, b []int) []int {
-	set := make(map[int]bool, len(b))
-	for _, x := range b {
-		set[x] = true
-	}
-	var out []int
-	for _, x := range a {
-		if !set[x] {
-			out = append(out, x)
-		}
-	}
-	return out
+	syncService    service.SyncService
 }
 
 // NewProductController registers the product routes on the given group.
@@ -139,13 +125,17 @@ func (a *ProductController) update(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	// Propagate the inbound change to configs already sold from this product:
-	// attach newly-added inbounds, detach removed ones (best-effort).
-	newInbounds := []int(p.InboundIds)
-	added := intsNotIn(newInbounds, oldInbounds)
-	removed := intsNotIn(oldInbounds, newInbounds)
+	// Propagate the inbound change to configs already sold from this product via
+	// the centralized SyncService: diff -> attach added / detach removed on every
+	// affected client, with retry, audit, and node convergence. Recording the
+	// acting admin/moderator as the audit actor.
+	added, removed := service.InboundDiff(oldInbounds, []int(p.InboundIds))
 	if len(added) > 0 || len(removed) > 0 {
-		if _, serr := a.orderService.SyncProductInbounds(id, added, removed); serr != nil {
+		actor := ""
+		if user := session.GetLoginUser(c); user != nil {
+			actor = user.Username
+		}
+		if _, serr := a.syncService.ReconcileProductClients(actor, id, added, removed); serr != nil {
 			logger.Warning("product update: sync existing configs' inbounds failed:", serr)
 		}
 	}
