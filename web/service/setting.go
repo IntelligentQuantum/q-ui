@@ -71,10 +71,21 @@ var defaultValueMap = map[string]string{
 	"referralCommissionPercent": "15",
 
 	// ZarinPal payment gateway (balance top-up)
-	"zarinpalEnable":              "false",
-	"zarinpalMerchantId":          "",
-	"zarinpalSandbox":             "false",
-	"zarinpalCurrency":            "IRT",
+	"zarinpalEnable":     "false",
+	"zarinpalMerchantId": "",
+	"zarinpalSandbox":    "false",
+	"zarinpalCurrency":   "IRT",
+	// Plisio cryptocurrency payment gateway (balance top-up)
+	"plisioEnable":         "false",
+	"plisioSecretKey":      "", // Plisio "Secret Key": used for both API calls and webhook HMAC
+	"plisioSandbox":        "false",
+	"plisioSourceCurrency": "USD", // fiat currency Plisio invoices are priced in
+	"cryptoExchangeRate":   "1",   // wallet credits per 1 unit of plisioSourceCurrency (e.g. 60000 Toman per USD)
+	// Configurable crypto deposit bonus (applies only to Plisio top-ups)
+	"cryptoBonusEnabled":          "true",
+	"cryptoBonusPercent":          "15", // bonus % credited on top of a crypto deposit
+	"cryptoBonusMinDeposit":       "0",  // minimum deposit (credits) to qualify for the bonus
+	"cryptoBonusMax":              "0",  // maximum bonus (credits); 0 = uncapped
 	"subEnable":                   "true",
 	"subJsonEnable":               "false",
 	"subTitle":                    "",
@@ -235,6 +246,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.HasLdapPassword = secretConfigured(allSetting.LdapPassword)
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
+	view.HasPlisioSecretKey = secretConfigured(allSetting.PlisioSecretKey)
 	var apiTokenCount int64
 	if err := database.GetDB().Model(model.ApiToken{}).Where("enabled = ?", true).Count(&apiTokenCount).Error; err == nil {
 		view.HasApiToken = apiTokenCount > 0
@@ -242,6 +254,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.TgBotToken = ""
 	view.TwoFactorToken = ""
 	view.LdapPassword = ""
+	view.PlisioSecretKey = ""
 	return view, nil
 }
 
@@ -576,6 +589,107 @@ func (s *SettingService) GetZarinpalCurrency() (string, error) {
 		return "IRT", nil
 	}
 	return cur, nil
+}
+
+// --- Plisio cryptocurrency payment gateway ---
+
+func (s *SettingService) GetPlisioEnable() (bool, error) {
+	return s.getBool("plisioEnable")
+}
+
+func (s *SettingService) SetPlisioEnable(value bool) error {
+	return s.setBool("plisioEnable", value)
+}
+
+// GetPlisioSecretKey returns the Plisio "Secret Key". Plisio uses one secret
+// for both authenticating API requests (api_key) and signing callbacks
+// (verify_hash), so the same value backs the API client and webhook verifier.
+func (s *SettingService) GetPlisioSecretKey() (string, error) {
+	return s.getString("plisioSecretKey")
+}
+
+func (s *SettingService) SetPlisioSecretKey(value string) error {
+	return s.setString("plisioSecretKey", strings.TrimSpace(value))
+}
+
+func (s *SettingService) GetPlisioSandbox() (bool, error) {
+	return s.getBool("plisioSandbox")
+}
+
+func (s *SettingService) SetPlisioSandbox(value bool) error {
+	return s.setBool("plisioSandbox", value)
+}
+
+// GetPlisioSourceCurrency returns the fiat currency Plisio invoices are priced
+// in (one of Plisio's supported fiat currencies). Defaults to USD.
+func (s *SettingService) GetPlisioSourceCurrency() (string, error) {
+	cur, err := s.getString("plisioSourceCurrency")
+	if err != nil || strings.TrimSpace(cur) == "" {
+		return "USD", err
+	}
+	return strings.ToUpper(strings.TrimSpace(cur)), nil
+}
+
+func (s *SettingService) SetPlisioSourceCurrency(value string) error {
+	return s.setString("plisioSourceCurrency", strings.ToUpper(strings.TrimSpace(value)))
+}
+
+// GetCryptoExchangeRate returns how many wallet credits equal 1 unit of the
+// Plisio invoice currency (e.g. 60000 when 1 USD = 60000 Toman). The deposit
+// amount the user enters is in credits; the Plisio invoice is priced at
+// credits/rate of the source currency, and credits are what get added back.
+// A rate <= 0 is treated as 1 (1 credit = 1 unit) so a missing config never
+// divides by zero.
+func (s *SettingService) GetCryptoExchangeRate() (int, error) {
+	rate, err := s.getInt("cryptoExchangeRate")
+	if err != nil {
+		return 1, err
+	}
+	if rate <= 0 {
+		return 1, nil
+	}
+	return rate, nil
+}
+
+func (s *SettingService) SetCryptoExchangeRate(value int) error {
+	if value <= 0 {
+		value = 1
+	}
+	return s.setInt("cryptoExchangeRate", value)
+}
+
+// --- Crypto deposit bonus (Plisio) ---
+
+func (s *SettingService) GetCryptoBonusEnabled() (bool, error) {
+	return s.getBool("cryptoBonusEnabled")
+}
+
+func (s *SettingService) SetCryptoBonusEnabled(value bool) error {
+	return s.setBool("cryptoBonusEnabled", value)
+}
+
+func (s *SettingService) GetCryptoBonusPercent() (int, error) {
+	return s.getInt("cryptoBonusPercent")
+}
+
+func (s *SettingService) SetCryptoBonusPercent(value int) error {
+	return s.setInt("cryptoBonusPercent", value)
+}
+
+func (s *SettingService) GetCryptoBonusMinDeposit() (int, error) {
+	return s.getInt("cryptoBonusMinDeposit")
+}
+
+func (s *SettingService) SetCryptoBonusMinDeposit(value int) error {
+	return s.setInt("cryptoBonusMinDeposit", value)
+}
+
+func (s *SettingService) GetCryptoBonusMax() (int, error) {
+	return s.getInt("cryptoBonusMax")
+}
+
+func (s *SettingService) SetCryptoBonusMax(value int) error {
+	return s.setInt("cryptoBonusMax", value)
 }
 
 func (s *SettingService) SetTwoFactorToken(value string) error {
@@ -1007,6 +1121,15 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting) 
 			return err
 		}
 		allSetting.TwoFactorToken = value
+	}
+	// Plisio secret key is write-once-style: a blank submission keeps the stored
+	// value (the UI sends it blank when already configured).
+	if strings.TrimSpace(allSetting.PlisioSecretKey) == "" {
+		value, err := s.GetPlisioSecretKey()
+		if err != nil {
+			return err
+		}
+		allSetting.PlisioSecretKey = value
 	}
 	return nil
 }

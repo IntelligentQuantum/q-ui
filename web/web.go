@@ -229,6 +229,8 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	s.panel = controller.NewXUIController(g)
 	g.GET("/panel/api/openapi.json", controller.ServeOpenAPISpec)
 	s.api = controller.NewAPIController(g, s.customGeoService)
+	// Public Plisio crypto-payment webhook (no auth/CSRF — verified by HMAC).
+	controller.NewPlisioWebhookController(g)
 
 	// Initialize WebSocket hub
 	s.wsHub = websocket.NewHub()

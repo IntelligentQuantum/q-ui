@@ -42,6 +42,15 @@ export class AllSetting
     public zarinpalMerchantId = '';
     public zarinpalSandbox = false;
     public zarinpalCurrency = 'IRT';
+    public plisioEnable = false;
+    public plisioSecretKey = '';
+    public plisioSandbox = false;
+    public plisioSourceCurrency = 'USD';
+    public cryptoExchangeRate = 1;
+    public cryptoBonusEnabled = true;
+    public cryptoBonusPercent = 15;
+    public cryptoBonusMinDeposit = 0;
+    public cryptoBonusMax = 0;
     public xrayTemplateConfig = '';
     public subEnable = true;
     public subJsonEnable = false;
@@ -104,6 +113,7 @@ export class AllSetting
     public hasApiToken = false;
     public hasWarpSecret = false;
     public hasNordSecret = false;
+    public hasPlisioSecretKey = false;
 
     constructor(data?: unknown)
     {

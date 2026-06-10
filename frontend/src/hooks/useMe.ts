@@ -39,6 +39,13 @@ export interface MeInfo {
   clientCostPerGB: number;
   zarinpalEnable: boolean;
   currency: string;
+  plisioEnable: boolean;
+  plisioSourceCurrency: string;
+  cryptoExchangeRate: number;
+  cryptoBonusEnabled: boolean;
+  cryptoBonusPercent: number;
+  cryptoBonusMinDeposit: number;
+  cryptoBonusMax: number;
 }
 
 export const ME_QUERY_KEY = ['me'] as const;
@@ -81,7 +88,14 @@ async function fetchMe(): Promise<MeInfo>
         clientCost: Number(o.clientCost) || 0,
         clientCostPerGB: Number(o.clientCostPerGB) || 0,
         zarinpalEnable: Boolean(o.zarinpalEnable),
-        currency: String(o.currency ?? 'IRT')
+        currency: String(o.currency ?? 'IRT'),
+        plisioEnable: Boolean(o.plisioEnable),
+        plisioSourceCurrency: String(o.plisioSourceCurrency ?? 'USD'),
+        cryptoExchangeRate: Number(o.cryptoExchangeRate) || 1,
+        cryptoBonusEnabled: Boolean(o.cryptoBonusEnabled),
+        cryptoBonusPercent: Number(o.cryptoBonusPercent) || 0,
+        cryptoBonusMinDeposit: Number(o.cryptoBonusMinDeposit) || 0,
+        cryptoBonusMax: Number(o.cryptoBonusMax) || 0
     };
 }
 

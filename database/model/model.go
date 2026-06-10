@@ -33,19 +33,19 @@ const (
 
 // User represents a user account in the 3x-ui panel.
 type User struct {
-	Id       int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username string `json:"username"`
-	Password string `json:"-"`
-	FullName string `json:"fullName" gorm:"default:''"`
-	Phone    string `json:"phone" gorm:"default:''"`
-	Email    string `json:"email" gorm:"default:''"`
-	Role string `json:"role" gorm:"default:'user';index"`
-	Balance int64 `json:"balance" gorm:"default:0"`
-	CostPerGBOverride int `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
-	ReferralCode string `json:"referralCode" gorm:"column:referral_code;default:'';index"`
-	ReferralEnabled bool `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
-	ReferredByUserId int   `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
-	LoginEpoch       int64 `json:"-" gorm:"default:0"`
+	Id                int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Username          string `json:"username"`
+	Password          string `json:"-"`
+	FullName          string `json:"fullName" gorm:"default:''"`
+	Phone             string `json:"phone" gorm:"default:''"`
+	Email             string `json:"email" gorm:"default:''"`
+	Role              string `json:"role" gorm:"default:'user';index"`
+	Balance           int64  `json:"balance" gorm:"default:0"`
+	CostPerGBOverride int    `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
+	ReferralCode      string `json:"referralCode" gorm:"column:referral_code;default:'';index"`
+	ReferralEnabled   bool   `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
+	ReferredByUserId  int    `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
+	LoginEpoch        int64  `json:"-" gorm:"default:0"`
 }
 
 // Role constants for the RBAC system. Four roles, in descending privilege:
@@ -135,10 +135,16 @@ type Payment struct {
 	Gateway   string `json:"gateway" gorm:"default:zarinpal"`
 	Authority string `json:"authority" gorm:"uniqueIndex"`
 	Amount    int64  `json:"amount"`
-	Status    string `json:"status" gorm:"default:pending"` // pending | paid | failed
-	RefId     string `json:"refId" gorm:"column:ref_id"`
-	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	// Currency is the fiat/source currency the deposit was priced in (e.g. "USD"
+	// for Plisio crypto top-ups). Empty for legacy ZarinPal rows.
+	Currency string `json:"currency" gorm:"default:''"`
+	// BonusAmount is the credit bonus granted on top of Amount (crypto-deposit
+	// bonus). Recorded at confirmation time so the ledger and reports are auditable.
+	BonusAmount int64  `json:"bonusAmount" gorm:"column:bonus_amount;default:0"`
+	Status      string `json:"status" gorm:"default:pending"` // pending | paid | failed
+	RefId       string `json:"refId" gorm:"column:ref_id"`
+	CreatedAt   int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt   int64  `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 }
 
 func (Payment) TableName() string { return "payments" }

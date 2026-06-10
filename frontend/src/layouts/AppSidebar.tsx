@@ -9,6 +9,7 @@ import {
     ChevronsRight,
     Cloud,
     Code,
+    CreditCard,
     Database,
     IdCard,
     Import,
@@ -203,6 +204,7 @@ export default function AppSidebar()
             { key: '/settings#general', icon: Settings, label: t('pages.settings.panelSettings') },
             { key: '/settings#security', icon: ShieldCheck, label: t('pages.settings.securitySettings') },
             { key: '/settings#reseller', icon: Wallet, label: t('pages.settings.resellerSettings') },
+            { key: '/settings#payments', icon: CreditCard, label: t('pages.settings.paymentsSettings') },
             { key: '/settings#telegram', icon: MessageSquare, label: t('pages.settings.TGBotSettings') },
             { key: '/settings#subscription', icon: Cloud, label: t('pages.settings.subSettings') }
         ];

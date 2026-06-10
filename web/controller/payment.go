@@ -4,8 +4,10 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/google/uuid"
 	"github.com/mhsanaei/3x-ui/v3/database/model"
 	"github.com/mhsanaei/3x-ui/v3/logger"
+	"github.com/mhsanaei/3x-ui/v3/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/web/service"
 	"github.com/mhsanaei/3x-ui/v3/web/session"
 
@@ -19,6 +21,7 @@ import (
 // SPA billing page.
 type PaymentController struct {
 	zarinpalService service.ZarinpalService
+	plisioService   service.PlisioService
 	paymentService  service.PaymentService
 	walletService   service.WalletService
 	settingService  service.SettingService
@@ -34,7 +37,10 @@ func (a *PaymentController) initRouter(g *gin.RouterGroup) {
 	billing := g.Group("/billing")
 	billing.POST("/zarinpal/request", a.zarinpalRequest)
 	billing.GET("/zarinpal/callback", a.zarinpalCallback)
+	billing.POST("/plisio/request", a.plisioRequest)
 	billing.GET("/payments", a.listPayments)
+	// Admin reporting over confirmed crypto deposits.
+	billing.GET("/crypto/report", middleware.RequireAdmin(), a.cryptoReport)
 }
 
 type zarinpalRequestForm struct {
@@ -83,6 +89,72 @@ func (a *PaymentController) zarinpalRequest(c *gin.Context) {
 		return
 	}
 	jsonObj(c, gin.H{"url": startPay, "authority": authority}, nil)
+}
+
+type plisioRequestForm struct {
+	Amount int64 `json:"amount"`
+}
+
+// plisioRequest opens a Plisio crypto invoice for the logged-in user and returns
+// the hosted invoice URL the browser is redirected to. The balance is credited
+// asynchronously by the Plisio webhook once the payment confirms — never here.
+func (a *PaymentController) plisioRequest(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	var form plisioRequestForm
+	if err := c.ShouldBindJSON(&form); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if form.Amount <= 0 {
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.billing.toasts.invalidAmount"))
+		return
+	}
+
+	sourceCurrency, _ := a.settingService.GetPlisioSourceCurrency()
+	rate, _ := a.settingService.GetCryptoExchangeRate()
+	// The user deposits in wallet credits; Plisio prices the invoice in the
+	// source (fiat) currency at credits/rate. Credits are what we credit back.
+	fiatAmount := float64(form.Amount) / float64(rate)
+	basePath := c.GetString("base_path")
+	if basePath == "" {
+		basePath = "/"
+	}
+	callbackURL := absoluteURL(c, basePath+"plisio/callback")
+	billingPage := absoluteURL(c, basePath+"panel/billing")
+	// order_number is our own unique reference; Plisio echoes it on every
+	// callback and it survives the buyer switching cryptocurrency mid-payment.
+	authority := uuid.NewString()
+	orderName := "wallet-topup-" + user.Username
+	desc := "Panel balance top-up for " + user.Username
+
+	if _, err := a.paymentService.CreateCryptoPending(user.Id, "plisio", authority, sourceCurrency, form.Amount); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	_, invoiceURL, err := a.plisioService.CreateInvoice(authority, orderName, desc, callbackURL,
+		billingPage+"?status=crypto_pending", billingPage+"?status=crypto_failed", user.Email, sourceCurrency, fiatAmount)
+	if err != nil {
+		_ = a.paymentService.MarkFailed(authority)
+		logger.Warning("plisio invoice request failed:", err)
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.billing.toasts.requestFailed"))
+		return
+	}
+	jsonObj(c, gin.H{"url": invoiceURL}, nil)
+}
+
+// cryptoReport returns aggregate statistics over confirmed crypto deposits
+// (admin only — gated at the route).
+func (a *PaymentController) cryptoReport(c *gin.Context) {
+	rep, err := a.paymentService.CryptoReport("plisio", 20)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "fail"), err)
+		return
+	}
+	jsonObj(c, rep, nil)
 }
 
 func (a *PaymentController) zarinpalCallback(c *gin.Context) {

@@ -74,6 +74,17 @@ type AllSetting struct {
 	ZarinpalSandbox    bool   `json:"zarinpalSandbox" form:"zarinpalSandbox"`       // Use ZarinPal sandbox endpoint
 	ZarinpalCurrency   string `json:"zarinpalCurrency" form:"zarinpalCurrency"`     // Amount currency: IRR | IRT
 
+	// Plisio cryptocurrency gateway (balance top-up) + configurable crypto deposit bonus
+	PlisioEnable          bool   `json:"plisioEnable" form:"plisioEnable"`                                      // Enable Plisio crypto top-up
+	PlisioSecretKey       string `json:"plisioSecretKey" form:"plisioSecretKey"`                                // Plisio Secret Key (API + webhook); redacted in view
+	PlisioSandbox         bool   `json:"plisioSandbox" form:"plisioSandbox"`                                    // Reserved: Plisio exposes no separate sandbox host
+	PlisioSourceCurrency  string `json:"plisioSourceCurrency" form:"plisioSourceCurrency"`                      // Fiat currency invoices are priced in (e.g. USD)
+	CryptoExchangeRate    int    `json:"cryptoExchangeRate" form:"cryptoExchangeRate" validate:"gte=1"`         // Wallet credits per 1 unit of the invoice currency
+	CryptoBonusEnabled    bool   `json:"cryptoBonusEnabled" form:"cryptoBonusEnabled"`                          // Enable the crypto deposit bonus
+	CryptoBonusPercent    int    `json:"cryptoBonusPercent" form:"cryptoBonusPercent" validate:"gte=0,lte=100"` // Bonus % credited on top of a crypto deposit
+	CryptoBonusMinDeposit int    `json:"cryptoBonusMinDeposit" form:"cryptoBonusMinDeposit" validate:"gte=0"`   // Minimum deposit (credits) to qualify for the bonus
+	CryptoBonusMax        int    `json:"cryptoBonusMax" form:"cryptoBonusMax" validate:"gte=0"`                 // Maximum bonus (credits); 0 = uncapped
+
 	// Subscription server settings
 	SubEnable                   bool   `json:"subEnable" form:"subEnable"`                                     // Enable subscription server
 	SubJsonEnable               bool   `json:"subJsonEnable" form:"subJsonEnable"`                             // Enable JSON subscription endpoint
@@ -139,12 +150,13 @@ type AllSetting struct {
 type AllSettingView struct {
 	AllSetting
 
-	HasTgBotToken     bool `json:"hasTgBotToken"`
-	HasTwoFactorToken bool `json:"hasTwoFactorToken"`
-	HasLdapPassword   bool `json:"hasLdapPassword"`
-	HasApiToken       bool `json:"hasApiToken"`
-	HasWarpSecret     bool `json:"hasWarpSecret"`
-	HasNordSecret     bool `json:"hasNordSecret"`
+	HasTgBotToken      bool `json:"hasTgBotToken"`
+	HasTwoFactorToken  bool `json:"hasTwoFactorToken"`
+	HasLdapPassword    bool `json:"hasLdapPassword"`
+	HasApiToken        bool `json:"hasApiToken"`
+	HasWarpSecret      bool `json:"hasWarpSecret"`
+	HasNordSecret      bool `json:"hasNordSecret"`
+	HasPlisioSecretKey bool `json:"hasPlisioSecretKey"`
 }
 
 // CheckValid validates all settings in the AllSetting struct, checking IP addresses, ports, SSL certificates, and other configuration values.

@@ -21,6 +21,7 @@ import {
 import GeneralTab from './GeneralTab';
 import SecurityTab from './SecurityTab';
 import ResellerTab from './ResellerTab';
+import PaymentsTab from './PaymentsTab';
 import TelegramTab from './TelegramTab';
 import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
@@ -29,7 +30,7 @@ interface ApiMsg {
   success?: boolean;
 }
 
-const tabSlugs = ['general', 'security', 'reseller', 'telegram', 'subscription', 'subscription-formats'];
+const tabSlugs = ['general', 'security', 'reseller', 'payments', 'telegram', 'subscription', 'subscription-formats'];
 
 function isIp(h: string): boolean
 {
@@ -265,6 +266,7 @@ export default function SettingsPage()
         {
             case 'security': return <SecurityTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'reseller': return <ResellerTab allSetting={allSetting} updateSetting={updateSetting} />;
+            case 'payments': return <PaymentsTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'telegram': return <TelegramTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'subscription': return <SubscriptionGeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'subscription-formats': return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;

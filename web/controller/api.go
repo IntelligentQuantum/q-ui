@@ -139,6 +139,13 @@ func (a *APIController) me(c *gin.Context) {
 	}
 	zarinpalEnable, _ := a.settingService.GetZarinpalEnable()
 	currency, _ := a.settingService.GetZarinpalCurrency()
+	plisioEnable, _ := a.settingService.GetPlisioEnable()
+	plisioSourceCurrency, _ := a.settingService.GetPlisioSourceCurrency()
+	cryptoExchangeRate, _ := a.settingService.GetCryptoExchangeRate()
+	cryptoBonusEnabled, _ := a.settingService.GetCryptoBonusEnabled()
+	cryptoBonusPercent, _ := a.settingService.GetCryptoBonusPercent()
+	cryptoBonusMinDeposit, _ := a.settingService.GetCryptoBonusMinDeposit()
+	cryptoBonusMax, _ := a.settingService.GetCryptoBonusMax()
 	jsonObj(c, gin.H{
 		"id":       user.Id,
 		"username": user.Username,
@@ -158,6 +165,15 @@ func (a *APIController) me(c *gin.Context) {
 		"clientCostPerGB": costPerGB,
 		"zarinpalEnable":  zarinpalEnable,
 		"currency":        currency,
+		// Plisio crypto top-up + configurable deposit bonus, so the SPA can show
+		// the crypto option and preview the bonus without extra round-trips.
+		"plisioEnable":          plisioEnable,
+		"plisioSourceCurrency":  plisioSourceCurrency,
+		"cryptoExchangeRate":    cryptoExchangeRate,
+		"cryptoBonusEnabled":    cryptoBonusEnabled,
+		"cryptoBonusPercent":    cryptoBonusPercent,
+		"cryptoBonusMinDeposit": cryptoBonusMinDeposit,
+		"cryptoBonusMax":        cryptoBonusMax,
 		// Reseller referral identity, so the SPA can render the share link without
 		// a second round-trip. Empty for non-resellers / before first generation.
 		"referralCode":    user.ReferralCode,
