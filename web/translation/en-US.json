@@ -214,7 +214,6 @@
       "descLabel": "Description",
       "category": "Category",
       "price": "Price",
-      "description": "Description",
       "descriptionHint": "Optional details shown to buyers in the store (features, terms, notes).",
       "audience": "Audience",
       "audienceHint": "Which buyers see and can purchase this product in the store. Admins and moderators always see every product.",

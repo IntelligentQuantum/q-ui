@@ -358,7 +358,7 @@ export default function ProductsPage()
             />
           </Field>
 
-          <Field label={t('pages.products.description')} htmlFor="prod-desc" hint={t('pages.products.descriptionHint')}>
+          <Field label={t('pages.products.descLabel')} htmlFor="prod-desc" hint={t('pages.products.descriptionHint')}>
             <Textarea id="prod-desc" rows={3} {...register('description')} />
           </Field>
 
