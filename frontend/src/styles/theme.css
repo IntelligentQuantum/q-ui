@@ -164,6 +164,16 @@
         border-color: var(--border);
     }
 
+    /* Tailwind v4 no longer sets cursor:pointer on <button> by default. Restore
+       it for interactive controls so the whole panel feels clickable. */
+    button:not(:disabled),
+    [role="button"]:not([aria-disabled="true"]),
+    summary,
+    label[for]
+    {
+        cursor: pointer;
+    }
+
     ::selection
     {
         background-color: color-mix(in srgb, var(--accent) 30%, transparent);

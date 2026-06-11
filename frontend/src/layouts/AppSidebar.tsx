@@ -13,6 +13,7 @@ import {
     Database,
     IdCard,
     Import,
+    Languages,
     LayoutDashboard,
     LayoutGrid,
     LogOut,
@@ -39,12 +40,13 @@ import {
     X
 } from 'lucide-react';
 
-import { HttpUtil } from '@/utils';
+import { HttpUtil, LanguageManager } from '@/utils';
 import { pauseAnimationsUntilLeave, useTheme, type ThemeMode } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useMe, type Permission } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
-import { cn } from '@/components/ui';
+import { cn, DropdownMenu } from '@/components/ui';
+import type { DropdownItem } from '@/components/ui';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
 const LOGOUT_KEY = '__logout__';
@@ -141,6 +143,29 @@ export default function AppSidebar()
 
     const [collapsed, setCollapsed] = useState<boolean>(() => readCollapsed());
     const [drawerOpen, setDrawerOpen] = useState(false);
+    const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
+
+    // Panel language switcher (mirrors the one on the login page) so the UI
+    // language can be changed from inside the dashboard, not only at login.
+    const onLangChange = useCallback((next: string) =>
+    {
+        setLang(next);
+        LanguageManager.setLanguage(next);
+    }, []);
+    const langItems = useMemo<DropdownItem[]>(
+        () => (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map((l) => ({
+            key: l.value,
+            label: (
+        <span className="flex items-center gap-2">
+          <span aria-hidden="true">{l.icon}</span>
+          <span>{l.name}</span>
+          {l.value === lang ? <span className="ms-auto text-accent">•</span> : null}
+        </span>
+            ),
+            onSelect: () => onLangChange(l.value)
+        })),
+        [lang, onLangChange]
+    );
 
     const tabs = useMemo<NavTab[]>(() =>
     {
@@ -419,12 +444,20 @@ export default function AppSidebar()
             {collapsed ? 'Q' : 'Q-UI'}
           </span>
           {!collapsed && (
-            <ThemeCycleButton
-              id="theme-cycle"
-              mode={mode}
-              onCycle={() => cycleTheme('theme-cycle')}
-              ariaLabel={t('menu.theme')}
-            />
+            <div className="flex items-center gap-1">
+              <DropdownMenu
+                align="end"
+                label={t('pages.settings.language')}
+                items={langItems}
+                trigger={<Languages className="h-[18px] w-[18px]" aria-hidden />}
+              />
+              <ThemeCycleButton
+                id="theme-cycle"
+                mode={mode}
+                onCycle={() => cycleTheme('theme-cycle')}
+                ariaLabel={t('menu.theme')}
+              />
+            </div>
           )}
         </div>
 
@@ -487,6 +520,12 @@ export default function AppSidebar()
             <div className="flex h-14 items-center justify-between border-b border-border ps-4 pe-2">
               <span className="select-none text-lg font-semibold tracking-wide text-foreground">Q-UI</span>
               <div className="inline-flex items-center gap-1">
+                <DropdownMenu
+                  align="end"
+                  label={t('pages.settings.language')}
+                  items={langItems}
+                  trigger={<Languages className="h-[18px] w-[18px]" aria-hidden />}
+                />
                 <ThemeCycleButton
                   id="theme-cycle-drawer"
                   mode={mode}

@@ -84,6 +84,11 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
 	if err != nil || product.Status != model.ProductActive {
 		return nil, ErrProductUnavailable
 	}
+	// Audience gate: a buyer may only purchase products targeted at their role
+	// ("all" or their own). admin/moderator manage the catalog and may buy any.
+	if !buyer.Can(model.PermProductManage) && !ProductAudienceAllows(product.Audience, buyer.CanonicalRole()) {
+		return nil, ErrProductUnavailable
+	}
 
 	var charged int64
 	if product.Price > 0 {
@@ -141,6 +146,11 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 	}
 	product, err := s.productService.Get(productId)
 	if err != nil || product.Status != model.ProductActive {
+		return nil, ErrProductUnavailable
+	}
+	// Audience gate: a buyer may only purchase products targeted at their role
+	// ("all" or their own). admin/moderator manage the catalog and may buy any.
+	if !buyer.Can(model.PermProductManage) && !ProductAudienceAllows(product.Audience, buyer.CanonicalRole()) {
 		return nil, ErrProductUnavailable
 	}
 	owner, err := s.clientService.GetOwnerByEmail(email)

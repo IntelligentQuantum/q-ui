@@ -21,6 +21,7 @@ import {
     Switch,
     Table,
     TableSkeleton,
+    Textarea,
     ErrorState,
     confirm
 } from '@/components/ui';
@@ -34,9 +35,11 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as cons
 interface Product {
   id: number;
   name: string;
+  description: string;
   trafficLimit: number;
   durationDays: number;
   price: number;
+  audience: string;
   inboundIds: number[];
   status: string;
 }
@@ -50,9 +53,11 @@ interface InboundOption {
 
 interface ProductForm {
   name: string;
+  description: string;
   price: number;
   trafficLimit: number;
   durationDays: number;
+  audience: string;
   inboundIds: number[];
   status?: string;
 }
@@ -102,7 +107,7 @@ export default function ProductsPage()
         control,
         formState: { errors }
     } = useForm<ProductForm>({
-        defaultValues: { name: '', price: 0, trafficLimit: 0, durationDays: 0, inboundIds: [], status: 'active' }
+        defaultValues: { name: '', description: '', price: 0, trafficLimit: 0, durationDays: 0, audience: 'all', inboundIds: [], status: 'active' }
     });
 
     const { data: products, isLoading, isError, refetch } = useQuery({
@@ -224,7 +229,7 @@ export default function ProductsPage()
     const openCreate = () =>
     {
         setEditing(null);
-        reset({ name: '', price: 0, trafficLimit: 0, durationDays: 0, inboundIds: [], status: 'active' });
+        reset({ name: '', description: '', price: 0, trafficLimit: 0, durationDays: 0, audience: 'all', inboundIds: [], status: 'active' });
         setOpen(true);
     };
 
@@ -233,9 +238,11 @@ export default function ProductsPage()
         setEditing(p);
         reset({
             name: p.name,
+            description: p.description ?? '',
             price: p.price,
             trafficLimit: p.trafficLimit,
             durationDays: p.durationDays,
+            audience: p.audience ?? 'all',
             inboundIds: p.inboundIds ?? [],
             status: p.status
         });
@@ -351,6 +358,10 @@ export default function ProductsPage()
             />
           </Field>
 
+          <Field label={t('pages.products.description')} htmlFor="prod-desc" hint={t('pages.products.descriptionHint')}>
+            <Textarea id="prod-desc" rows={3} {...register('description')} />
+          </Field>
+
           <Field label={t('pages.products.price')} htmlFor="prod-price" error={errors.price?.message}>
             <Input
               id="prod-price"
@@ -367,6 +378,24 @@ export default function ProductsPage()
 
           <Field label={t('pages.products.durationDays')} htmlFor="prod-duration">
             <Input id="prod-duration" type="number" min={0} {...register('durationDays', { valueAsNumber: true, min: 0 })} />
+          </Field>
+
+          <Field label={t('pages.products.audience')} hint={t('pages.products.audienceHint')}>
+            <Controller
+              control={control}
+              name="audience"
+              render={({ field }) => (
+                <Select
+                  value={(field.value as string) ?? 'all'}
+                  onChange={field.onChange}
+                  options={[
+                      { value: 'all', label: t('pages.products.audienceAll') },
+                      { value: 'reseller', label: t('pages.products.audienceReseller') },
+                      { value: 'member', label: t('pages.products.audienceMember') }
+                  ]}
+                />
+              )}
+            />
           </Field>
 
           <Field label={t('pages.products.inbound')} hint={t('pages.products.inboundHint')}>

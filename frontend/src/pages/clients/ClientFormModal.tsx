@@ -542,8 +542,8 @@ export default function ClientFormModal({
     );
 
     const showReverseTag = useMemo(
-        () => (form.inboundIds || []).some((id) => vlessLikeIds.has(id)),
-        [form.inboundIds, vlessLikeIds]
+        () => !isReseller && (form.inboundIds || []).some((id) => vlessLikeIds.has(id)),
+        [form.inboundIds, vlessLikeIds, isReseller]
     );
 
     const showSecurity = useMemo(
@@ -830,15 +830,17 @@ export default function ClientFormModal({
           )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            <Field label={t('pages.clients.uuid')} htmlFor="cf-uuid">
-              <RegenInput
-                id="cf-uuid"
-                value={form.uuid}
-                regenLabel={t('regenerate')}
-                onChange={(v) => update('uuid', v)}
-                onRegen={() => update('uuid', RandomUtil.randomUUID())}
-              />
-            </Field>
+            {!isReseller && (
+              <Field label={t('pages.clients.uuid')} htmlFor="cf-uuid">
+                <RegenInput
+                  id="cf-uuid"
+                  value={form.uuid}
+                  regenLabel={t('regenerate')}
+                  onChange={(v) => update('uuid', v)}
+                  onRegen={() => update('uuid', RandomUtil.randomUUID())}
+                />
+              </Field>
+            )}
             <div className={cn('grid gap-4', ipLimitEnable ? 'grid-cols-2' : 'grid-cols-1')}>
               <Field label={t('pages.clients.totalGB')} htmlFor="cf-totalgb">
                 <NumberInput id="cf-totalgb" value={form.totalGB} min={0} step={1} onChange={(v) => update('totalGB', v)} />

@@ -8,7 +8,7 @@ import {
     Gauge
 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
-import { EmptyState, ErrorState, StatCard, SearchInput } from '@/components/ui';
+import { Badge, EmptyState, ErrorState, StatCard, SearchInput } from '@/components/ui';
 
 import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
@@ -28,9 +28,11 @@ import SubscriptionDetailsModal, { type PurchaseSubscription } from '@/component
 interface Product {
   id: number;
   name: string;
+  description: string;
   trafficLimit: number;
   durationDays: number;
   price: number;
+  audience: string;
   status: string;
 }
 
@@ -184,9 +186,20 @@ export default function StorePage()
                     className="flex flex-col gap-3 rounded-lg border border-border bg-surface p-4 transition-colors hover:border-border-strong"
                   >
                     <div className="flex min-w-0 flex-col gap-1">
-                      <span className="truncate text-base font-semibold text-foreground">{p.name}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="min-w-0 flex-1 truncate text-base font-semibold text-foreground">{p.name}</span>
+                        {p.audience && p.audience !== 'all' && (
+                          <Badge variant="neutral" className="shrink-0">
+                            {p.audience === 'reseller' ? t('pages.products.audienceReseller') : t('pages.products.audienceMember')}
+                          </Badge>
+                        )}
+                      </div>
                       <span className="text-lg font-bold tabular-nums text-foreground">{format(p.price)}</span>
                     </div>
+
+                    {p.description && (
+                      <p className="line-clamp-3 whitespace-pre-line text-sm text-muted-foreground">{p.description}</p>
+                    )}
 
                     <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-muted-foreground">
                       <span className="inline-flex items-center gap-1.5">

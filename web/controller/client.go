@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/mhsanaei/3x-ui/v3/database/model"
 	"github.com/mhsanaei/3x-ui/v3/logger"
 	"github.com/mhsanaei/3x-ui/v3/util/random"
@@ -233,6 +234,10 @@ func (a *ClientController) create(c *gin.Context) {
 		payload.Client.Comment = ""
 		payload.Client.Reset = 0
 		payload.Client.Group = ""
+		// A reseller can't choose the UUID or set a reverse-proxy tag — the UI
+		// hides both; regenerate the id server-side and drop any reverse config.
+		payload.Client.ID = uuid.NewString()
+		payload.Client.Reverse = nil
 	}
 
 	// Cost system: non-admins are charged clientCost credits per client. The
@@ -301,6 +306,10 @@ func (a *ClientController) update(c *gin.Context) {
 			updated.Comment = rec.Comment
 			updated.Reset = rec.Reset
 			updated.Group = rec.Group
+			// Preserve the stored UUID and reverse-proxy config — a reseller can't
+			// change either (both hidden in the UI).
+			updated.ID = rec.UUID
+			updated.Reverse = rec.ToClient().Reverse
 		}
 	}
 	inboundFilter := parseInboundIdsQuery(c.Query("inboundIds"))

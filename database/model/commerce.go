@@ -59,9 +59,15 @@ func (l *IntList) Scan(src any) error {
 type Product struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	Name         string `json:"name" gorm:"not null"`
+	Description  string `json:"description" gorm:"default:''"`                      // optional marketing/notes text shown in the store
 	TrafficLimit int64  `json:"trafficLimit" gorm:"column:traffic_limit;default:0"` // bytes; 0 = unlimited
 	DurationDays int    `json:"durationDays" gorm:"column:duration_days;default:0"` // 0 = no expiry
 	Price        int64  `json:"price" gorm:"not null;default:0"`                    // credits
+	// Audience controls which buyer role sees/can purchase this product in the
+	// store: "all" (everyone), "reseller" (resellers only), or "member" (members
+	// only). admin/moderator always see every product. Default "all" keeps every
+	// existing product visible to everyone.
+	Audience string `json:"audience" gorm:"index;default:'all'"`
 	// InboundIds are the inbounds a purchased config (client) is provisioned on
 	// (the buyer's config is attached to every one). Empty = no provisioning
 	// (e.g. a pure balance/credit product) — buying it just records an order
@@ -79,6 +85,13 @@ func (Product) TableName() string { return "products" }
 const (
 	ProductActive   = "active"
 	ProductInactive = "inactive"
+)
+
+// Product audience constants — which buyer role a product is offered to.
+const (
+	ProductAudienceAll      = "all"
+	ProductAudienceReseller = "reseller"
+	ProductAudienceMember   = "member"
 )
 
 // Order records a purchase of a product by a user. The amount is captured at
