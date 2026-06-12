@@ -27,7 +27,7 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/users':
             return has('user.manage'); // admin only
         case '/clients':
-            return has('client.manage'); // admin, reseller
+            return has('client.manage'); // admin, moderator
         case '/products':
             return has('product.manage'); // admin, moderator
         case '/store':
@@ -35,10 +35,8 @@ function canAccess(me: MeInfo, path: string): boolean
             return has('product.purchase'); // admin, reseller, member
         case '/orders':
             return has('order.view_own'); // everyone with order visibility
-        case '/customers':
-            return has('customer.view'); // admin, moderator, reseller
         case '/services':
-            return me.isMember || me.isAdmin;
+            return has('product.purchase'); // admin, reseller, member — own configs
         case '/profile':
             return true; // every authenticated user
         default:
@@ -60,7 +58,7 @@ function homeFor(me: MeInfo): string
     }
     if (me.isReseller)
     {
-        return '/clients';
+        return '/store'; // reseller no longer manages the Clients page; land on the store
     }
     return '/store'; // member
 }

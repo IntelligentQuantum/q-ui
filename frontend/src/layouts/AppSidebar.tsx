@@ -54,7 +54,7 @@ const LOGOUT_KEY = '__logout__';
 type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
-  | 'orders' | 'products' | 'services' | 'customers' | 'referral';
+  | 'orders' | 'products' | 'services' | 'referral';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -74,7 +74,6 @@ const iconByName: Record<IconName, LucideIcon> = {
     orders: ShoppingCart,
     products: LayoutGrid,
     services: Server,
-    customers: Users,
     referral: Share2
 };
 
@@ -204,7 +203,7 @@ export default function AppSidebar()
 
         // 2) Infrastructure (admin): inbounds, clients, groups, nodes.
         push(has('infra.manage'), '/inbounds', 'inbound', 'menu.inbounds');
-        push(has('client.manage'), '/clients', 'team', 'menu.clients'); // admin + reseller
+        push(has('client.manage'), '/clients', 'team', 'menu.clients'); // admin + moderator
         push(has('infra.manage'), '/groups', 'groups', 'menu.groups');
         push(has('infra.manage'), '/nodes', 'cluster', 'menu.nodes');
 
@@ -213,7 +212,6 @@ export default function AppSidebar()
         push(has('product.purchase'), '/store', 'store', 'menu.store');           // admin, reseller, member
         push(has('product.purchase'), '/services', 'services', 'menu.services');  // own configs — admin, reseller, member
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
-        push(has('customer.view') && !me?.isAdmin, '/customers', 'customers', 'menu.customers'); // mod, reseller
         // Referral dashboard: resellers (own link/stats) and admins (manage).
         push(Boolean(me?.isReseller || me?.isAdmin), '/referral', 'referral', 'menu.referral');
 

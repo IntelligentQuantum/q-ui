@@ -139,8 +139,8 @@ func TestAPIRoutesDocumented(t *testing.T) {
 			"GET /panel/billing": true, "GET /panel/nodes": true,
 			"GET /panel/settings": true, "GET /panel/xray": true,
 			"GET /panel/api-docs": true,
-			"GET /panel/store": true, "GET /panel/orders": true,
-			"GET /panel/products": true, "GET /panel/customers": true,
+			"GET /panel/store":    true, "GET /panel/orders": true,
+			"GET /panel/products": true,
 			"GET /panel/services": true,
 		}
 		if spaPages[key] {

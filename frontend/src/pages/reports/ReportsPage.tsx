@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { message } from '@/components/ui/message';
 import {
@@ -26,6 +26,7 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
+    SearchInput,
     Spinner,
     StatCard,
     Table,
@@ -117,6 +118,30 @@ export default function ReportsPage()
             newClients: report.newClients[key] ?? 0
         }));
     }, [report]);
+
+    const [periodQ, setPeriodQ] = useState('');
+    const [resellerQ, setResellerQ] = useState('');
+
+    const filteredPeriodRows = useMemo(() =>
+    {
+        const s = periodQ.trim().toLowerCase();
+        if (!s)
+        {
+            return periodRows;
+        }
+        return periodRows.filter((row) => t(`pages.reports.periods.${ row.key }`).toLowerCase().includes(s));
+    }, [periodRows, periodQ, t]);
+
+    const filteredResellers = useMemo(() =>
+    {
+        const list = report?.topResellers ?? [];
+        const s = resellerQ.trim().toLowerCase();
+        if (!s)
+        {
+            return list;
+        }
+        return list.filter((row) => (row.username || '').toLowerCase().includes(s));
+    }, [report, resellerQ]);
 
     const daily = useMemo(() => report?.daily ?? [], [report]);
     const revenueSeries = useMemo(() => daily.map((d) => d.revenue), [daily]);
@@ -282,27 +307,44 @@ export default function ReportsPage()
                 {/* Breakdown + top resellers */}
                 <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[7fr_5fr]">
                   <Card>
-                    <CardHeader className="p-4 sm:p-5">
+                    <CardHeader className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5">
                       <CardTitle>{t('pages.reports.breakdownTitle')}</CardTitle>
+                      <SearchInput
+                        className="w-full sm:w-52"
+                        aria-label={t('search')}
+                        placeholder={t('search')}
+                        value={periodQ}
+                        onChange={(e) => setPeriodQ(e.target.value)}
+                      />
                     </CardHeader>
                     <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                       <Table<PeriodRow>
                         columns={periodColumns}
-                        data={periodRows}
+                        data={filteredPeriodRows}
                         rowKey={(row) => row.key}
-                        pageSize={0}
+                        pageSize={5}
+                        empty={
+                          <div className="py-6 text-center text-muted-foreground">{t('noData')}</div>
+                        }
                       />
                     </CardContent>
                   </Card>
 
                   <Card>
-                    <CardHeader className="p-4 sm:p-5">
+                    <CardHeader className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5">
                       <CardTitle>{t('pages.reports.topResellersTitle')}</CardTitle>
+                      <SearchInput
+                        className="w-full sm:w-52"
+                        aria-label={t('search')}
+                        placeholder={t('search')}
+                        value={resellerQ}
+                        onChange={(e) => setResellerQ(e.target.value)}
+                      />
                     </CardHeader>
                     <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
                       <Table<ResellerStat>
                         columns={resellerColumns}
-                        data={report?.topResellers ?? []}
+                        data={filteredResellers}
                         rowKey={(row) => String(row.userId)}
                         pageSize={10}
                         empty={

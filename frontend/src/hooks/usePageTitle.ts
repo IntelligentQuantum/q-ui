@@ -20,7 +20,6 @@ const TITLE_KEYS: Record<string, string> = {
     '/store': 'menu.store',
     '/orders': 'menu.orders',
     '/products': 'menu.products',
-    '/customers': 'menu.customers',
     '/services': 'menu.services'
 };
 

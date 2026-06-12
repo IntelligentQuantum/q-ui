@@ -418,10 +418,11 @@ export default function ClientFormModal({
     const { t } = useTranslation();
     const [messageApi, messageContextHolder] = message.useMessage();
     const { me } = useMe();
-    // Resellers get a simplified form: the advanced fields below are hidden and
-    // the "Email" label reads "Name". The backend independently ignores these
-    // fields for non-admins, so hiding them is purely a UX simplification.
-    const isReseller = !!me?.isReseller;
+    // The Clients page is admin + moderator only. Managers (moderators) get a
+    // simplified form: the advanced fields below (UUID, reverse tag, group, …) are
+    // hidden and the "Email" label reads "Name". The backend independently ignores
+    // these fields for every non-admin, so hiding them is purely a UX simplification.
+    const restricted = !!me && !me.isAdmin;
     const { format: formatMoney } = useCurrency();
     const isEdit = mode === 'edit';
     const groupListId = useId();
@@ -542,8 +543,8 @@ export default function ClientFormModal({
     );
 
     const showReverseTag = useMemo(
-        () => !isReseller && (form.inboundIds || []).some((id) => vlessLikeIds.has(id)),
-        [form.inboundIds, vlessLikeIds, isReseller]
+        () => !restricted && (form.inboundIds || []).some((id) => vlessLikeIds.has(id)),
+        [form.inboundIds, vlessLikeIds, restricted]
     );
 
     const showSecurity = useMemo(
@@ -779,21 +780,21 @@ export default function ClientFormModal({
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field
-              label={isReseller ? t('pages.clients.name') : t('pages.clients.email')}
+              label={restricted ? t('pages.clients.name') : t('pages.clients.email')}
               htmlFor="cf-email"
               required
-              className={isReseller ? 'md:col-span-2' : undefined}
+              className={restricted ? 'md:col-span-2' : undefined}
             >
               <RegenInput
                 id="cf-email"
                 value={form.email}
-                placeholder={isReseller ? t('pages.clients.name') : t('pages.clients.email')}
+                placeholder={restricted ? t('pages.clients.name') : t('pages.clients.email')}
                 regenLabel={t('regenerate')}
                 onChange={(v) => update('email', v)}
                 onRegen={() => update('email', RandomUtil.randomLowerAndNum(12))}
               />
             </Field>
-            {!isReseller && (
+            {!restricted && (
               <Field label={t('pages.clients.subId')} htmlFor="cf-subid">
                 <RegenInput
                   id="cf-subid"
@@ -806,7 +807,7 @@ export default function ClientFormModal({
             )}
           </div>
 
-          {!isReseller && (
+          {!restricted && (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
             <Field label={t('pages.clients.hysteriaAuth')} htmlFor="cf-auth">
               <RegenInput
@@ -830,7 +831,7 @@ export default function ClientFormModal({
           )}
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {!isReseller && (
+            {!restricted && (
               <Field label={t('pages.clients.uuid')} htmlFor="cf-uuid">
                 <RegenInput
                   id="cf-uuid"
@@ -889,7 +890,7 @@ export default function ClientFormModal({
           </div>
 
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-            {!isReseller && (
+            {!restricted && (
               <Field label={t('pages.clients.renew')} htmlFor="cf-reset" tooltip={t('pages.clients.renewDesc')}>
                 <NumberInput id="cf-reset" value={form.reset} min={0} onChange={(v) => update('reset', v)} />
               </Field>
@@ -939,12 +940,12 @@ export default function ClientFormModal({
                 />
               </Field>
             )}
-            {!isReseller && (
+            {!restricted && (
               <Field label={t('pages.clients.comment')} htmlFor="cf-comment" className={tgBotEnable ? undefined : 'md:col-span-2'}>
                 <Input id="cf-comment" value={form.comment} onChange={(e) => update('comment', e.target.value)} />
               </Field>
             )}
-            {!isReseller && (
+            {!restricted && (
               <Field label={t('pages.clients.group')} htmlFor="cf-group" tooltip={t('pages.clients.groupDesc')}>
                 <Input
                   id="cf-group"

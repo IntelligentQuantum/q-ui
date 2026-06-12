@@ -99,8 +99,6 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// reseller/member can browse + purchase, while infra stays admin-only.
 	NewProductController(api)
 	NewOrderController(api)
-	// Customer roster (moderator: all, reseller: own) — gated by customer.view.
-	NewCustomerController(api)
 
 	// Referral dashboard (reseller views own code/stats) + admin code management.
 	NewReferralController(api)

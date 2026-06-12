@@ -102,6 +102,12 @@ export const sections: readonly Section[] = [
             },
             {
                 method: 'POST',
+                path: '/getPanelTitle',
+                summary: 'Returns the configurable panel brand/title (defaults to "Q-UI") — used by the pre-auth login and registration pages to render the brand.',
+                response: '{\n  "success": true,\n  "obj": "Q-UI"\n}'
+            },
+            {
+                method: 'POST',
                 path: '/register',
                 summary: 'Create a new panel user from the public self-registration form. Only works while registration is enabled in settings; rate limited per client IP. password and confirmPassword must match.',
                 params: [

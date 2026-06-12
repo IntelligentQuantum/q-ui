@@ -318,6 +318,40 @@
         }
       }
     },
+    "/getPanelTitle": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Returns the configurable panel brand/title (defaults to \"Q-UI\") — used by the pre-auth login and registration pages to render the brand.",
+        "operationId": "post_getPanelTitle",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": "Q-UI"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/register": {
       "post": {
         "tags": [

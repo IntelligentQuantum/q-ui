@@ -37,6 +37,7 @@ var rolePermissions = map[string]map[Permission]bool{
 	RoleModerator: {
 		PermProductManage:  true,
 		PermProductView:    true,
+		PermClientManage:   true, // manages clients (Clients page) — UUID/reverse/group hidden, enforced server-side
 		PermCustomerView:   true,
 		PermOrderViewAll:   true,
 		PermOrderViewOwn:   true,
@@ -45,7 +46,6 @@ var rolePermissions = map[string]map[Permission]bool{
 	RoleReseller: {
 		PermProductView:     true,
 		PermProductPurchase: true,
-		PermClientManage:    true,
 		PermCustomerView:    true, // own customers only (ownership-scoped in services)
 		PermOrderViewOwn:    true,
 		PermBalanceViewOwn:  true,

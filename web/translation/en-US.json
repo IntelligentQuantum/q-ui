@@ -130,7 +130,6 @@
     "store": "Store",
     "orders": "Orders",
     "products": "Products",
-    "customers": "Customers",
     "services": "My Services",
     "referral": "Referrals",
     "logout": "Log Out",
@@ -237,18 +236,6 @@
       "saved": "Product saved",
       "deleted": "Product deleted",
       "statusChanged": "Product status updated"
-    },
-    "customers": {
-      "pending": "Customer management is enabled for your role; the customer list view is coming soon.",
-      "customer": "Customer",
-      "owner": "Owner",
-      "statusCol": "Status",
-      "active": "Active",
-      "disabled": "Disabled",
-      "traffic": "Traffic",
-      "expiry": "Expiry",
-      "total": "Total customers",
-      "empty": "No customers yet."
     },
     "services": {
       "empty": "You have no active services yet.",
