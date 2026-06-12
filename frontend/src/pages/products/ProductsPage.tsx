@@ -10,6 +10,7 @@ import { HttpUtil } from '@/utils';
 import { getMessage } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
 import {
+    Badge,
     Button,
     Card,
     Checkbox,
@@ -139,8 +140,16 @@ export default function ProductsPage()
         {
             return id ? `#${ id }` : '—';
         }
-        return `${ ib.remark || `#${ ib.id }` } · ${ ib.protocol }:${ ib.port }`;
+        // Just the remark/name is enough to identify the inbound.
+        return ib.remark || `#${ ib.id }`;
     };
+
+    const audienceLabel = (a: string) =>
+        a === 'reseller'
+            ? t('pages.products.audienceReseller')
+            : a === 'member'
+                ? t('pages.products.audienceMember')
+                : t('pages.products.audienceAll');
 
     const list = products ?? [];
     const [q, setQ] = useState('');
@@ -253,6 +262,17 @@ export default function ProductsPage()
         { key: 'name', header: t('pages.products.name'), accessor: (p) => p.name },
         { key: 'price', header: t('pages.products.price'), cell: (p) => p.price },
         { key: 'durationDays', header: t('pages.products.durationDays'), hideBelow: 'sm', cell: (p) => p.durationDays },
+        {
+            key: 'audience',
+            header: t('pages.products.audience'),
+            hideBelow: 'sm',
+            cell: (p) =>
+            {
+                const a = p.audience || 'all';
+                const variant = a === 'reseller' ? 'primary' : a === 'member' ? 'success' : 'neutral';
+                return <Badge variant={variant}>{audienceLabel(a)}</Badge>;
+            }
+        },
         {
             key: 'inbound',
             header: t('pages.products.inbound'),
@@ -417,7 +437,7 @@ export default function ProductsPage()
                         checked={selected.includes(i.id)}
                         onChange={(e) => toggleId(i.id, e.target.checked)}
                       >
-                        {`${ i.remark || `#${ i.id }` } · ${ i.protocol }:${ i.port }`}
+                        {i.remark || `#${ i.id }`}
                       </Checkbox>
                     ))}
                   </div>
