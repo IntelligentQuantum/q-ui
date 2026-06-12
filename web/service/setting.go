@@ -38,6 +38,7 @@ var defaultValueMap = map[string]string{
 	"secret":                        random.Seq(32),
 	"apiToken":                      "",
 	"webBasePath":                   "/",
+	"panelTitle":                    "Q-UI",
 	"sessionMaxAge":                 "360",
 	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",
 	"pageSize":                      "25",
@@ -809,6 +810,23 @@ func (s *SettingService) GetBasePath() (string, error) {
 		basePath += "/"
 	}
 	return basePath, nil
+}
+
+// GetPanelTitle returns the configurable brand/title shown on the login,
+// register and sidebar UI. Falls back to "Q-UI" when unset.
+func (s *SettingService) GetPanelTitle() (string, error) {
+	title, err := s.getString("panelTitle")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(title) == "" {
+		return defaultValueMap["panelTitle"], nil
+	}
+	return title, nil
+}
+
+func (s *SettingService) SetPanelTitle(title string) error {
+	return s.setString("panelTitle", title)
 }
 
 func (s *SettingService) GetTimeLocation() (*time.Location, error) {

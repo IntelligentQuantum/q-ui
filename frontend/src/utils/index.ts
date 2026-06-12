@@ -1182,6 +1182,47 @@ export class LanguageManager
     }
 }
 
+/**
+ * BrandManager holds the configurable panel title (default "Q-UI"). The value
+ * is set from the backend (public `/getPanelTitle` pre-auth, or `/me` once
+ * logged in) and cached in localStorage so every page — including the pre-auth
+ * login/register screens — can render the brand instantly without a flash of
+ * the default while the request is in flight.
+ */
+export class BrandManager
+{
+    public static readonly DEFAULT_TITLE = 'Q-UI';
+    private static readonly STORAGE_KEY = 'panelTitle';
+
+    public static getTitle(): string
+    {
+        try
+        {
+            const cached = window.localStorage.getItem(BrandManager.STORAGE_KEY);
+            const trimmed = (cached ?? '').trim();
+            return trimmed || BrandManager.DEFAULT_TITLE;
+        }
+        catch
+        {
+            return BrandManager.DEFAULT_TITLE;
+        }
+    }
+
+    public static setTitle(title: string | null | undefined): string
+    {
+        const value = (title ?? '').trim() || BrandManager.DEFAULT_TITLE;
+        try
+        {
+            window.localStorage.setItem(BrandManager.STORAGE_KEY, value);
+        }
+        catch
+        {
+            // localStorage unavailable (private mode / disabled) — ignore.
+        }
+        return value;
+    }
+}
+
 export class FileManager
 {
     public static downloadTextFile(content: BlobPart, filename: string = 'file.txt', options: BlobPropertyBag = { type: 'text/plain' }): void

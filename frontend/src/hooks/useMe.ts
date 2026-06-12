@@ -46,6 +46,7 @@ export interface MeInfo {
   cryptoBonusPercent: number;
   cryptoBonusMinDeposit: number;
   cryptoBonusMax: number;
+  panelTitle: string;
 }
 
 export const ME_QUERY_KEY = ['me'] as const;
@@ -95,7 +96,8 @@ async function fetchMe(): Promise<MeInfo>
         cryptoBonusEnabled: Boolean(o.cryptoBonusEnabled),
         cryptoBonusPercent: Number(o.cryptoBonusPercent) || 0,
         cryptoBonusMinDeposit: Number(o.cryptoBonusMinDeposit) || 0,
-        cryptoBonusMax: Number(o.cryptoBonusMax) || 0
+        cryptoBonusMax: Number(o.cryptoBonusMax) || 0,
+        panelTitle: String(o.panelTitle ?? '').trim() || 'Q-UI'
     };
 }
 

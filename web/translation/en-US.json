@@ -1325,6 +1325,8 @@
       "publicKeyPathDesc": "The public key file path for the web panel. (begins with ‘/‘)",
       "privateKeyPath": "Private Key Path",
       "privateKeyPathDesc": "The private key file path for the web panel. (begins with ‘/‘)",
+      "panelTitle": "Panel Title",
+      "panelTitleDesc": "The brand name shown on the login, registration and sidebar. Leave empty to use the default (Q-UI).",
       "panelUrlPath": "URI Path",
       "panelUrlPathDesc": "The URI path for the web panel. (begins with ‘/‘ and concludes with ‘/‘)",
       "pageSize": "Pagination Size",

@@ -146,6 +146,7 @@ func (a *APIController) me(c *gin.Context) {
 	cryptoBonusPercent, _ := a.settingService.GetCryptoBonusPercent()
 	cryptoBonusMinDeposit, _ := a.settingService.GetCryptoBonusMinDeposit()
 	cryptoBonusMax, _ := a.settingService.GetCryptoBonusMax()
+	panelTitle, _ := a.settingService.GetPanelTitle()
 	jsonObj(c, gin.H{
 		"id":       user.Id,
 		"username": user.Username,
@@ -174,6 +175,8 @@ func (a *APIController) me(c *gin.Context) {
 		"cryptoBonusPercent":    cryptoBonusPercent,
 		"cryptoBonusMinDeposit": cryptoBonusMinDeposit,
 		"cryptoBonusMax":        cryptoBonusMax,
+		// Configurable brand/title shown in the sidebar header.
+		"panelTitle": panelTitle,
 		// Reseller referral identity, so the SPA can render the share link without
 		// a second round-trip. Empty for non-resellers / before first generation.
 		"referralCode":    user.ReferralCode,

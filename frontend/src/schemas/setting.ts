@@ -11,6 +11,7 @@ export const AllSettingSchema = z.object({
     webCertFile: z.string().optional(),
     webKeyFile: z.string().optional(),
     webBasePath: absolutePath.optional(),
+    panelTitle: z.string().max(60).optional(),
     sessionMaxAge: z.number().int().min(1).max(525600).optional(),
     trustedProxyCIDRs: z.string().optional(),
     panelProxy: z.string().optional(),

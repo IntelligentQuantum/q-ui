@@ -40,7 +40,7 @@ import {
     X
 } from 'lucide-react';
 
-import { HttpUtil, LanguageManager } from '@/utils';
+import { BrandManager, HttpUtil, LanguageManager } from '@/utils';
 import { pauseAnimationsUntilLeave, useTheme, type ThemeMode } from '@/hooks/useTheme';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useMe, type Permission } from '@/hooks/useMe';
@@ -140,6 +140,18 @@ export default function AppSidebar()
     const { format: formatMoney } = useCurrency();
     const showBilling = !!me?.zarinpalEnable;
     const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
+
+    // Configurable brand/title. Prefer the freshly-loaded value from /me; fall
+    // back to the cached one (so it renders before /me resolves). Cache it so the
+    // pre-auth login/register screens show the same brand on next visit.
+    const brandTitle = me?.panelTitle?.trim() || BrandManager.getTitle();
+    useEffect(() =>
+    {
+        if (me?.panelTitle)
+        {
+            BrandManager.setTitle(me.panelTitle);
+        }
+    }, [me?.panelTitle]);
 
     const [collapsed, setCollapsed] = useState<boolean>(() => readCollapsed());
     const [drawerOpen, setDrawerOpen] = useState(false);
@@ -441,7 +453,7 @@ export default function AppSidebar()
       >
         <div className={cn('flex h-14 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'justify-between ps-4 pe-2')}>
           <span className="select-none text-lg font-semibold tracking-wide text-foreground">
-            {collapsed ? 'Q' : 'Q-UI'}
+            {collapsed ? (brandTitle.slice(0, 1) || 'Q') : brandTitle}
           </span>
           {!collapsed && (
             <div className="flex items-center gap-1">
@@ -518,7 +530,7 @@ export default function AppSidebar()
             className="absolute inset-y-0 left-0 flex w-[min(82vw,320px)] flex-col border-r border-border bg-surface shadow-lg motion-safe:animate-[drawer-in_220ms_var(--ease-out)]"
           >
             <div className="flex h-14 items-center justify-between border-b border-border ps-4 pe-2">
-              <span className="select-none text-lg font-semibold tracking-wide text-foreground">Q-UI</span>
+              <span className="select-none text-lg font-semibold tracking-wide text-foreground">{brandTitle}</span>
               <div className="inline-flex items-center gap-1">
                 <DropdownMenu
                   align="end"

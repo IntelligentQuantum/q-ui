@@ -7,7 +7,7 @@ import { KeyRound, Languages, Lock, Moon, Sun, User } from 'lucide-react';
 import type { TFunction } from 'i18next';
 import type { z } from 'zod';
 
-import { HttpUtil, LanguageManager } from '@/utils';
+import { BrandManager, HttpUtil, LanguageManager } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import { pauseAnimationsUntilLeave, useTheme } from '@/hooks/useTheme';
 import { LoginFormSchema, TwoFactorCodeSchema, type LoginFormValues } from '@/schemas/login';
@@ -89,6 +89,7 @@ export default function LoginPage()
     const [submitting, setSubmitting] = useState(false);
     const [twoFactorEnable, setTwoFactorEnable] = useState(false);
     const [registrationEnable, setRegistrationEnable] = useState(false);
+    const [brandTitle, setBrandTitle] = useState<string>(() => BrandManager.getTitle());
     const [headlineIndex, setHeadlineIndex] = useState(0);
     const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
 
@@ -119,9 +120,10 @@ export default function LoginPage()
         let cancelled = false;
         (async () =>
         {
-            const [twoFactor, registration] = await Promise.all([
+            const [twoFactor, registration, panelTitle] = await Promise.all([
                 HttpUtil.post('/getTwoFactorEnable', undefined, { silent: true }),
-                HttpUtil.post('/getRegistrationEnable', undefined, { silent: true })
+                HttpUtil.post('/getRegistrationEnable', undefined, { silent: true }),
+                HttpUtil.post('/getPanelTitle', undefined, { silent: true })
             ]);
             if (cancelled)
             {
@@ -134,6 +136,10 @@ export default function LoginPage()
             if (registration.success)
             {
                 setRegistrationEnable(!!registration.obj);
+            }
+            if (panelTitle.success)
+            {
+                setBrandTitle(BrandManager.setTitle(panelTitle.obj as string));
             }
             setFetched(true);
         })();
@@ -222,7 +228,7 @@ export default function LoginPage()
               <Card className="w-full max-w-md shadow-lg">
                 <CardContent className="flex flex-col p-6 pt-6 sm:p-8">
                   <div className="flex flex-col items-center gap-2.5">
-                    <span className="text-2xl font-bold tracking-wide text-foreground">Q-UI</span>
+                    <span className="text-2xl font-bold tracking-wide text-foreground">{brandTitle}</span>
                     <span aria-hidden="true" className="h-[3px] w-10 rounded-full bg-accent" />
                   </div>
 

@@ -29,7 +29,7 @@ type RegisterForm struct {
 	Username        string `json:"username" form:"username"`
 	Password        string `json:"password" form:"password"`
 	ConfirmPassword string `json:"confirmPassword" form:"confirmPassword"`
-	ReferralCode string `json:"referralCode" form:"referralCode"`
+	ReferralCode    string `json:"referralCode" form:"referralCode"`
 }
 
 // IndexController handles the main index and login-related routes.
@@ -59,6 +59,7 @@ func (a *IndexController) initRouter(g *gin.RouterGroup) {
 	g.POST("/logout", middleware.CSRFMiddleware(), a.logout)
 	g.POST("/getTwoFactorEnable", middleware.CSRFMiddleware(), a.getTwoFactorEnable)
 	g.POST("/getRegistrationEnable", middleware.CSRFMiddleware(), a.getRegistrationEnable)
+	g.POST("/getPanelTitle", middleware.CSRFMiddleware(), a.getPanelTitle)
 }
 
 // index handles the root route, redirecting logged-in users to the panel or showing the login page.
@@ -278,5 +279,14 @@ func (a *IndexController) getTwoFactorEnable(c *gin.Context) {
 	status, err := a.settingService.GetTwoFactorEnable()
 	if err == nil {
 		jsonObj(c, status, nil)
+	}
+}
+
+// getPanelTitle returns the configurable brand/title so the pre-auth
+// login and registration pages can render it (defaults to "Q-UI").
+func (a *IndexController) getPanelTitle(c *gin.Context) {
+	title, err := a.settingService.GetPanelTitle()
+	if err == nil {
+		jsonObj(c, title, nil)
 	}
 }

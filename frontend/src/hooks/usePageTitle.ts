@@ -2,6 +2,8 @@ import { useEffect } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 
+import { BrandManager } from '@/utils';
+
 const TITLE_KEYS: Record<string, string> = {
     '/': 'menu.dashboard',
     '/inbounds': 'menu.inbounds',
@@ -30,7 +32,7 @@ export function usePageTitle()
     useEffect(() =>
     {
         const key = TITLE_KEYS[pathname];
-        const title = key ? t(key) : 'Q-UI';
+        const title = key ? t(key) : BrandManager.getTitle();
         const host = window.location.hostname;
         document.title = host ? `${ host } - ${ title }` : title;
     }, [pathname, t]);

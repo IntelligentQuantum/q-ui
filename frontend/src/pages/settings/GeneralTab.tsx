@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SettingRow } from '@/components/ui';
 import { MultiSelect } from '@/components/ui';
-import { Bell, Clock, Globe, Hash, Network, Route, Settings, ShieldCheck } from 'lucide-react';
+import { Bell, Clock, Globe, Hash, Network, Route, Settings, ShieldCheck, Type } from 'lucide-react';
 
 import type { AllSetting } from '@/models/setting';
 import { HttpUtil, LanguageManager } from '@/utils';
@@ -129,6 +129,11 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
           <SettingRow title={t('pages.settings.panelPort')} description={t('pages.settings.panelPortDesc')}>
             <Input type="number" min={1} max={65535} startIcon={<Hash aria-hidden />} value={allSetting.webPort}
               onChange={(e) => updateSetting({ webPort: Number(e.target.value) || 0 })} />
+          </SettingRow>
+
+          <SettingRow title={t('pages.settings.panelTitle')} description={t('pages.settings.panelTitleDesc')}>
+            <Input startIcon={<Type aria-hidden />} maxLength={60} placeholder="Q-UI" value={allSetting.panelTitle}
+              onChange={(e) => updateSetting({ panelTitle: e.target.value })} />
           </SettingRow>
 
           <SettingRow title={t('pages.settings.panelUrlPath')} description={t('pages.settings.panelUrlPathDesc')}>
