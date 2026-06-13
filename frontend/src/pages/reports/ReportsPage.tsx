@@ -322,7 +322,7 @@ export default function ReportsPage()
                         columns={periodColumns}
                         data={filteredPeriodRows}
                         rowKey={(row) => row.key}
-                        pageSize={5}
+                        pageSize={15}
                         empty={
                           <div className="py-6 text-center text-muted-foreground">{t('noData')}</div>
                         }
@@ -346,7 +346,7 @@ export default function ReportsPage()
                         columns={resellerColumns}
                         data={filteredResellers}
                         rowKey={(row) => String(row.userId)}
-                        pageSize={10}
+                        pageSize={15}
                         empty={
                           <div className={cn('flex flex-col items-center gap-2 py-6 text-muted-foreground')}>
                             <Crown className="h-7 w-7 opacity-50" aria-hidden />

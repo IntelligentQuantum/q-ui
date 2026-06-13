@@ -504,7 +504,7 @@ export default function BillingPage()
                     data={paymentsQuery.data ?? []}
                     rowKey={(row) => String(row.id)}
                     loading={paymentsQuery.isFetching}
-                    pageSize={10}
+                    pageSize={15}
                   />
                 </CardContent>
               </Card>

@@ -32,7 +32,10 @@ function canAccess(me: MeInfo, path: string): boolean
             return has('product.manage'); // admin, moderator
         case '/store':
         case '/billing':
+        case '/manual-deposit':
             return has('product.purchase'); // admin, reseller, member
+        case '/manual-deposits':
+            return has('deposit.manage'); // admin only — review queue + cards
         case '/orders':
             return has('order.view_own'); // everyone with order visibility
         case '/services':

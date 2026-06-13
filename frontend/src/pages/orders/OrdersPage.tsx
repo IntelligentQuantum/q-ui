@@ -180,7 +180,7 @@ export default function OrdersPage()
               data={filtered}
               rowKey={(o) => String(o.id)}
               loading={isLoading}
-              pageSize={10}
+              pageSize={15}
               empty={t('noData')}
             />
           )}

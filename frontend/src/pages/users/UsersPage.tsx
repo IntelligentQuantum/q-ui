@@ -711,7 +711,7 @@ export default function UsersPage()
             data={txQuery.data ?? []}
             rowKey={(row) => String(row.id)}
             loading={txQuery.isFetching}
-            pageSize={10}
+            pageSize={15}
             empty={<div className="py-6 text-center text-muted-foreground">{t('noData')}</div>}
           />
         </Modal>

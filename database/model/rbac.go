@@ -14,6 +14,7 @@ const (
 	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
 	PermStatsViewAll  Permission = "stats.view_all"
 	PermTxnViewAll    Permission = "transaction.view_all"
+	PermDepositManage Permission = "deposit.manage" // review/approve/reject manual deposits + manage payment cards
 
 	// Product catalog.
 	PermProductManage   Permission = "product.manage"   // create/edit/delete/activate products
@@ -100,6 +101,7 @@ func (u *User) Permissions() []Permission {
 // and to keep Permissions() output deterministic.
 var allPermissions = []Permission{
 	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
+	PermDepositManage,
 	PermProductManage, PermProductView, PermProductPurchase,
 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
 }

@@ -26,20 +26,41 @@ const sideGap: Record<TooltipSide, string> = {
 // scrollable ancestor (e.g. a data table), which plain z-index cannot do. No
 // gap is left, so the cursor can travel from the trigger onto the popover (a
 // DOM descendant) without firing mouseleave — keeping its content scrollable.
+//
+// It also caps maxHeight to the available space in the chosen direction (and
+// flips top<->bottom when the anchored side is too cramped) so a tall list never
+// runs off-screen with unreachable rows — it scrolls inside the viewport instead.
 function fixedStyleFor(sideValue: TooltipSide, rect: DOMRect): CSSProperties
 {
-    switch (sideValue)
+    const margin = 8;
+    const vh = window.innerHeight;
+
+    if (sideValue === 'start')
     {
-        case 'top':
-            return { top: rect.top, left: rect.left + rect.width / 2, transform: 'translate(-50%, -100%)' };
-        case 'start':
-            return { top: rect.top + rect.height / 2, left: rect.left, transform: 'translate(-100%, -50%)' };
-        case 'end':
-            return { top: rect.top + rect.height / 2, left: rect.right, transform: 'translateY(-50%)' };
-        case 'bottom':
-        default:
-            return { top: rect.bottom, left: rect.left + rect.width / 2, transform: 'translateX(-50%)' };
+        return { top: rect.top + rect.height / 2, left: rect.left, transform: 'translate(-100%, -50%)', maxHeight: vh - margin * 2 };
     }
+    if (sideValue === 'end')
+    {
+        return { top: rect.top + rect.height / 2, left: rect.right, transform: 'translateY(-50%)', maxHeight: vh - margin * 2 };
+    }
+
+    // top / bottom — pick the side with usable room, preferring the requested one.
+    const spaceBelow = vh - rect.bottom - margin;
+    const spaceAbove = rect.top - margin;
+    let placeBelow = sideValue !== 'top';
+    if (placeBelow && spaceBelow < 180 && spaceAbove > spaceBelow)
+    {
+        placeBelow = false;
+    }
+    else if (!placeBelow && spaceAbove < 180 && spaceBelow > spaceAbove)
+    {
+        placeBelow = true;
+    }
+
+    const left = rect.left + rect.width / 2;
+    return placeBelow
+        ? { top: rect.bottom, left, transform: 'translateX(-50%)', maxHeight: spaceBelow }
+        : { top: rect.top, left, transform: 'translate(-50%, -100%)', maxHeight: spaceAbove };
 }
 
 export interface TooltipProps {
@@ -109,7 +130,10 @@ export function Tooltip({ content, side = 'top', delay = 150, children, classNam
               'z-[var(--z-popover)] rounded-md border border-border bg-surface-raised px-2 py-1 text-xs font-medium text-foreground shadow-md',
               'motion-safe:animate-[fade-in_120ms_ease-out]',
               interactive
-                  ? 'fixed pointer-events-auto whitespace-normal'
+                  // Cap height/width to the viewport and scroll internally so a
+                  // data-heavy list (e.g. all online clients) is fully reachable
+                  // instead of overflowing off-screen with no way to see the rest.
+                  ? 'fixed pointer-events-auto max-w-[min(85vw,24rem)] overflow-y-auto overscroll-contain whitespace-normal'
                   : cn('absolute pointer-events-none whitespace-nowrap', sidePos[side], sideGap[side]),
               className
           )}

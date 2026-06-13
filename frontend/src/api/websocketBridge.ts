@@ -88,10 +88,19 @@ export function useWebSocketBridge()
             queryClient.setQueryData(keys.inbounds.slim(), payload);
         };
 
+        // Real-time bell: a notification was created/approved/rejected. Each
+        // session refetches its own server-scoped count/list (no per-user data is
+        // pushed), so the bell updates instantly without a poll or page refresh.
+        const onNotifications: Handler = () =>
+        {
+            queryClient.invalidateQueries({ queryKey: ['notifications'] });
+        };
+
         client.on('invalidate', onInvalidate);
         client.on('outbounds', onOutbounds);
         client.on('nodes', onNodes);
         client.on('inbounds', onInbounds);
+        client.on('notifications_changed', onNotifications);
         client.connect();
 
         return () =>
@@ -100,6 +109,7 @@ export function useWebSocketBridge()
             client.off('outbounds', onOutbounds);
             client.off('nodes', onNodes);
             client.off('inbounds', onInbounds);
+            client.off('notifications_changed', onNotifications);
             if (invalidateTimer != null)
             {
                 clearTimeout(invalidateTimer);

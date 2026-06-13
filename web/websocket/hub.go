@@ -20,7 +20,11 @@ const (
 	MessageTypeOutbounds    MessageType = "outbounds"
 	MessageTypeNodes        MessageType = "nodes"
 	MessageTypeNotification MessageType = "notification"
-	MessageTypeXrayState    MessageType = "xray_state"
+	// MessageTypeNotificationsChanged nudges clients to refetch their in-app
+	// notification bell (created/approved/rejected). Distinct from
+	// MessageTypeNotification, which shows a transient toast.
+	MessageTypeNotificationsChanged MessageType = "notifications_changed"
+	MessageTypeXrayState            MessageType = "xray_state"
 	MessageTypeClientStats  MessageType = "client_stats"
 	MessageTypeClients      MessageType = "clients"
 	MessageTypeInvalidate   MessageType = "invalidate"

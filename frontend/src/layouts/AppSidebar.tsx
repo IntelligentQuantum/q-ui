@@ -4,23 +4,22 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import {
     ArrowLeftRight,
+    Banknote,
     ChevronDown,
     ChevronsLeft,
     ChevronsRight,
+    ClipboardCheck,
     Cloud,
     Code,
     CreditCard,
     Database,
     IdCard,
     Import,
-    Languages,
     LayoutDashboard,
     LayoutGrid,
     LogOut,
     type LucideIcon,
-    Menu as MenuIcon,
     MessageSquare,
-    Moon,
     Network,
     Plug,
     Server,
@@ -29,7 +28,6 @@ import {
     ShieldCheck,
     ShoppingBag,
     ShoppingCart,
-    Sun,
     Tags,
     TrendingUp,
     Upload,
@@ -40,13 +38,11 @@ import {
     X
 } from 'lucide-react';
 
-import { BrandManager, HttpUtil, LanguageManager } from '@/utils';
-import { pauseAnimationsUntilLeave, useTheme, type ThemeMode } from '@/hooks/useTheme';
+import { BrandManager, HttpUtil } from '@/utils';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useMe, type Permission } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
-import { cn, DropdownMenu } from '@/components/ui';
-import type { DropdownItem } from '@/components/ui';
+import { cn } from '@/components/ui';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
 const LOGOUT_KEY = '__logout__';
@@ -54,7 +50,7 @@ const LOGOUT_KEY = '__logout__';
 type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
-  | 'orders' | 'products' | 'services' | 'referral';
+  | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -74,7 +70,9 @@ const iconByName: Record<IconName, LucideIcon> = {
     orders: ShoppingCart,
     products: LayoutGrid,
     services: Server,
-    referral: Share2
+    referral: Share2,
+    manualDeposit: Banknote,
+    manualDeposits: ClipboardCheck
 };
 
 interface NavTab {
@@ -101,37 +99,16 @@ function readCollapsed(): boolean
     }
 }
 
-const THEME_ICON: Record<ThemeMode, ReactNode> = {
-    light: <Sun className="h-4 w-4" />,
-    dark: <Moon className="h-4 w-4" />
-};
-
-function ThemeCycleButton({ id, mode, onCycle, ariaLabel }: {
-  id: string;
-  mode: ThemeMode;
-  onCycle: () => void;
-  ariaLabel: string;
-})
-{
-    const label = `${ ariaLabel }: ${ mode }`;
-    return (
-    <button
-      id={id}
-      type="button"
-      className="inline-flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-      aria-label={label}
-      title={label}
-      onClick={onCycle}
-    >
-      {THEME_ICON[mode]}
-    </button>
-    );
+interface AppSidebarProps {
+  /** Controlled mobile-drawer open state (lifted to PageShell so the top navbar's
+   *  hamburger can open it). */
+  drawerOpen: boolean;
+  setDrawerOpen: (open: boolean) => void;
 }
 
-export default function AppSidebar()
+export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProps)
 {
     const { t } = useTranslation();
-    const { mode, cycleMode } = useTheme();
     const navigate = useNavigate();
     const { pathname, hash } = useLocation();
     const { allSetting } = useAllSettings();
@@ -153,30 +130,6 @@ export default function AppSidebar()
     }, [me?.panelTitle]);
 
     const [collapsed, setCollapsed] = useState<boolean>(() => readCollapsed());
-    const [drawerOpen, setDrawerOpen] = useState(false);
-    const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
-
-    // Panel language switcher (mirrors the one on the login page) so the UI
-    // language can be changed from inside the dashboard, not only at login.
-    const onLangChange = useCallback((next: string) =>
-    {
-        setLang(next);
-        LanguageManager.setLanguage(next);
-    }, []);
-    const langItems = useMemo<DropdownItem[]>(
-        () => (LanguageManager.supportedLanguages as { value: string; name: string; icon: string }[]).map((l) => ({
-            key: l.value,
-            label: (
-        <span className="flex items-center gap-2">
-          <span aria-hidden="true">{l.icon}</span>
-          <span>{l.name}</span>
-          {l.value === lang ? <span className="ms-auto text-accent">•</span> : null}
-        </span>
-            ),
-            onSelect: () => onLangChange(l.value)
-        })),
-        [lang, onLangChange]
-    );
 
     const tabs = useMemo<NavTab[]>(() =>
     {
@@ -214,6 +167,8 @@ export default function AppSidebar()
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
         // Referral dashboard: resellers (own link/stats) and admins (manage).
         push(Boolean(me?.isReseller || me?.isAdmin), '/referral', 'referral', 'menu.referral');
+        // Manual card-to-card deposit review queue (admin).
+        push(has('deposit.manage'), '/manual-deposits', 'manualDeposits', 'menu.manualDeposits');
 
         // 4) Administration (admin): users, reports, settings, xray, API docs.
         push(has('user.manage'), '/users', 'users', 'menu.users');
@@ -223,8 +178,9 @@ export default function AppSidebar()
         push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
 
         // 5) Account: top-up (when a gateway is on and the caller can purchase),
-        // profile, logout — always at the bottom.
+        // manual deposit (any buyer), profile, logout — always at the bottom.
         push(showBilling && has('product.purchase'), '/billing', 'billing', 'menu.billing');
+        push(has('product.purchase'), '/manual-deposit', 'manualDeposit', 'menu.manualDeposit');
         items.push({ key: '/profile', icon: 'profile', title: t('menu.profile') });
         items.push({ key: LOGOUT_KEY, icon: 'logout', title: t('logout') });
         return items;
@@ -240,6 +196,7 @@ export default function AppSidebar()
             { key: '/settings#security', icon: ShieldCheck, label: t('pages.settings.securitySettings') },
             { key: '/settings#reseller', icon: Wallet, label: t('pages.settings.resellerSettings') },
             { key: '/settings#payments', icon: CreditCard, label: t('pages.settings.paymentsSettings') },
+            { key: '/settings#manual-deposit', icon: Banknote, label: t('pages.settings.manualDepositSettings') },
             { key: '/settings#telegram', icon: MessageSquare, label: t('pages.settings.TGBotSettings') },
             { key: '/settings#subscription', icon: Cloud, label: t('pages.settings.subSettings') }
         ];
@@ -303,12 +260,6 @@ export default function AppSidebar()
         });
     }, []);
 
-    const cycleTheme = useCallback((id: string) =>
-    {
-        pauseAnimationsUntilLeave(id);
-        cycleMode();
-    }, [cycleMode]);
-
     // Close the mobile drawer on Escape.
     useEffect(() =>
     {
@@ -325,7 +276,7 @@ export default function AppSidebar()
         };
         window.addEventListener('keydown', onKey);
         return () => window.removeEventListener('keydown', onKey);
-    }, [drawerOpen]);
+    }, [drawerOpen, setDrawerOpen]);
 
     const childOf = useCallback((key: string): SubItem[] | null =>
     {
@@ -423,22 +374,58 @@ export default function AppSidebar()
         );
     }), [childOf, selectedKey, pathname, openKeys, toggleSubmenu, openLink]);
 
-    const balanceChip = (iconOnly: boolean) => me && (
-    <div
-      className={cn(
-          'flex items-center gap-2 rounded-md border border-accent-subtle bg-accent-subtle/60 text-[13px] font-medium text-muted-foreground',
-          iconOnly ? 'justify-center px-0 py-2' : 'px-3 py-2'
-      )}
-      title={`${ t('balance') }: ${ formatMoney(me.balance) }`}
-    >
-      <Wallet className="h-4 w-4 flex-shrink-0 text-accent" />
-      {!iconOnly && (
-        <span className="min-w-0 truncate">
-          {t('balance')}: <strong className="font-semibold text-foreground">{formatMoney(me.balance)}</strong>
-        </span>
-      )}
-    </div>
-    );
+    // Buyers (admin/reseller/member) can top up; for them the balance chip is a
+    // button that jumps straight to the deposit page — the primary money action,
+    // one click from anywhere. Non-buyers (moderator) get the static chip.
+    const canTopUp = !!me && (me.isAdmin || me.permissions.includes('product.purchase'));
+
+    const balanceChip = (iconOnly: boolean) =>
+    {
+        if (!me)
+        {
+            return null;
+        }
+        const inner = (
+        <>
+          <Wallet className="h-4 w-4 flex-shrink-0 text-accent" />
+          {!iconOnly && (
+            <span className="min-w-0 truncate">
+              {t('balance')}: <strong className="font-semibold text-foreground">{formatMoney(me.balance)}</strong>
+            </span>
+          )}
+        </>
+        );
+        const base = cn(
+            'flex items-center gap-2 rounded-md border border-accent-subtle bg-accent-subtle/60 text-[13px] font-medium text-muted-foreground',
+            iconOnly ? 'justify-center px-0 py-2' : 'px-3 py-2'
+        );
+        if (!canTopUp)
+        {
+            return (
+        <div className={base} title={`${ t('balance') }: ${ formatMoney(me.balance) }`}>
+          {inner}
+        </div>
+            );
+        }
+        return (
+      <button
+        type="button"
+        className={cn(
+            base,
+            'w-full cursor-pointer transition-colors hover:bg-accent-subtle hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring'
+        )}
+        title={`${ t('balance') }: ${ formatMoney(me.balance) } — ${ t('menu.manualDeposit') }`}
+        aria-label={`${ t('balance') }: ${ formatMoney(me.balance) }. ${ t('menu.manualDeposit') }`}
+        onClick={() =>
+        {
+            setDrawerOpen(false);
+            navigate('/manual-deposit');
+        }}
+      >
+        {inner}
+      </button>
+        );
+    };
 
     return (
     <>
@@ -449,26 +436,10 @@ export default function AppSidebar()
             collapsed ? 'w-16' : 'w-56'
         )}
       >
-        <div className={cn('flex h-14 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'justify-between ps-4 pe-2')}>
+        <div className={cn('flex h-14 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'ps-4 pe-2')}>
           <span className="select-none text-lg font-semibold tracking-wide text-foreground">
             {collapsed ? (brandTitle.slice(0, 1) || 'Q') : brandTitle}
           </span>
-          {!collapsed && (
-            <div className="flex items-center gap-1">
-              <DropdownMenu
-                align="end"
-                label={t('pages.settings.language')}
-                items={langItems}
-                trigger={<Languages className="h-[18px] w-[18px]" aria-hidden />}
-              />
-              <ThemeCycleButton
-                id="theme-cycle"
-                mode={mode}
-                onCycle={() => cycleTheme('theme-cycle')}
-                ariaLabel={t('menu.theme')}
-              />
-            </div>
-          )}
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
@@ -502,19 +473,7 @@ export default function AppSidebar()
         </button>
       </aside>
 
-      {/* Mobile hamburger handle. */}
-      {!drawerOpen && (
-        <button
-          type="button"
-          className="fixed top-3 left-3 z-[1100] inline-flex h-10 w-10 items-center justify-center rounded-md border border-border bg-surface text-foreground shadow-md transition-colors hover:bg-foreground/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring md:hidden"
-          aria-label={t('menu.dashboard')}
-          onClick={() => setDrawerOpen(true)}
-        >
-          <MenuIcon className="h-5 w-5" />
-        </button>
-      )}
-
-      {/* Mobile slide-in drawer. */}
+      {/* Mobile slide-in drawer (opened from the top navbar's hamburger). */}
       {drawerOpen && (
         <div className="fixed inset-0 z-[1200] md:hidden">
           <div
@@ -529,28 +488,14 @@ export default function AppSidebar()
           >
             <div className="flex h-14 items-center justify-between border-b border-border ps-4 pe-2">
               <span className="select-none text-lg font-semibold tracking-wide text-foreground">{brandTitle}</span>
-              <div className="inline-flex items-center gap-1">
-                <DropdownMenu
-                  align="end"
-                  label={t('pages.settings.language')}
-                  items={langItems}
-                  trigger={<Languages className="h-[18px] w-[18px]" aria-hidden />}
-                />
-                <ThemeCycleButton
-                  id="theme-cycle-drawer"
-                  mode={mode}
-                  onCycle={() => cycleTheme('theme-cycle-drawer')}
-                  ariaLabel={t('menu.theme')}
-                />
-                <button
-                  type="button"
-                  className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                  aria-label={t('close')}
-                  onClick={() => setDrawerOpen(false)}
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
+              <button
+                type="button"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-foreground/[0.06] hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                aria-label={t('close')}
+                onClick={() => setDrawerOpen(false)}
+              >
+                <X className="h-4 w-4" />
+              </button>
             </div>
 
             <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">

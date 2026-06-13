@@ -91,6 +91,16 @@ func BroadcastNotification(title, message, level string) {
 	})
 }
 
+// BroadcastNotificationsChanged nudges every connected client to refetch its
+// in-app notification bell. The payload is intentionally empty: each session
+// refetches its own server-scoped unread count/list, so no per-user data (not
+// even ids) crosses the wire to other clients.
+func BroadcastNotificationsChanged() {
+	if hub := GetHub(); hub != nil {
+		hub.Broadcast(MessageTypeNotificationsChanged, struct{}{})
+	}
+}
+
 // BroadcastXrayState broadcasts Xray state change to all connected clients.
 func BroadcastXrayState(state string, errorMsg string) {
 	hub := GetHub()

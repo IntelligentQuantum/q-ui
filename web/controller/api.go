@@ -112,6 +112,11 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	api.POST("/profile", a.updateProfile)
 	// Balance top-up via ZarinPal (any logged-in user).
 	NewPaymentController(api)
+	// Manual card-to-card deposits: buyer submission/history + admin review &
+	// payment-card management. Per-route RBAC lives inside the controller.
+	NewDepositController(api)
+	// Per-user in-app notifications (bell menu) — scoped to the caller.
+	NewNotificationController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", middleware.RequireAdmin(), a.BackuptoTgbot)

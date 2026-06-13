@@ -34,7 +34,7 @@ export interface TableProps<T> {
   data: T[];
   rowKey: (row: T, index: number) => string;
   loading?: boolean;
-  /** Rows per page. `0` disables pagination. Default 10. */
+  /** Rows per page. `0` disables pagination. Default 15. */
   pageSize?: number;
   empty?: ReactNode;
   onRowClick?: (row: T) => void;
@@ -74,7 +74,7 @@ export function Table<T>({
     data,
     rowKey,
     loading = false,
-    pageSize = 10,
+    pageSize = 15,
     empty,
     onRowClick,
     rowSelection,

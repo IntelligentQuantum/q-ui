@@ -15,6 +15,7 @@ export type Permission =
   | 'balance.manage'
   | 'stats.view_all'
   | 'transaction.view_all'
+  | 'deposit.manage'
   | 'product.manage'
   | 'product.view'
   | 'product.purchase'
