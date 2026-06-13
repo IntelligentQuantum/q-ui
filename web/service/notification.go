@@ -68,6 +68,21 @@ func (s *NotificationService) NotifyAdmins(title, body, level, link string, para
 	return nil
 }
 
+// NotifyUsers writes the same notification for a set of users (fan-out, e.g. all
+// support staff) and pushes a single real-time nudge.
+func (s *NotificationService) NotifyUsers(userIds []int, title, body, level, link string, params map[string]any) error {
+	seen := make(map[int]bool, len(userIds))
+	for _, id := range userIds {
+		if id <= 0 || seen[id] {
+			continue
+		}
+		seen[id] = true
+		_ = s.createOne(id, title, body, level, link, params)
+	}
+	websocket.BroadcastNotificationsChanged()
+	return nil
+}
+
 // ListForUser returns a user's notifications, newest first. limit is the page
 // size the bell grows as the user clicks "load more" (capped to keep the bell
 // payload bounded).

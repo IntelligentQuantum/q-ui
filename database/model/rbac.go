@@ -16,6 +16,12 @@ const (
 	PermTxnViewAll    Permission = "transaction.view_all"
 	PermDepositManage Permission = "deposit.manage" // review/approve/reject manual deposits + manage payment cards
 
+	// Support ticketing (helpdesk).
+	PermTicketCreate  Permission = "ticket.create"  // open + reply to own tickets
+	PermTicketViewOwn Permission = "ticket.view_own" // view own tickets
+	PermTicketManage  Permission = "ticket.manage"  // staff: view all, reply, assign, transfer, status, notes
+	PermTicketAdmin   Permission = "ticket.admin"   // categories, SLA config, audit log, merge
+
 	// Product catalog.
 	PermProductManage   Permission = "product.manage"   // create/edit/delete/activate products
 	PermProductView     Permission = "product.view"     // browse catalog / store
@@ -43,6 +49,9 @@ var rolePermissions = map[string]map[Permission]bool{
 		PermOrderViewAll:   true,
 		PermOrderViewOwn:   true,
 		PermBalanceViewOwn: true,
+		PermTicketCreate:   true,
+		PermTicketViewOwn:  true,
+		PermTicketManage:   true, // support staff
 	},
 	RoleReseller: {
 		PermProductView:     true,
@@ -50,12 +59,16 @@ var rolePermissions = map[string]map[Permission]bool{
 		PermCustomerView:    true, // own customers only (ownership-scoped in services)
 		PermOrderViewOwn:    true,
 		PermBalanceViewOwn:  true,
+		PermTicketCreate:    true,
+		PermTicketViewOwn:   true,
 	},
 	RoleMember: {
 		PermProductView:     true,
 		PermProductPurchase: true,
 		PermOrderViewOwn:    true,
 		PermBalanceViewOwn:  true,
+		PermTicketCreate:    true,
+		PermTicketViewOwn:   true,
 	},
 }
 
@@ -102,6 +115,7 @@ func (u *User) Permissions() []Permission {
 var allPermissions = []Permission{
 	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
 	PermDepositManage,
+	PermTicketCreate, PermTicketViewOwn, PermTicketManage, PermTicketAdmin,
 	PermProductManage, PermProductView, PermProductPurchase,
 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
 }

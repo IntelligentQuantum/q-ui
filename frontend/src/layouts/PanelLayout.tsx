@@ -36,6 +36,10 @@ function canAccess(me: MeInfo, path: string): boolean
             return has('product.purchase'); // admin, reseller, member
         case '/manual-deposits':
             return has('deposit.manage'); // admin only — review queue + cards
+        case '/tickets':
+            return has('ticket.view_own'); // every role with tickets
+        case '/support':
+            return has('ticket.manage'); // support staff — moderator/admin
         case '/orders':
             return has('order.view_own'); // everyone with order visibility
         case '/services':

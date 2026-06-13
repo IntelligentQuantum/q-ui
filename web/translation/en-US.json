@@ -134,6 +134,8 @@
     "referral": "Referrals",
     "manualDeposit": "Manual Deposit",
     "manualDeposits": "Manual Deposits",
+    "tickets": "Support Tickets",
+    "support": "Support Desk",
     "logout": "Log Out",
     "link": "Manage",
     "donate": "Donate",
@@ -155,9 +157,142 @@
     "depositRejected": {
       "title": "Deposit rejected",
       "body": "Your deposit of {amount} was rejected: {reason}"
+    },
+    "ticketCreated": {
+      "title": "New support ticket",
+      "body": "{number} — {subject}"
+    },
+    "ticketReplied": {
+      "title": "Ticket updated",
+      "body": "There is a new reply on ticket {number}."
+    },
+    "ticketUserReplied": {
+      "body": "The requester replied on ticket {number}."
+    },
+    "ticketAssigned": {
+      "title": "Ticket assigned to you",
+      "body": "Ticket {number} was assigned to you."
+    },
+    "ticketClosed": {
+      "title": "Ticket resolved",
+      "body": "Your ticket {number} was marked solved."
+    },
+    "ticketReopened": {
+      "title": "Ticket reopened",
+      "body": "Ticket {number} was reopened."
+    },
+    "ticketMention": {
+      "title": "You were mentioned",
+      "body": "{actor} mentioned you on ticket {number}."
     }
   },
   "pages": {
+    "tickets": {
+      "title": "Support Tickets",
+      "subtitle": "Open a ticket and our team will help you here.",
+      "new": "New Ticket",
+      "submit": "Create Ticket",
+      "number": "Ticket",
+      "subject": "Subject",
+      "requester": "Requester",
+      "statusLabel": "Status",
+      "priorityLabel": "Priority",
+      "assignee": "Assignee",
+      "unassigned": "Unassigned",
+      "lastActivity": "Last activity",
+      "empty": "No tickets found.",
+      "searchPlaceholder": "Search ID, subject, user…",
+      "totalCount": "{count} tickets",
+      "category": "Category",
+      "selectCategory": "Select a category",
+      "message": "Message",
+      "messagePlaceholder": "Describe your issue. You can attach screenshots, videos or documents.",
+      "formattingHint": "Formatting: **bold**, *italic*, `code`, > quote, - lists, [links](https://…).",
+      "attachments": "Attachments",
+      "dropHint": "Click, drag & drop, or paste a screenshot",
+      "status_open": "Open",
+      "status_pending_user": "Pending User",
+      "status_pending_staff": "Pending Staff",
+      "status_in_progress": "In Progress",
+      "status_escalated": "Escalated",
+      "status_solved": "Solved",
+      "status_closed": "Closed",
+      "priority_low": "Low",
+      "priority_normal": "Normal",
+      "priority_high": "High",
+      "priority_urgent": "Urgent",
+      "filter_all": "All",
+      "filter_open": "Open",
+      "filter_assigned_to_me": "Assigned to me",
+      "filter_unassigned": "Unassigned",
+      "filter_escalated": "Escalated",
+      "filter_urgent": "Urgent",
+      "filter_closed": "Closed",
+      "filter_today": "Today",
+      "filter_week": "This week",
+      "slaLeft": "{time} left",
+      "slaOverdue": "Overdue {time}",
+      "slaTooltip": "First-response SLA",
+      "toasts": {
+        "created": "Ticket created.",
+        "invalid": "Please fill in the subject, category and message.",
+        "category": "Please choose a valid category.",
+        "notFound": "Ticket not found.",
+        "closedReply": "This ticket is closed. Reopen it to reply.",
+        "reopenWindow": "The reopen window for this ticket has passed.",
+        "reopened": "Ticket reopened.",
+        "fileType": "Unsupported file type.",
+        "fileTooLarge": "File is too large.",
+        "fileEmpty": "The file is empty."
+      }
+    },
+    "ticketDetail": {
+      "title": "Ticket",
+      "you": "you",
+      "internalNote": "Internal note",
+      "closedNote": "This ticket is closed.",
+      "reopen": "Reopen",
+      "replyPlaceholder": "Write a reply…",
+      "internalPlaceholder": "Write a staff-only internal note…",
+      "markInternal": "Internal note (staff only)",
+      "send": "Send",
+      "staffActions": "Staff Actions",
+      "assignToMe": "Assign to me",
+      "assignedToMe": "Assigned to you.",
+      "transferCategory": "Transfer to category",
+      "transferred": "Ticket transferred.",
+      "escalate": "Escalate",
+      "escalated": "Ticket escalated."
+    },
+    "ticketAdmin": {
+      "title": "Ticket Categories",
+      "add": "Add Category",
+      "edit": "Edit Category",
+      "name": "Name",
+      "descLabel": "Description",
+      "empty": "No categories yet. Add a few (e.g. Technical, Billing, Abuse).",
+      "deleteTitle": "Delete category?",
+      "deleteContent": "Delete \"{name}\"? Categories with existing tickets can't be deleted.",
+      "toasts": {
+        "saved": "Category saved.",
+        "deleted": "Category deleted.",
+        "categoryInUse": "This category has tickets and can't be deleted."
+      }
+    },
+    "support": {
+      "title": "Support Desk",
+      "subtitle": "Live overview of the support queue.",
+      "open": "Open Tickets",
+      "waitingStaff": "Waiting for Staff",
+      "waitingUser": "Waiting for User",
+      "urgent": "Urgent",
+      "overdue": "SLA Overdue",
+      "closedToday": "Closed Today",
+      "avgResponse": "Avg First Response",
+      "minutes": "{n}m",
+      "hours": "{n}h",
+      "days": "{n}d"
+    },
     "manualDeposit": {
       "title": "Manual Deposit",
       "subtitle": "Top up your balance with a card-to-card bank transfer.",
@@ -1406,6 +1541,7 @@
       "resellerSettings": "Reseller & Billing",
       "paymentsSettings": "Payments",
       "manualDepositSettings": "Manual Deposit",
+      "ticketCategoriesSettings": "Ticket Categories",
       "payments": {
         "plisioEnable": "Enable Plisio crypto top-up",
         "plisioEnableDesc": "Let members and resellers top up their balance with cryptocurrency (BTC, ETH, USDT, TRX and more) via Plisio.",

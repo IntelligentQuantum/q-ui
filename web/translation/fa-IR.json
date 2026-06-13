@@ -126,7 +126,9 @@
     "services": "سرویس‌های من",
     "referral": "معرفی‌ها",
     "manualDeposit": "واریز دستی",
-    "manualDeposits": "واریزهای دستی"
+    "manualDeposits": "واریزهای دستی",
+    "tickets": "تیکت‌های پشتیبانی",
+    "support": "میز پشتیبانی"
   },
   "notifications": {
     "title": "اعلان‌ها",
@@ -144,9 +146,142 @@
     "depositRejected": {
       "title": "واریز رد شد",
       "body": "واریز شما به مبلغ {amount} رد شد: {reason}"
+    },
+    "ticketCreated": {
+      "title": "تیکت پشتیبانی جدید",
+      "body": "{number} — {subject}"
+    },
+    "ticketReplied": {
+      "title": "به‌روزرسانی تیکت",
+      "body": "پاسخ جدیدی روی تیکت {number} ثبت شد."
+    },
+    "ticketUserReplied": {
+      "body": "کاربر روی تیکت {number} پاسخ داد."
+    },
+    "ticketAssigned": {
+      "title": "تیکت به شما واگذار شد",
+      "body": "تیکت {number} به شما واگذار شد."
+    },
+    "ticketClosed": {
+      "title": "تیکت حل شد",
+      "body": "تیکت {number} شما حل‌شده علامت‌گذاری شد."
+    },
+    "ticketReopened": {
+      "title": "تیکت بازگشایی شد",
+      "body": "تیکت {number} دوباره باز شد."
+    },
+    "ticketMention": {
+      "title": "شما منشن شدید",
+      "body": "{actor} شما را روی تیکت {number} منشن کرد."
     }
   },
   "pages": {
+    "tickets": {
+      "title": "تیکت‌های پشتیبانی",
+      "subtitle": "یک تیکت باز کنید تا تیم ما همین‌جا کمکتان کند.",
+      "new": "تیکت جدید",
+      "submit": "ایجاد تیکت",
+      "number": "تیکت",
+      "subject": "موضوع",
+      "requester": "درخواست‌دهنده",
+      "statusLabel": "وضعیت",
+      "priorityLabel": "اولویت",
+      "assignee": "مسئول",
+      "unassigned": "بدون مسئول",
+      "lastActivity": "آخرین فعالیت",
+      "empty": "تیکتی یافت نشد.",
+      "searchPlaceholder": "جستجوی شناسه، موضوع، کاربر…",
+      "totalCount": "{count} تیکت",
+      "category": "دسته‌بندی",
+      "selectCategory": "یک دسته انتخاب کنید",
+      "message": "پیام",
+      "messagePlaceholder": "مشکل خود را شرح دهید. می‌توانید تصویر، ویدیو یا سند پیوست کنید.",
+      "formattingHint": "قالب‌بندی: **پررنگ**، *مورب*، `کد`، > نقل‌قول، - فهرست، [لینک](https://…).",
+      "attachments": "پیوست‌ها",
+      "dropHint": "کلیک، کشیدن و رها کردن، یا چسباندن تصویر",
+      "status_open": "باز",
+      "status_pending_user": "در انتظار کاربر",
+      "status_pending_staff": "در انتظار پشتیبانی",
+      "status_in_progress": "در حال بررسی",
+      "status_escalated": "ارجاع‌شده",
+      "status_solved": "حل‌شده",
+      "status_closed": "بسته‌شده",
+      "priority_low": "کم",
+      "priority_normal": "عادی",
+      "priority_high": "زیاد",
+      "priority_urgent": "فوری",
+      "filter_all": "همه",
+      "filter_open": "باز",
+      "filter_assigned_to_me": "واگذارشده به من",
+      "filter_unassigned": "بدون مسئول",
+      "filter_escalated": "ارجاع‌شده",
+      "filter_urgent": "فوری",
+      "filter_closed": "بسته‌شده",
+      "filter_today": "امروز",
+      "filter_week": "این هفته",
+      "slaLeft": "{time} مانده",
+      "slaOverdue": "{time} تأخیر",
+      "slaTooltip": "تعهد زمان اولین پاسخ",
+      "toasts": {
+        "created": "تیکت ایجاد شد.",
+        "invalid": "لطفاً موضوع، دسته و پیام را وارد کنید.",
+        "category": "لطفاً یک دسته معتبر انتخاب کنید.",
+        "notFound": "تیکت یافت نشد.",
+        "closedReply": "این تیکت بسته است. برای پاسخ، آن را بازگشایی کنید.",
+        "reopenWindow": "مهلت بازگشایی این تیکت گذشته است.",
+        "reopened": "تیکت بازگشایی شد.",
+        "fileType": "نوع فایل پشتیبانی نمی‌شود.",
+        "fileTooLarge": "حجم فایل زیاد است.",
+        "fileEmpty": "فایل خالی است."
+      }
+    },
+    "ticketDetail": {
+      "title": "تیکت",
+      "you": "شما",
+      "internalNote": "یادداشت داخلی",
+      "closedNote": "این تیکت بسته است.",
+      "reopen": "بازگشایی",
+      "replyPlaceholder": "پاسخ بنویسید…",
+      "internalPlaceholder": "یادداشت داخلی (فقط پشتیبانی)…",
+      "markInternal": "یادداشت داخلی (فقط پشتیبانی)",
+      "send": "ارسال",
+      "staffActions": "اقدامات پشتیبانی",
+      "assignToMe": "واگذاری به من",
+      "assignedToMe": "به شما واگذار شد.",
+      "transferCategory": "انتقال به دسته",
+      "transferred": "تیکت منتقل شد.",
+      "escalate": "ارجاع",
+      "escalated": "تیکت ارجاع شد."
+    },
+    "ticketAdmin": {
+      "title": "دسته‌بندی تیکت‌ها",
+      "add": "افزودن دسته",
+      "edit": "ویرایش دسته",
+      "name": "نام",
+      "descLabel": "توضیحات",
+      "empty": "هنوز دسته‌ای ندارید. چند تا اضافه کنید (مثلاً فنی، مالی، تخلف).",
+      "deleteTitle": "حذف دسته؟",
+      "deleteContent": "حذف «{name}»؟ دسته‌هایی که تیکت دارند قابل حذف نیستند.",
+      "toasts": {
+        "saved": "دسته ذخیره شد.",
+        "deleted": "دسته حذف شد.",
+        "categoryInUse": "این دسته تیکت دارد و قابل حذف نیست."
+      }
+    },
+    "support": {
+      "title": "میز پشتیبانی",
+      "subtitle": "نمای زنده صف پشتیبانی.",
+      "open": "تیکت‌های باز",
+      "waitingStaff": "در انتظار پشتیبانی",
+      "waitingUser": "در انتظار کاربر",
+      "urgent": "فوری",
+      "overdue": "تأخیر SLA",
+      "closedToday": "بسته‌شده امروز",
+      "avgResponse": "میانگین اولین پاسخ",
+      "minutes": "{n} دقیقه",
+      "hours": "{n} ساعت",
+      "days": "{n} روز"
+    },
     "manualDeposit": {
       "title": "واریز دستی",
       "subtitle": "موجودی خود را با انتقال کارت‌به‌کارت بانکی افزایش دهید.",
@@ -1238,6 +1373,7 @@
       "securitySettings": "احرازهویت",
       "paymentsSettings": "پرداخت‌ها",
       "manualDepositSettings": "واریز دستی",
+      "ticketCategoriesSettings": "دسته‌بندی تیکت‌ها",
       "payments": {
         "plisioEnable": "فعال‌سازی افزایش موجودی با ارز دیجیتال (پلیسیو)",
         "plisioEnableDesc": "به اعضا و نمایندگان اجازه دهید موجودی خود را با ارز دیجیتال (BTC، ETH، USDT، TRX و موارد دیگر) از طریق پلیسیو افزایش دهند.",

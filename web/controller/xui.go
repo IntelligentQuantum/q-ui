@@ -59,6 +59,10 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	// admin review queue + payment-card management.
 	g.GET("/manual-deposit", a.panelSPA)
 	g.GET("/manual-deposits", a.panelSPA)
+	// Support ticketing: list, detail (/tickets/:id), and the staff dashboard.
+	g.GET("/tickets", a.panelSPA)
+	g.GET("/tickets/*any", a.panelSPA)
+	g.GET("/support", a.panelSPA)
 
 	// SPA pages built by Vite don't have a server-rendered <meta name="csrf-token">,
 	// so they fetch the session token via this endpoint at startup and replay it

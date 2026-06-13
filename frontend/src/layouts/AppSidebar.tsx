@@ -17,6 +17,7 @@ import {
     Import,
     LayoutDashboard,
     LayoutGrid,
+    LifeBuoy,
     LogOut,
     type LucideIcon,
     MessageSquare,
@@ -29,6 +30,7 @@ import {
     ShoppingBag,
     ShoppingCart,
     Tags,
+    Ticket,
     TrendingUp,
     Upload,
     User,
@@ -50,7 +52,8 @@ const LOGOUT_KEY = '__logout__';
 type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
-  | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits';
+  | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits'
+  | 'tickets' | 'support';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -72,7 +75,9 @@ const iconByName: Record<IconName, LucideIcon> = {
     services: Server,
     referral: Share2,
     manualDeposit: Banknote,
-    manualDeposits: ClipboardCheck
+    manualDeposits: ClipboardCheck,
+    tickets: Ticket,
+    support: LifeBuoy
 };
 
 interface NavTab {
@@ -181,6 +186,9 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         // manual deposit (any buyer), profile, logout — always at the bottom.
         push(showBilling && has('product.purchase'), '/billing', 'billing', 'menu.billing');
         push(has('product.purchase'), '/manual-deposit', 'manualDeposit', 'menu.manualDeposit');
+        // Support / helpdesk: the staff dashboard, then tickets (every role).
+        push(has('ticket.manage'), '/support', 'support', 'menu.support');
+        push(has('ticket.view_own'), '/tickets', 'tickets', 'menu.tickets');
         items.push({ key: '/profile', icon: 'profile', title: t('menu.profile') });
         items.push({ key: LOGOUT_KEY, icon: 'logout', title: t('logout') });
         return items;
@@ -197,6 +205,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
             { key: '/settings#reseller', icon: Wallet, label: t('pages.settings.resellerSettings') },
             { key: '/settings#payments', icon: CreditCard, label: t('pages.settings.paymentsSettings') },
             { key: '/settings#manual-deposit', icon: Banknote, label: t('pages.settings.manualDepositSettings') },
+            { key: '/settings#ticket-categories', icon: Ticket, label: t('pages.settings.ticketCategoriesSettings') },
             { key: '/settings#telegram', icon: MessageSquare, label: t('pages.settings.TGBotSettings') },
             { key: '/settings#subscription', icon: Cloud, label: t('pages.settings.subSettings') }
         ];

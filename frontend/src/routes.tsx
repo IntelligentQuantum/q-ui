@@ -22,6 +22,9 @@ const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
 const ReferralPage = lazy(() => import('@/pages/referral/ReferralPage'));
 const ManualDepositPage = lazy(() => import('@/pages/wallet/ManualDepositPage'));
 const AdminManualDepositsPage = lazy(() => import('@/pages/admin/ManualDepositsPage'));
+const TicketsPage = lazy(() => import('@/pages/tickets/TicketsPage'));
+const TicketDetailPage = lazy(() => import('@/pages/tickets/TicketDetailPage'));
+const SupportDashboardPage = lazy(() => import('@/pages/tickets/SupportDashboardPage'));
 const ThemePreviewPage = lazy(() => import('@/pages/theme-preview/ThemePreviewPage'));
 
 function withSuspense(node: React.ReactNode)
@@ -52,7 +55,10 @@ const routes: RouteObject[] = [
             { path: 'services', element: withSuspense(<ServicesPage />) },
             { path: 'referral', element: withSuspense(<ReferralPage />) },
             { path: 'manual-deposit', element: withSuspense(<ManualDepositPage />) },
-            { path: 'manual-deposits', element: withSuspense(<AdminManualDepositsPage />) }
+            { path: 'manual-deposits', element: withSuspense(<AdminManualDepositsPage />) },
+            { path: 'tickets', element: withSuspense(<TicketsPage />) },
+            { path: 'tickets/:id', element: withSuspense(<TicketDetailPage />) },
+            { path: 'support', element: withSuspense(<SupportDashboardPage />) }
         ]
     },
     // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it

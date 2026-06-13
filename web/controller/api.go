@@ -117,6 +117,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	NewDepositController(api)
 	// Per-user in-app notifications (bell menu) — scoped to the caller.
 	NewNotificationController(api)
+	// Support ticketing (helpdesk): requester + staff + admin routes. Per-route
+	// RBAC + per-request ownership live inside the controller.
+	NewTicketController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", middleware.RequireAdmin(), a.BackuptoTgbot)
