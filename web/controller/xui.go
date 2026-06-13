@@ -41,7 +41,6 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g.GET("/clients", a.panelSPA)
 	g.GET("/groups", a.panelSPA)
 	g.GET("/users", a.panelSPA)
-	g.GET("/reports", a.panelSPA)
 	g.GET("/profile", a.panelSPA)
 	g.GET("/billing", a.panelSPA)
 	g.GET("/nodes", a.panelSPA)
@@ -63,6 +62,8 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
 	g.GET("/tickets", a.panelSPA)
 	g.GET("/tickets/*any", a.panelSPA)
 	g.GET("/support", a.panelSPA)
+	// Financial control center.
+	g.GET("/finance", a.panelSPA)
 
 	// SPA pages built by Vite don't have a server-rendered <meta name="csrf-token">,
 	// so they fetch the session token via this endpoint at startup and replay it

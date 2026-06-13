@@ -15,6 +15,7 @@ import {
     Database,
     IdCard,
     Import,
+    Landmark,
     LayoutDashboard,
     LayoutGrid,
     LifeBuoy,
@@ -53,7 +54,7 @@ type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
   | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits'
-  | 'tickets' | 'support';
+  | 'tickets' | 'support' | 'finance';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -77,7 +78,8 @@ const iconByName: Record<IconName, LucideIcon> = {
     manualDeposit: Banknote,
     manualDeposits: ClipboardCheck,
     tickets: Ticket,
-    support: LifeBuoy
+    support: LifeBuoy,
+    finance: Landmark
 };
 
 interface NavTab {
@@ -177,7 +179,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
 
         // 4) Administration (admin): users, reports, settings, xray, API docs.
         push(has('user.manage'), '/users', 'users', 'menu.users');
-        push(has('stats.view_all'), '/reports', 'reports', 'menu.reports');
+        push(has('finance.view_all'), '/finance', 'finance', 'menu.finance'); // admin + moderator
         push(has('infra.manage'), '/settings', 'setting', 'menu.settings');
         push(has('infra.manage'), '/xray', 'tool', 'menu.xray');
         push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');

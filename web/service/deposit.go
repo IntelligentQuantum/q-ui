@@ -37,6 +37,10 @@ var (
 // fat-fingered upload can't exhaust disk/memory.
 const MaxReceiptSize = 5 << 20
 
+// LargeDepositThreshold (credits) above which an approved deposit raises an admin
+// alert. Documented fraud/finance-monitoring config point.
+const LargeDepositThreshold int64 = 10_000_000
+
 // DepositService owns the company payment cards and the manual card-to-card
 // deposit lifecycle. Approving a request is the ONLY path that credits a wallet,
 // and it does so atomically (state transition + ledger write in one DB
@@ -440,7 +444,8 @@ func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest, 
 			return ErrDepositNotPending
 		}
 		desc := fmt.Sprintf("Manual deposit #%d approved", id)
-		if _, e := s.walletService.applyDelta(tx, dep.UserId, dep.Amount, model.TxCredit, desc); e != nil {
+		meta := TxMeta{Source: model.TxSourceManualDeposit, RefId: itoa(id), Actor: itoa(adminId)}
+		if _, e := s.walletService.applyDelta(tx, dep.UserId, dep.Amount, model.TxCredit, desc, meta); e != nil {
 			return e
 		}
 		dep.Status = model.ManualDepositApproved
@@ -464,6 +469,16 @@ func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest, 
 		"/manual-deposit",
 		map[string]any{"amount": formatAmount(result.Amount)},
 	)
+	// Fraud/finance alert: a large deposit pings every admin's bell.
+	if result.Amount >= LargeDepositThreshold {
+		_ = s.notificationService.NotifyAdmins(
+			"notifications.largeDeposit.title",
+			"notifications.largeDeposit.body",
+			model.NotificationWarning,
+			"/finance",
+			map[string]any{"amount": formatAmount(result.Amount)},
+		)
+	}
 	return result, nil
 }
 

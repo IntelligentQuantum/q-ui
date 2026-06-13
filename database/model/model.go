@@ -49,6 +49,9 @@ type User struct {
 	ReferralEnabled   bool   `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
 	ReferredByUserId  int    `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
 	LoginEpoch        int64  `json:"-" gorm:"default:0"`
+	// CreatedAt is the registration timestamp (ms). Backfilled to 0 for accounts
+	// that predate this column; set automatically on new signups.
+	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli"`
 }
 
 // Role constants for the RBAC system. Four roles, in descending privilege:
@@ -117,7 +120,14 @@ type Transaction struct {
 	Description   string `json:"description"`
 	BalanceBefore int64  `json:"balanceBefore" gorm:"column:balance_before"`
 	BalanceAfter  int64  `json:"balanceAfter" gorm:"column:balance_after"`
-	CreatedAt     int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
+	// Accounting-grade attribution: every entry carries WHY it happened (Source),
+	// WHAT it points at (RefId, e.g. a deposit/order id) and WHO caused it (Actor,
+	// for admin-initiated entries). Empty Source on legacy rows is treated as
+	// "other" by the finance reports. These make the ledger fully traceable.
+	Source    string `json:"source" gorm:"index;default:''"`
+	RefId     string `json:"refId" gorm:"column:ref_id;default:''"`
+	Actor     string `json:"actor" gorm:"default:''"`
+	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli;index"`
 }
 
 func (Transaction) TableName() string { return "transactions" }
@@ -126,6 +136,21 @@ func (Transaction) TableName() string { return "transactions" }
 const (
 	TxCredit = "credit"
 	TxDebit  = "debit"
+)
+
+// Transaction source constants — the canonical reason a ledger entry exists.
+const (
+	TxSourceManualDeposit = "manual_deposit"
+	TxSourceGateway       = "gateway"
+	TxSourceCrypto        = "crypto"
+	TxSourcePurchase      = "purchase"
+	TxSourceRenewal       = "renewal"
+	TxSourceRefund        = "refund"
+	TxSourceReferral      = "referral_commission"
+	TxSourceBonus         = "bonus"
+	TxSourceAdminCredit   = "admin_credit"
+	TxSourceAdminDebit    = "admin_debit"
+	TxSourceAdminSet      = "admin_adjust"
 )
 
 // Payment tracks an external payment-gateway top-up (currently ZarinPal). The

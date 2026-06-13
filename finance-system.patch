@@ -1,0 +1,3046 @@
+diff --git a/database/model/model.go b/database/model/model.go
+index 3a884e01..60839e96 100644
+--- a/database/model/model.go
++++ b/database/model/model.go
+@@ -49,6 +49,9 @@ type User struct {
+ 	ReferralEnabled   bool   `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
+ 	ReferredByUserId  int    `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
+ 	LoginEpoch        int64  `json:"-" gorm:"default:0"`
++	// CreatedAt is the registration timestamp (ms). Backfilled to 0 for accounts
++	// that predate this column; set automatically on new signups.
++	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli"`
+ }
+ 
+ // Role constants for the RBAC system. Four roles, in descending privilege:
+@@ -117,7 +120,14 @@ type Transaction struct {
+ 	Description   string `json:"description"`
+ 	BalanceBefore int64  `json:"balanceBefore" gorm:"column:balance_before"`
+ 	BalanceAfter  int64  `json:"balanceAfter" gorm:"column:balance_after"`
+-	CreatedAt     int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
++	// Accounting-grade attribution: every entry carries WHY it happened (Source),
++	// WHAT it points at (RefId, e.g. a deposit/order id) and WHO caused it (Actor,
++	// for admin-initiated entries). Empty Source on legacy rows is treated as
++	// "other" by the finance reports. These make the ledger fully traceable.
++	Source    string `json:"source" gorm:"index;default:''"`
++	RefId     string `json:"refId" gorm:"column:ref_id;default:''"`
++	Actor     string `json:"actor" gorm:"default:''"`
++	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli;index"`
+ }
+ 
+ func (Transaction) TableName() string { return "transactions" }
+@@ -128,6 +138,21 @@ const (
+ 	TxDebit  = "debit"
+ )
+ 
++// Transaction source constants — the canonical reason a ledger entry exists.
++const (
++	TxSourceManualDeposit = "manual_deposit"
++	TxSourceGateway       = "gateway"
++	TxSourceCrypto        = "crypto"
++	TxSourcePurchase      = "purchase"
++	TxSourceRenewal       = "renewal"
++	TxSourceRefund        = "refund"
++	TxSourceReferral      = "referral_commission"
++	TxSourceBonus         = "bonus"
++	TxSourceAdminCredit   = "admin_credit"
++	TxSourceAdminDebit    = "admin_debit"
++	TxSourceAdminSet      = "admin_adjust"
++)
++
+ // Payment tracks an external payment-gateway top-up (currently ZarinPal). The
+ // authority is the gateway's unique reference for the attempt; the row is
+ // created pending at request time and flipped to paid/failed at callback,
+diff --git a/database/model/rbac.go b/database/model/rbac.go
+index 1867f39f..2181e036 100644
+--- a/database/model/rbac.go
++++ b/database/model/rbac.go
+@@ -14,7 +14,8 @@ const (
+ 	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
+ 	PermStatsViewAll  Permission = "stats.view_all"
+ 	PermTxnViewAll    Permission = "transaction.view_all"
+-	PermDepositManage Permission = "deposit.manage" // review/approve/reject manual deposits + manage payment cards
++	PermDepositManage Permission = "deposit.manage"  // review/approve/reject manual deposits + manage payment cards
++	PermFinanceView   Permission = "finance.view_all" // finance control center: dashboards, analytics, ledger, exports
+ 
+ 	// Support ticketing (helpdesk).
+ 	PermTicketCreate  Permission = "ticket.create"  // open + reply to own tickets
+@@ -52,6 +53,7 @@ var rolePermissions = map[string]map[Permission]bool{
+ 		PermTicketCreate:   true,
+ 		PermTicketViewOwn:  true,
+ 		PermTicketManage:   true, // support staff
++		PermFinanceView:    true, // read-only finance reports
+ 	},
+ 	RoleReseller: {
+ 		PermProductView:     true,
+@@ -114,7 +116,7 @@ func (u *User) Permissions() []Permission {
+ // and to keep Permissions() output deterministic.
+ var allPermissions = []Permission{
+ 	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
+-	PermDepositManage,
++	PermDepositManage, PermFinanceView,
+ 	PermTicketCreate, PermTicketViewOwn, PermTicketManage, PermTicketAdmin,
+ 	PermProductManage, PermProductView, PermProductPurchase,
+ 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
+diff --git a/frontend/src/hooks/useMe.ts b/frontend/src/hooks/useMe.ts
+index ff4afdf0..e0275948 100644
+--- a/frontend/src/hooks/useMe.ts
++++ b/frontend/src/hooks/useMe.ts
+@@ -16,6 +16,7 @@ export type Permission =
+   | 'stats.view_all'
+   | 'transaction.view_all'
+   | 'deposit.manage'
++  | 'finance.view_all'
+   | 'ticket.create'
+   | 'ticket.view_own'
+   | 'ticket.manage'
+diff --git a/frontend/src/hooks/usePageTitle.ts b/frontend/src/hooks/usePageTitle.ts
+index f347c8ea..53f0afb0 100644
+--- a/frontend/src/hooks/usePageTitle.ts
++++ b/frontend/src/hooks/usePageTitle.ts
+@@ -10,7 +10,6 @@ const TITLE_KEYS: Record<string, string> = {
+     '/clients': 'menu.clients',
+     '/groups': 'menu.groups',
+     '/users': 'menu.users',
+-    '/reports': 'menu.reports',
+     '/profile': 'menu.profile',
+     '/billing': 'menu.billing',
+     '/nodes': 'menu.nodes',
+@@ -20,7 +19,12 @@ const TITLE_KEYS: Record<string, string> = {
+     '/store': 'menu.store',
+     '/orders': 'menu.orders',
+     '/products': 'menu.products',
+-    '/services': 'menu.services'
++    '/services': 'menu.services',
++    '/finance': 'menu.finance',
++    '/tickets': 'menu.tickets',
++    '/support': 'menu.support',
++    '/manual-deposit': 'menu.manualDeposit',
++    '/manual-deposits': 'menu.manualDeposits'
+ };
+ 
+ export function usePageTitle()
+diff --git a/frontend/src/layouts/AppSidebar.tsx b/frontend/src/layouts/AppSidebar.tsx
+index 922828f6..c5bc5ce3 100644
+--- a/frontend/src/layouts/AppSidebar.tsx
++++ b/frontend/src/layouts/AppSidebar.tsx
+@@ -15,6 +15,7 @@ import {
+     Database,
+     IdCard,
+     Import,
++    Landmark,
+     LayoutDashboard,
+     LayoutGrid,
+     LifeBuoy,
+@@ -53,7 +54,7 @@ type IconName =
+   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
+   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
+   | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits'
+-  | 'tickets' | 'support';
++  | 'tickets' | 'support' | 'finance';
+ 
+ const iconByName: Record<IconName, LucideIcon> = {
+     dashboard: LayoutDashboard,
+@@ -77,7 +78,8 @@ const iconByName: Record<IconName, LucideIcon> = {
+     manualDeposit: Banknote,
+     manualDeposits: ClipboardCheck,
+     tickets: Ticket,
+-    support: LifeBuoy
++    support: LifeBuoy,
++    finance: Landmark
+ };
+ 
+ interface NavTab {
+@@ -177,7 +179,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
+ 
+         // 4) Administration (admin): users, reports, settings, xray, API docs.
+         push(has('user.manage'), '/users', 'users', 'menu.users');
+-        push(has('stats.view_all'), '/reports', 'reports', 'menu.reports');
++        push(has('finance.view_all'), '/finance', 'finance', 'menu.finance'); // admin + moderator
+         push(has('infra.manage'), '/settings', 'setting', 'menu.settings');
+         push(has('infra.manage'), '/xray', 'tool', 'menu.xray');
+         push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
+diff --git a/frontend/src/layouts/PanelLayout.tsx b/frontend/src/layouts/PanelLayout.tsx
+index 02b995d4..b55e4a94 100644
+--- a/frontend/src/layouts/PanelLayout.tsx
++++ b/frontend/src/layouts/PanelLayout.tsx
+@@ -15,7 +15,6 @@ function canAccess(me: MeInfo, path: string): boolean
+     switch (path)
+     {
+         case '/':
+-        case '/reports':
+             return has('stats.view_all'); // admin only
+         case '/inbounds':
+         case '/groups':
+@@ -40,6 +39,8 @@ function canAccess(me: MeInfo, path: string): boolean
+             return has('ticket.view_own'); // every role with tickets
+         case '/support':
+             return has('ticket.manage'); // support staff — moderator/admin
++        case '/finance':
++            return has('finance.view_all'); // admin + read-only moderator
+         case '/orders':
+             return has('order.view_own'); // everyone with order visibility
+         case '/services':
+diff --git a/frontend/src/pages/finance/AnalyticsTab.tsx b/frontend/src/pages/finance/AnalyticsTab.tsx
+new file mode 100644
+index 00000000..09f171f8
+--- /dev/null
++++ b/frontend/src/pages/finance/AnalyticsTab.tsx
+@@ -0,0 +1,140 @@
++import { useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import { useQuery } from '@tanstack/react-query';
++
++import { HttpUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
++import UserProfileModal from './UserProfileModal';
++
++interface TopProduct { productId: number; name: string; sales: number; revenue: number; }
++interface TopUser { userId: number; username: string; role: string; value: number; count: number; }
++interface MethodStat { method: string; count: number; volume: number; bonus: number; pending: number; rejected: number; }
++
++function useList<T>(key: string, url: string)
++{
++    return useQuery({
++        queryKey: ['finance', key],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get(url, undefined, { silent: true });
++            return m?.success ? ((m.obj as T[]) ?? []) : [];
++        }
++    });
++}
++
++export default function AnalyticsTab()
++{
++    const { t } = useTranslation();
++    const { format: money } = useCurrency();
++    const [profileId, setProfileId] = useState<number | null>(null);
++
++    const products = useList<TopProduct>('top-products', '/panel/api/finance/top/products?limit=10');
++    const customers = useList<TopUser>('top-customers', '/panel/api/finance/top/customers?limit=10');
++    const resellers = useList<TopUser>('top-resellers', '/panel/api/finance/top/resellers?limit=10');
++    const depositors = useList<TopUser>('top-depositors', '/panel/api/finance/top/depositors?limit=10');
++    const breakdown = useList<MethodStat>('breakdown', '/panel/api/finance/payment-breakdown');
++
++    const userTable = (title: string, rows: TopUser[], valueLabel: string) => (
++    <Card>
++      <CardHeader className="p-4 sm:p-5"><CardTitle>{title}</CardTitle></CardHeader>
++      <CardContent className="p-0">
++        <table className="w-full text-sm">
++          <thead>
++            <tr className="border-b border-border text-xs text-muted-foreground">
++              <th className="px-4 py-2 text-start font-medium">{t('pages.finance.user')}</th>
++              <th className="px-4 py-2 text-end font-medium">{valueLabel}</th>
++            </tr>
++          </thead>
++          <tbody>
++            {rows.length === 0 ? (
++              <tr><td colSpan={2} className="p-6 text-center text-muted-foreground">{t('noData')}</td></tr>
++            ) : rows.map((r) => (
++              <tr key={r.userId} className="cursor-pointer border-b border-border last:border-0 hover:bg-foreground/[0.03]" onClick={() => setProfileId(r.userId)}>
++                <td className="px-4 py-2">
++                  <span className="flex items-center gap-2">
++                    <span className="font-medium text-foreground">{r.username || `#${ r.userId }`}</span>
++                    {r.role && <Badge variant="neutral" className="capitalize">{r.role}</Badge>}
++                  </span>
++                </td>
++                <td className="px-4 py-2 text-end font-medium tabular-nums">{money(r.value)} <span className="text-xs text-muted-foreground">· {r.count}×</span></td>
++              </tr>
++            ))}
++          </tbody>
++        </table>
++      </CardContent>
++    </Card>
++    );
++
++    return (
++    <div className="flex flex-col gap-4">
++      {/* Payment method breakdown */}
++      <Card>
++        <CardHeader className="p-4 sm:p-5"><CardTitle>{t('pages.finance.paymentBreakdown')}</CardTitle></CardHeader>
++        <CardContent className="p-0">
++          <div className="overflow-x-auto">
++            <table className="w-full text-sm">
++              <thead>
++                <tr className="border-b border-border text-xs text-muted-foreground">
++                  <th className="px-4 py-2 text-start font-medium">{t('pages.finance.method')}</th>
++                  <th className="px-4 py-2 text-end font-medium">{t('pages.finance.confirmed')}</th>
++                  <th className="px-4 py-2 text-end font-medium">{t('pages.finance.volume')}</th>
++                  <th className="hidden px-4 py-2 text-end font-medium sm:table-cell">{t('pages.finance.bonuses')}</th>
++                  <th className="hidden px-4 py-2 text-end font-medium sm:table-cell">{t('pages.finance.pending')}</th>
++                  <th className="hidden px-4 py-2 text-end font-medium sm:table-cell">{t('pages.finance.rejected')}</th>
++                </tr>
++              </thead>
++              <tbody>
++                {(breakdown.data ?? []).map((m) => (
++                  <tr key={m.method} className="border-b border-border last:border-0">
++                    <td className="px-4 py-2"><Badge variant="primary" className="capitalize">{m.method}</Badge></td>
++                    <td className="px-4 py-2 text-end tabular-nums">{m.count}</td>
++                    <td className="px-4 py-2 text-end font-medium tabular-nums">{money(m.volume)}</td>
++                    <td className="hidden px-4 py-2 text-end tabular-nums text-success sm:table-cell">{money(m.bonus)}</td>
++                    <td className="hidden px-4 py-2 text-end tabular-nums text-warning sm:table-cell">{m.pending}</td>
++                    <td className="hidden px-4 py-2 text-end tabular-nums text-danger sm:table-cell">{m.rejected}</td>
++                  </tr>
++                ))}
++              </tbody>
++            </table>
++          </div>
++        </CardContent>
++      </Card>
++
++      {/* Top products */}
++      <Card>
++        <CardHeader className="p-4 sm:p-5"><CardTitle>{t('pages.finance.topProducts')}</CardTitle></CardHeader>
++        <CardContent className="p-0">
++          <table className="w-full text-sm">
++            <thead>
++              <tr className="border-b border-border text-xs text-muted-foreground">
++                <th className="px-4 py-2 text-start font-medium">{t('pages.tickets.subject')}</th>
++                <th className="px-4 py-2 text-end font-medium">{t('pages.finance.sales')}</th>
++                <th className="px-4 py-2 text-end font-medium">{t('pages.finance.revenue')}</th>
++              </tr>
++            </thead>
++            <tbody>
++              {(products.data ?? []).length === 0 ? (
++                <tr><td colSpan={3} className="p-6 text-center text-muted-foreground">{t('noData')}</td></tr>
++              ) : (products.data ?? []).map((p) => (
++                <tr key={p.productId} className="border-b border-border last:border-0">
++                  <td className="px-4 py-2 font-medium text-foreground">{p.name || `#${ p.productId }`}</td>
++                  <td className="px-4 py-2 text-end tabular-nums">{p.sales}</td>
++                  <td className="px-4 py-2 text-end font-medium tabular-nums">{money(p.revenue)}</td>
++                </tr>
++              ))}
++            </tbody>
++          </table>
++        </CardContent>
++      </Card>
++
++      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
++        {userTable(t('pages.finance.topCustomers'), customers.data ?? [], t('pages.finance.spent'))}
++        {userTable(t('pages.finance.topDepositors'), depositors.data ?? [], t('pages.finance.deposited'))}
++        {userTable(t('pages.finance.topResellers'), resellers.data ?? [], t('pages.finance.commission'))}
++      </div>
++
++      <UserProfileModal userId={profileId} onClose={() => setProfileId(null)} />
++    </div>
++    );
++}
+diff --git a/frontend/src/pages/finance/CashflowTab.tsx b/frontend/src/pages/finance/CashflowTab.tsx
+new file mode 100644
+index 00000000..6062ef6f
+--- /dev/null
++++ b/frontend/src/pages/finance/CashflowTab.tsx
+@@ -0,0 +1,100 @@
++import { useMemo, useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import { useQuery } from '@tanstack/react-query';
++import { Download } from 'lucide-react';
++
++import { HttpUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import { Button, Card, CardContent, CardHeader, CardTitle, StatCard } from '@/components/ui';
++
++interface Cashflow {
++  from: number; to: number; income: number; productSales: number; bonuses: number;
++  refunds: number; net: number; deposits: number; orders: number;
++}
++
++const PRESETS: { key: string; days: number }[] = [
++    { key: 'today', days: 0 },
++    { key: 'd7', days: 7 },
++    { key: 'd30', days: 30 },
++    { key: 'd90', days: 90 }
++];
++
++function startOfDay(daysAgo: number): number
++{
++    const d = new Date();
++    d.setHours(0, 0, 0, 0);
++    d.setDate(d.getDate() - daysAgo);
++    return d.getTime();
++}
++
++function exportUrl(path: string): string
++{
++    return `${ window.Q_UI_BASE_PATH || '/' }panel/api/finance/export/${ path }`.replace(/\/{2,}/g, '/');
++}
++
++export default function CashflowTab()
++{
++    const { t } = useTranslation();
++    const { format: money, formatNumber } = useCurrency();
++    const [preset, setPreset] = useState('d30');
++
++    const from = useMemo(() =>
++    {
++        const p = PRESETS.find((x) => x.key === preset);
++        return startOfDay(p ? p.days : 30);
++    }, [preset]);
++
++    const query = useQuery({
++        queryKey: ['finance', 'cashflow', from],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get(`/panel/api/finance/cashflow?from=${ from }`, undefined, { silent: true });
++            return m?.success ? (m.obj as Cashflow) : null;
++        }
++    });
++    const cf = query.data;
++
++    return (
++    <div className="flex flex-col gap-4">
++      <Card>
++        <CardContent className="flex flex-wrap items-center justify-between gap-3 p-4 sm:p-5">
++          <div className="flex flex-wrap gap-1.5">
++            {PRESETS.map((p) => (
++              <Button key={p.key} variant={preset === p.key ? 'primary' : 'secondary'} size="sm" onClick={() => setPreset(p.key)}>
++                {t(`pages.finance.range_${ p.key }`)}
++              </Button>
++            ))}
++          </div>
++          <div className="flex flex-wrap gap-2">
++            <a href={exportUrl('transactions')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
++              <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportTransactions')}
++            </a>
++            <a href={exportUrl('orders')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
++              <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportOrders')}
++            </a>
++            <a href={exportUrl('users')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
++              <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportUsers')}
++            </a>
++          </div>
++        </CardContent>
++      </Card>
++
++      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
++        <StatCard label={t('pages.finance.income')} value={<span className="text-lg">{money(cf?.income ?? 0)}</span>} />
++        <StatCard label={t('pages.finance.productSales')} value={<span className="text-lg">{money(cf?.productSales ?? 0)}</span>} />
++        <StatCard label={t('pages.finance.bonuses')} value={<span className="text-lg">{money(cf?.bonuses ?? 0)}</span>} />
++        <StatCard label={t('pages.finance.refunds')} value={<span className="text-lg">{money(cf?.refunds ?? 0)}</span>} />
++        <StatCard label={t('pages.finance.netProfit')} value={<span className="text-lg">{money(cf?.net ?? 0)}</span>} />
++        <StatCard label={t('pages.finance.depositsCount')} value={formatNumber(cf?.deposits ?? 0)} />
++        <StatCard label={t('pages.finance.ordersCount')} value={formatNumber(cf?.orders ?? 0)} />
++      </div>
++
++      <Card>
++        <CardHeader className="p-4 sm:p-5"><CardTitle>{t('pages.finance.cashflowNote')}</CardTitle></CardHeader>
++        <CardContent className="p-4 pt-0 text-sm text-muted-foreground sm:p-5 sm:pt-0">
++          {t('pages.finance.cashflowExplain')}
++        </CardContent>
++      </Card>
++    </div>
++    );
++}
+diff --git a/frontend/src/pages/finance/DepositsTab.tsx b/frontend/src/pages/finance/DepositsTab.tsx
+new file mode 100644
+index 00000000..77f916be
+--- /dev/null
++++ b/frontend/src/pages/finance/DepositsTab.tsx
+@@ -0,0 +1,131 @@
++import { useEffect, useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import { useQuery } from '@tanstack/react-query';
++import { ChevronLeft, ChevronRight, Download } from 'lucide-react';
++
++import { HttpUtil, IntlUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import { Badge, Button, Card, CardContent, SearchInput, Select, Table } from '@/components/ui';
++import type { BadgeVariant, Column } from '@/components/ui';
++
++const PAGE_SIZE = 25;
++
++interface Deposit {
++  method: string; refId: number; userId: number; username: string; role: string;
++  amount: number; bonus: number; currency: string; status: string; createdAt: number;
++}
++interface Feed { items: Deposit[]; total: number; }
++
++const STATUS_VARIANT: Record<string, BadgeVariant> = { approved: 'success', pending: 'warning', rejected: 'danger' };
++
++function exportUrl(): string
++{
++    return `${ window.Q_UI_BASE_PATH || '/' }panel/api/finance/export/deposits`.replace(/\/{2,}/g, '/');
++}
++
++export default function DepositsTab()
++{
++    const { t } = useTranslation();
++    const { format: money } = useCurrency();
++    const [method, setMethod] = useState('');
++    const [status, setStatus] = useState('');
++    const [search, setSearch] = useState('');
++    const [page, setPage] = useState(0);
++
++    useEffect(() =>
++    {
++        setPage(0);
++    }, [method, status, search]);
++
++    const query = useQuery({
++        queryKey: ['finance', 'deposits', method, status, search, page],
++        queryFn: async () =>
++        {
++            const params = new URLSearchParams({ limit: String(PAGE_SIZE), offset: String(page * PAGE_SIZE) });
++            if (method)
++            {
++                params.set('method', method);
++            }
++            if (status)
++            {
++                params.set('status', status);
++            }
++            if (search.trim())
++            {
++                params.set('search', search.trim());
++            }
++            const m = await HttpUtil.get(`/panel/api/finance/deposits?${ params.toString() }`, undefined, { silent: true });
++            return m?.success ? (m.obj as Feed) : { items: [], total: 0 };
++        }
++    });
++    const feed = query.data ?? { items: [], total: 0 };
++    const pageCount = Math.max(1, Math.ceil(feed.total / PAGE_SIZE));
++
++    const columns: Column<Deposit>[] = [
++        { key: 'method', header: t('pages.finance.method'), cell: (r) => <Badge variant="primary" className="capitalize">{r.method}</Badge> },
++        {
++            key: 'user', header: t('pages.finance.user'),
++            cell: (r) => (
++        <div className="flex flex-col">
++          <span className="font-medium">{r.username || `#${ r.userId }`}</span>
++          <span className="text-xs capitalize text-muted-foreground">{r.role}</span>
++        </div>
++            )
++        },
++        { key: 'amount', header: t('pages.finance.amount'), cell: (r) => <strong className="tabular-nums">{money(r.amount)}</strong> },
++        {
++            key: 'status', header: t('pages.finance.statusLabel'),
++            cell: (r) => <Badge variant={STATUS_VARIANT[r.status] ?? 'neutral'}>{t(`pages.finance.dstatus_${ r.status }`, { defaultValue: r.status })}</Badge>
++        },
++        { key: 'createdAt', header: t('pages.finance.date'), className: 'hidden sm:table-cell', cell: (r) => IntlUtil.formatDate(r.createdAt) }
++    ];
++
++    return (
++    <Card>
++      <CardContent className="flex flex-col gap-4 p-4 sm:p-5">
++        <div className="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
++          <div className="flex flex-col gap-3 sm:flex-row">
++            <div className="w-full sm:w-40">
++              <Select value={method} onChange={setMethod} placeholder={t('pages.finance.allMethods')}
++                options={[{ value: '', label: t('pages.finance.allMethods') }, { value: 'manual', label: 'Manual' }, { value: 'zarinpal', label: 'ZarinPal' }, { value: 'plisio', label: 'Plisio' }]} />
++            </div>
++            <div className="w-full sm:w-40">
++              <Select value={status} onChange={setStatus} placeholder={t('pages.finance.allStatuses')}
++                options={[{ value: '', label: t('pages.finance.allStatuses') }, { value: 'approved', label: t('pages.finance.dstatus_approved') }, { value: 'pending', label: t('pages.finance.dstatus_pending') }, { value: 'rejected', label: t('pages.finance.dstatus_rejected') }]} />
++            </div>
++            <div className="w-full sm:w-56">
++              <SearchInput value={search} onChange={(e) => setSearch(e.target.value)} placeholder={t('pages.finance.searchUser')} />
++            </div>
++          </div>
++          <a href={exportUrl()} className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-border px-3 text-sm font-medium text-foreground transition-colors hover:bg-foreground/[0.04]">
++            <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportCsv')}
++          </a>
++        </div>
++
++        <Table<Deposit>
++          columns={columns}
++          data={feed.items ?? []}
++          rowKey={(r) => `${ r.method }-${ r.refId }`}
++          loading={query.isFetching}
++          pageSize={0}
++          empty={<div className="py-10 text-center text-muted-foreground">{t('noData')}</div>}
++        />
++
++        {feed.total > PAGE_SIZE && (
++          <div className="flex items-center justify-between gap-3">
++            <span className="text-xs text-muted-foreground">{t('pages.finance.totalRows', { count: feed.total })}</span>
++            <div className="flex items-center gap-1">
++              <Button variant="ghost" size="icon" disabled={page === 0} aria-label="prev" onClick={() => setPage((p) => Math.max(0, p - 1))}>
++                <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
++              </Button>
++              <span className="px-1 text-xs tabular-nums text-muted-foreground">{page + 1} / {pageCount}</span>
++              <Button variant="ghost" size="icon" disabled={page >= pageCount - 1} aria-label="next" onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}>
++                <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden />
++              </Button>
++            </div>
++          </div>
++        )}
++      </CardContent>
++    </Card>
++    );
++}
+diff --git a/frontend/src/pages/finance/FinancePage.tsx b/frontend/src/pages/finance/FinancePage.tsx
+new file mode 100644
+index 00000000..737849f8
+--- /dev/null
++++ b/frontend/src/pages/finance/FinancePage.tsx
+@@ -0,0 +1,46 @@
++import { useState } from 'react';
++import { useTranslation } from 'react-i18next';
++import { BarChart3, CreditCard, LineChart, Wallet } from 'lucide-react';
++
++import { usePageTitle } from '@/hooks/usePageTitle';
++import PageShell from '@/layouts/PageShell';
++import { Tabs } from '@/components/ui';
++import OverviewTab from './OverviewTab';
++import DepositsTab from './DepositsTab';
++import AnalyticsTab from './AnalyticsTab';
++import CashflowTab from './CashflowTab';
++
++type TabKey = 'overview' | 'deposits' | 'analytics' | 'cashflow';
++
++// FinancePage is the single financial control center (Admin → Finance). Read-only
++// dashboards/analytics/cashflow/exports; moderators get the same view (RBAC
++// finance.view_all). Money never moves here — only through the ledger.
++export default function FinancePage()
++{
++    usePageTitle();
++    const { t } = useTranslation();
++    const [tab, setTab] = useState<TabKey>('overview');
++
++    return (
++    <PageShell title={t('pages.finance.title')} description={t('pages.finance.subtitle')}>
++      <div className="flex flex-col gap-4">
++        <Tabs
++          variant="segmented"
++          value={tab}
++          onChange={(k) => setTab(k as TabKey)}
++          tabs={[
++              { key: 'overview', label: t('pages.finance.tabOverview'), icon: <LineChart className="h-4 w-4" aria-hidden /> },
++              { key: 'deposits', label: t('pages.finance.tabDeposits'), icon: <CreditCard className="h-4 w-4" aria-hidden /> },
++              { key: 'analytics', label: t('pages.finance.tabAnalytics'), icon: <BarChart3 className="h-4 w-4" aria-hidden /> },
++              { key: 'cashflow', label: t('pages.finance.tabCashflow'), icon: <Wallet className="h-4 w-4" aria-hidden /> }
++          ]}
++        />
++
++        {tab === 'overview' && <OverviewTab />}
++        {tab === 'deposits' && <DepositsTab />}
++        {tab === 'analytics' && <AnalyticsTab />}
++        {tab === 'cashflow' && <CashflowTab />}
++      </div>
++    </PageShell>
++    );
++}
+diff --git a/frontend/src/pages/finance/OverviewTab.tsx b/frontend/src/pages/finance/OverviewTab.tsx
+new file mode 100644
+index 00000000..3ebc91be
+--- /dev/null
++++ b/frontend/src/pages/finance/OverviewTab.tsx
+@@ -0,0 +1,221 @@
++import { useMemo } from 'react';
++import { useTranslation } from 'react-i18next';
++import { useQuery } from '@tanstack/react-query';
++import {
++    Banknote, CircleCheck, CircleDollarSign, Clock, Gift, Receipt, RotateCcw,
++    ShieldCheck, ShoppingCart, TrendingUp, TriangleAlert, Users, Wallet
++} from 'lucide-react';
++
++import { HttpUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import { Alert, Card, CardContent, CardHeader, CardTitle, StatCard, Spinner } from '@/components/ui';
++import Sparkline from '@/components/viz/Sparkline';
++
++interface Dashboard {
++  totalRevenue: number; todayRevenue: number; weekRevenue: number; monthRevenue: number; yearRevenue: number;
++  grossRevenue: number; netRevenue: number; lifetimeRevenue: number;
++  totalDeposits: number; totalWithdrawals: number; totalWalletBalance: number;
++  pendingDeposits: number; approvedDeposits: number; rejectedDeposits: number;
++  totalBonuses: number; totalReferralCommissions: number; totalRefunds: number;
++  totalProductSales: number; productSalesCount: number;
++  totalUsers: number; payingUsers: number; activeUsers: number; arpu: number; aov: number;
++  totalSpend: number; totalClients: number; newClientsMonth: number;
++}
++interface DayPoint { date: string; revenue: number; deposits: number; orders: number; users: number; }
++interface Segments {
++  totalUsers: number; registeredNeverDeposited: number; depositedNeverPurchased: number;
++  purchasedOnce: number; repeatBuyers: number; highValue: number; inactive90d: number;
++  resellers: number; members: number; moderators: number; admins: number;
++}
++interface Consistency {
++  sumUserBalances: number; ledgerNet: number; difference: number; balanced: boolean;
++  negativeBalances: number; duplicateTracking: number; orphanedOrders: number;
++}
++
++function compact(v: number): string
++{
++    if (Math.abs(v) >= 1_000_000)
++    {
++        return `${ (v / 1_000_000).toFixed(1) }M`;
++    }
++    if (Math.abs(v) >= 1_000)
++    {
++        return `${ Math.round(v / 1_000) }k`;
++    }
++    return String(Math.round(v));
++}
++
++export default function OverviewTab()
++{
++    const { t } = useTranslation();
++    const { format: money, formatNumber, unit } = useCurrency();
++
++    const dash = useQuery({
++        queryKey: ['finance', 'dashboard'],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get('/panel/api/finance/dashboard', undefined, { silent: true });
++            return m?.success ? (m.obj as Dashboard) : null;
++        }
++    });
++    const series = useQuery({
++        queryKey: ['finance', 'timeseries', 30],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get('/panel/api/finance/timeseries?days=30', undefined, { silent: true });
++            return m?.success ? ((m.obj as DayPoint[]) ?? []) : [];
++        }
++    });
++    const segs = useQuery({
++        queryKey: ['finance', 'segments'],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get('/panel/api/finance/segments', undefined, { silent: true });
++            return m?.success ? (m.obj as Segments) : null;
++        }
++    });
++    const cons = useQuery({
++        queryKey: ['finance', 'consistency'],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get('/panel/api/finance/consistency', undefined, { silent: true });
++            return m?.success ? (m.obj as Consistency) : null;
++        }
++    });
++
++    const points = series.data ?? [];
++    const labels = useMemo(() => points.map((p) => p.date.slice(5)), [points]);
++    const moneyAxis = (v: number) => compact(v);
++
++    const d = dash.data;
++
++    if (dash.isLoading)
++    {
++        return <div className="flex min-h-[30vh] items-center justify-center"><Spinner className="h-7 w-7" /></div>;
++    }
++
++    const moneyCards = [
++        { k: 'totalRevenue', label: t('pages.finance.totalRevenue'), v: d?.totalRevenue, icon: <CircleDollarSign className="h-5 w-5 text-success" aria-hidden /> },
++        { k: 'today', label: t('pages.finance.today'), v: d?.todayRevenue, icon: <TrendingUp className="h-5 w-5" aria-hidden /> },
++        { k: 'week', label: t('pages.finance.week'), v: d?.weekRevenue, icon: <TrendingUp className="h-5 w-5" aria-hidden /> },
++        { k: 'month', label: t('pages.finance.month'), v: d?.monthRevenue, icon: <TrendingUp className="h-5 w-5" aria-hidden /> },
++        { k: 'year', label: t('pages.finance.year'), v: d?.yearRevenue, icon: <TrendingUp className="h-5 w-5" aria-hidden /> },
++        { k: 'net', label: t('pages.finance.netRevenue'), v: d?.netRevenue, icon: <CircleDollarSign className="h-5 w-5" aria-hidden /> },
++        { k: 'deposits', label: t('pages.finance.totalDeposits'), v: d?.totalDeposits, icon: <Banknote className="h-5 w-5 text-accent" aria-hidden /> },
++        { k: 'wallet', label: t('pages.finance.walletBalance'), v: d?.totalWalletBalance, icon: <Wallet className="h-5 w-5" aria-hidden /> },
++        { k: 'bonus', label: t('pages.finance.bonuses'), v: d?.totalBonuses, icon: <Gift className="h-5 w-5 text-success" aria-hidden /> },
++        { k: 'commission', label: t('pages.finance.referralCommissions'), v: d?.totalReferralCommissions, icon: <Receipt className="h-5 w-5" aria-hidden /> },
++        { k: 'refunds', label: t('pages.finance.refunds'), v: d?.totalRefunds, icon: <RotateCcw className="h-5 w-5 text-warning" aria-hidden /> },
++        { k: 'sales', label: t('pages.finance.productSales'), v: d?.totalProductSales, icon: <ShoppingCart className="h-5 w-5" aria-hidden /> },
++        { k: 'spend', label: t('pages.finance.totalSpend'), v: d?.totalSpend, icon: <Banknote className="h-5 w-5 text-warning" aria-hidden /> }
++    ];
++
++    const countCards = [
++        { k: 'users', label: t('pages.finance.totalUsers'), v: d?.totalUsers, icon: <Users className="h-5 w-5" aria-hidden /> },
++        { k: 'paying', label: t('pages.finance.payingUsers'), v: d?.payingUsers, icon: <Users className="h-5 w-5 text-success" aria-hidden /> },
++        { k: 'active', label: t('pages.finance.activeUsers'), v: d?.activeUsers, icon: <Users className="h-5 w-5" aria-hidden /> },
++        { k: 'arpu', label: t('pages.finance.arpu'), v: d?.arpu, money: true, icon: <CircleDollarSign className="h-5 w-5" aria-hidden /> },
++        { k: 'aov', label: t('pages.finance.aov'), v: d?.aov, money: true, icon: <ShoppingCart className="h-5 w-5" aria-hidden /> },
++        { k: 'pending', label: t('pages.finance.pendingDeposits'), v: d?.pendingDeposits, icon: <Clock className="h-5 w-5 text-warning" aria-hidden /> },
++        { k: 'approved', label: t('pages.finance.approvedDeposits'), v: d?.approvedDeposits, icon: <CircleCheck className="h-5 w-5 text-success" aria-hidden /> },
++        { k: 'rejected', label: t('pages.finance.rejectedDeposits'), v: d?.rejectedDeposits, icon: <TriangleAlert className="h-5 w-5 text-danger" aria-hidden /> },
++        { k: 'clients', label: t('pages.finance.totalClients'), v: d?.totalClients, icon: <Users className="h-5 w-5" aria-hidden /> },
++        { k: 'newClients', label: t('pages.finance.newClients'), v: d?.newClientsMonth, icon: <Users className="h-5 w-5 text-success" aria-hidden /> }
++    ];
++
++    const c = cons.data;
++    const seg = segs.data;
++
++    return (
++    <div className="flex flex-col gap-4">
++      {/* Consistency banner */}
++      {c && (
++        <Alert variant={c.balanced ? 'success' : 'warning'} title={c.balanced ? t('pages.finance.ledgerBalanced') : t('pages.finance.ledgerDrift')}>
++          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm">
++            <span className="inline-flex items-center gap-1">
++              <ShieldCheck className="h-4 w-4" aria-hidden />
++              {t('pages.finance.balances')}: <strong>{money(c.sumUserBalances)}</strong>
++            </span>
++            <span>{t('pages.finance.ledgerNet')}: <strong>{money(c.ledgerNet)}</strong></span>
++            <span>{t('pages.finance.difference')}: <strong>{money(c.difference)}</strong></span>
++            {c.negativeBalances > 0 && <span className="text-danger">{t('pages.finance.negativeBalances')}: {c.negativeBalances}</span>}
++            {c.duplicateTracking > 0 && <span className="text-danger">{t('pages.finance.duplicateTracking')}: {c.duplicateTracking}</span>}
++            {c.orphanedOrders > 0 && <span className="text-danger">{t('pages.finance.orphanedOrders')}: {c.orphanedOrders}</span>}
++          </div>
++        </Alert>
++      )}
++
++      {/* Money KPIs */}
++      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
++        {moneyCards.map((card) => (
++          <StatCard key={card.k} icon={card.icon} label={card.label}
++            value={<span className="text-lg">{money(card.v ?? 0)}</span>} />
++        ))}
++      </div>
++
++      {/* Count / ratio KPIs */}
++      <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
++        {countCards.map((card) => (
++          <StatCard key={card.k} icon={card.icon} label={card.label}
++            value={card.money ? <span className="text-lg">{money(card.v ?? 0)}</span> : formatNumber(card.v ?? 0)} />
++        ))}
++      </div>
++
++      {/* Charts */}
++      <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
++        <Card>
++          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartRevenue')} <span className="text-xs font-normal text-muted-foreground">({unit})</span></CardTitle></CardHeader>
++          <CardContent className="p-2 sm:p-3">
++            <Sparkline data={points.map((p) => p.revenue)} labels={labels} height={160} showAxes showTooltip valueMax={null}
++              stroke="#22c55e" yFormatter={moneyAxis} tooltipFormatter={(v) => money(v)} />
++          </CardContent>
++        </Card>
++        <Card>
++          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartDeposits')} <span className="text-xs font-normal text-muted-foreground">({unit})</span></CardTitle></CardHeader>
++          <CardContent className="p-2 sm:p-3">
++            <Sparkline data={points.map((p) => p.deposits)} labels={labels} height={160} showAxes showTooltip valueMax={null}
++              stroke="#6366f1" yFormatter={moneyAxis} tooltipFormatter={(v) => money(v)} />
++          </CardContent>
++        </Card>
++        <Card>
++          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartOrders')}</CardTitle></CardHeader>
++          <CardContent className="p-2 sm:p-3">
++            <Sparkline data={points.map((p) => p.orders)} labels={labels} height={160} showAxes showTooltip valueMax={null}
++              stroke="#f59e0b" yFormatter={(v) => String(Math.round(v))} tooltipFormatter={(v) => String(Math.round(v))} />
++          </CardContent>
++        </Card>
++        <Card>
++          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartUsers')}</CardTitle></CardHeader>
++          <CardContent className="p-2 sm:p-3">
++            <Sparkline data={points.map((p) => p.users)} labels={labels} height={160} showAxes showTooltip valueMax={null}
++              stroke="#06b6d4" yFormatter={(v) => String(Math.round(v))} tooltipFormatter={(v) => String(Math.round(v))} />
++          </CardContent>
++        </Card>
++      </div>
++
++      {/* Segments */}
++      {seg && (
++        <Card>
++          <CardHeader className="p-4 sm:p-5"><CardTitle>{t('pages.finance.segments')}</CardTitle></CardHeader>
++          <CardContent className="grid grid-cols-2 gap-3 p-4 pt-0 sm:grid-cols-3 sm:p-5 sm:pt-0 lg:grid-cols-4">
++            {([
++                ['registeredNeverDeposited', seg.registeredNeverDeposited],
++                ['depositedNeverPurchased', seg.depositedNeverPurchased],
++                ['purchasedOnce', seg.purchasedOnce],
++                ['repeatBuyers', seg.repeatBuyers],
++                ['highValue', seg.highValue],
++                ['inactive90d', seg.inactive90d],
++                ['resellers', seg.resellers],
++                ['members', seg.members]
++            ] as [string, number][]).map(([k, v]) => (
++              <div key={k} className="flex flex-col gap-0.5 rounded-lg border border-border p-3">
++                <span className="text-xs text-muted-foreground">{t(`pages.finance.seg_${ k }`)}</span>
++                <span className="text-lg font-semibold tabular-nums text-foreground">{formatNumber(v)}</span>
++              </div>
++            ))}
++          </CardContent>
++        </Card>
++      )}
++    </div>
++    );
++}
+diff --git a/frontend/src/pages/finance/UserProfileModal.tsx b/frontend/src/pages/finance/UserProfileModal.tsx
+new file mode 100644
+index 00000000..f3704576
+--- /dev/null
++++ b/frontend/src/pages/finance/UserProfileModal.tsx
+@@ -0,0 +1,94 @@
++import { useTranslation } from 'react-i18next';
++import { useQuery } from '@tanstack/react-query';
++
++import { HttpUtil, IntlUtil } from '@/utils';
++import { useCurrency } from '@/hooks/useCurrency';
++import { Badge, Modal, Spinner } from '@/components/ui';
++
++interface Ledger { id: number; type: string; amount: number; source: string; description: string; balanceAfter: number; createdAt: number; }
++interface Purchase { id: number; productName: string; amount: number; status: string; createdAt: number; }
++interface Profile {
++  id: number; username: string; fullName: string; role: string; balance: number; createdAt: number;
++  referredByUserId: number; referredByUsername: string; referralCode: string;
++  totalDeposited: number; totalSpent: number; totalPurchased: number; totalOrders: number;
++  activeServices: number; expiredServices: number; lastPaymentAt: number; ltv: number;
++  ledger: Ledger[]; purchases: Purchase[];
++}
++
++export default function UserProfileModal({ userId, onClose }: { userId: number | null; onClose: () => void })
++{
++    const { t } = useTranslation();
++    const { format: money } = useCurrency();
++
++    const query = useQuery({
++        queryKey: ['finance', 'user', userId],
++        queryFn: async () =>
++        {
++            const m = await HttpUtil.get(`/panel/api/finance/users/${ userId }`, undefined, { silent: true });
++            return m?.success ? (m.obj as Profile) : null;
++        },
++        enabled: !!userId
++    });
++    const p = query.data;
++
++    const row = (label: string, value: React.ReactNode) => (
++    <div className="flex items-center justify-between gap-3 border-b border-border py-1.5 text-sm last:border-0">
++      <span className="text-muted-foreground">{label}</span>
++      <span className="font-medium text-foreground">{value}</span>
++    </div>
++    );
++
++    return (
++    <Modal open={!!userId} onClose={onClose} title={p ? `${ p.username }` : t('pages.finance.userProfile')} size="xl">
++      {query.isLoading || !p ? (
++        <div className="flex min-h-40 items-center justify-center"><Spinner className="h-6 w-6" /></div>
++      ) : (
++        <div className="flex flex-col gap-4">
++          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
++            <div className="rounded-lg border border-border p-3">
++              <h4 className="mb-2 text-sm font-semibold">{t('pages.finance.profile')}</h4>
++              {row(t('pages.users.role'), <Badge variant="primary" className="capitalize">{p.role}</Badge>)}
++              {row(t('balance'), money(p.balance))}
++              {row(t('pages.finance.registered'), p.createdAt ? IntlUtil.formatDate(p.createdAt) : '—')}
++              {row(t('pages.finance.referredBy'), p.referredByUsername || '—')}
++              {row(t('pages.finance.referralCode'), p.referralCode || '—')}
++            </div>
++            <div className="rounded-lg border border-border p-3">
++              <h4 className="mb-2 text-sm font-semibold">{t('pages.finance.financialSummary')}</h4>
++              {row(t('pages.finance.totalDeposited'), money(p.totalDeposited))}
++              {row(t('pages.finance.totalSpent'), money(p.totalSpent))}
++              {row(t('pages.finance.ltv'), money(p.ltv))}
++              {row(t('pages.finance.orders'), `${ p.totalPurchased } / ${ p.totalOrders }`)}
++              {row(t('pages.finance.services'), `${ p.activeServices } ${ t('pages.finance.active') } · ${ p.expiredServices } ${ t('pages.finance.expired') }`)}
++              {row(t('pages.finance.lastPayment'), p.lastPaymentAt ? IntlUtil.formatDate(p.lastPaymentAt) : '—')}
++            </div>
++          </div>
++
++          <div>
++            <h4 className="mb-2 text-sm font-semibold">{t('pages.finance.recentLedger')}</h4>
++            <div className="max-h-72 overflow-y-auto rounded-lg border border-border">
++              <table className="w-full text-sm">
++                <tbody>
++                  {p.ledger.length === 0 ? (
++                    <tr><td className="p-4 text-center text-muted-foreground">{t('noData')}</td></tr>
++                  ) : p.ledger.map((l) => (
++                    <tr key={l.id} className="border-b border-border last:border-0">
++                      <td className="px-3 py-2">
++                        <Badge variant={l.type === 'credit' ? 'success' : 'neutral'}>{l.source || l.type}</Badge>
++                      </td>
++                      <td className={`px-3 py-2 text-end font-medium tabular-nums ${ l.type === 'credit' ? 'text-success' : 'text-danger' }`}>
++                        {l.type === 'credit' ? '+' : '−'}{money(l.amount)}
++                      </td>
++                      <td className="hidden px-3 py-2 text-end text-muted-foreground tabular-nums sm:table-cell">{money(l.balanceAfter)}</td>
++                      <td className="hidden px-3 py-2 text-end text-xs text-muted-foreground md:table-cell">{IntlUtil.formatDate(l.createdAt)}</td>
++                    </tr>
++                  ))}
++                </tbody>
++              </table>
++            </div>
++          </div>
++        </div>
++      )}
++    </Modal>
++    );
++}
+diff --git a/frontend/src/pages/reports/ReportsPage.tsx b/frontend/src/pages/reports/ReportsPage.tsx
+deleted file mode 100644
+index 095adf54..00000000
+--- a/frontend/src/pages/reports/ReportsPage.tsx
++++ /dev/null
+@@ -1,364 +0,0 @@
+-import { useEffect, useMemo, useState } from 'react';
+-import { useTranslation } from 'react-i18next';
+-import { message } from '@/components/ui/message';
+-import {
+-    Crown,
+-    DollarSign,
+-    RefreshCw,
+-    TrendingDown,
+-    TrendingUp,
+-    Users,
+-    Wallet
+-} from 'lucide-react';
+-import { useQuery } from '@tanstack/react-query';
+-
+-import { useTheme } from '@/hooks/useTheme';
+-import { usePageTitle } from '@/hooks/usePageTitle';
+-import { useCurrency } from '@/hooks/useCurrency';
+-import { HttpUtil } from '@/utils';
+-import { setMessageInstance } from '@/utils/messageBus';
+-import PageShell from '@/layouts/PageShell';
+-import Sparkline from '@/components/viz/Sparkline';
+-import {
+-    Badge,
+-    Button,
+-    Card,
+-    CardContent,
+-    CardHeader,
+-    CardTitle,
+-    SearchInput,
+-    Spinner,
+-    StatCard,
+-    Table,
+-    cn
+-} from '@/components/ui';
+-import type { Column } from '@/components/ui';
+-
+-interface PeriodStat {
+-  amount: number;
+-  count: number;
+-}
+-
+-interface DailyPoint {
+-  date: string;
+-  revenue: number;
+-  spend: number;
+-}
+-
+-interface ResellerStat {
+-  userId: number;
+-  username: string;
+-  spend: number;
+-  clients: number;
+-}
+-
+-interface IncomeReport {
+-  revenue: Record<string, PeriodStat>;
+-  spend: Record<string, PeriodStat>;
+-  newClients: Record<string, number>;
+-  daily: DailyPoint[];
+-  topResellers: ResellerStat[] | null;
+-  pendingCount: number;
+-  totalUsers: number;
+-  totalClients: number;
+-  outstanding: number;
+-}
+-
+-// Period slugs in the order the backend reports them. Each maps to a localized
+-// label and feeds the breakdown table rows.
+-const PERIOD_KEYS = ['today', 'yesterday', 'last7', 'thisMonth', 'lastMonth', 'thisYear', 'allTime'] as const;
+-type PeriodKey = (typeof PERIOD_KEYS)[number];
+-
+-interface PeriodRow {
+-  key: PeriodKey;
+-  revenue: number;
+-  payments: number;
+-  spend: number;
+-  newClients: number;
+-}
+-
+-async function fetchReport(): Promise<IncomeReport>
+-{
+-    const msg = await HttpUtil.get('/panel/api/admin/reports/income', undefined, { silent: true });
+-    if (!msg?.success || !msg.obj)
+-    {
+-        throw new Error(msg?.msg || 'Failed to load report');
+-    }
+-    return msg.obj as IncomeReport;
+-}
+-
+-export default function ReportsPage()
+-{
+-    usePageTitle();
+-    const { t } = useTranslation();
+-    const { isDark } = useTheme();
+-    const { format: formatMoney, formatNumber, unit } = useCurrency();
+-    const [messageApi] = message.useMessage();
+-    useEffect(() =>
+-    {
+-        setMessageInstance(messageApi);
+-    }, [messageApi]);
+-
+-    const reportQuery = useQuery({ queryKey: ['admin', 'income-report'], queryFn: fetchReport });
+-    const report = reportQuery.data;
+-    const fetched = reportQuery.data !== undefined || reportQuery.isError;
+-    const fetchError = reportQuery.error ? (reportQuery.error as Error).message : '';
+-
+-    const periodRows = useMemo<PeriodRow[]>(() =>
+-    {
+-        if (!report)
+-        {
+-            return [];
+-        }
+-        return PERIOD_KEYS.map((key) => ({
+-            key,
+-            revenue: report.revenue[key]?.amount ?? 0,
+-            payments: report.revenue[key]?.count ?? 0,
+-            spend: report.spend[key]?.amount ?? 0,
+-            newClients: report.newClients[key] ?? 0
+-        }));
+-    }, [report]);
+-
+-    const [periodQ, setPeriodQ] = useState('');
+-    const [resellerQ, setResellerQ] = useState('');
+-
+-    const filteredPeriodRows = useMemo(() =>
+-    {
+-        const s = periodQ.trim().toLowerCase();
+-        if (!s)
+-        {
+-            return periodRows;
+-        }
+-        return periodRows.filter((row) => t(`pages.reports.periods.${ row.key }`).toLowerCase().includes(s));
+-    }, [periodRows, periodQ, t]);
+-
+-    const filteredResellers = useMemo(() =>
+-    {
+-        const list = report?.topResellers ?? [];
+-        const s = resellerQ.trim().toLowerCase();
+-        if (!s)
+-        {
+-            return list;
+-        }
+-        return list.filter((row) => (row.username || '').toLowerCase().includes(s));
+-    }, [report, resellerQ]);
+-
+-    const daily = useMemo(() => report?.daily ?? [], [report]);
+-    const revenueSeries = useMemo(() => daily.map((d) => d.revenue), [daily]);
+-    const spendSeries = useMemo(() => daily.map((d) => d.spend), [daily]);
+-    const dayLabels = useMemo(() => daily.map((d) => d.date.slice(5)), [daily]);
+-
+-    const periodColumns: Column<PeriodRow>[] = [
+-        {
+-            key: 'key',
+-            header: t('pages.reports.period'),
+-            cell: (row) => <strong>{t(`pages.reports.periods.${ row.key }`)}</strong>
+-        },
+-        {
+-            key: 'revenue',
+-            header: t('pages.reports.revenue'),
+-            align: 'end',
+-            cell: (row) => <span className="text-success">{formatMoney(row.revenue)}</span>
+-        },
+-        {
+-            key: 'payments',
+-            header: t('pages.reports.payments'),
+-            align: 'end',
+-            className: 'hidden sm:table-cell',
+-            cell: (row) => formatNumber(row.payments)
+-        },
+-        {
+-            key: 'spend',
+-            header: t('pages.reports.spend'),
+-            align: 'end',
+-            cell: (row) => formatMoney(row.spend)
+-        },
+-        {
+-            key: 'newClients',
+-            header: t('pages.reports.newClients'),
+-            align: 'end',
+-            className: 'hidden md:table-cell',
+-            cell: (row) => formatNumber(row.newClients)
+-        }
+-    ];
+-
+-    const resellerColumns: Column<ResellerStat>[] = [
+-        {
+-            key: 'username',
+-            header: t('username'),
+-            cell: (row) =>
+-                row.username ? (
+-          <Badge variant="primary">{row.username}</Badge>
+-                ) : (
+-          <span className="opacity-50">—</span>
+-                )
+-        },
+-        {
+-            key: 'spend',
+-            header: t('pages.reports.spend'),
+-            align: 'end',
+-            cell: (row) => <strong>{formatMoney(row.spend)}</strong>
+-        },
+-        {
+-            key: 'clients',
+-            header: t('clients'),
+-            align: 'end',
+-            className: 'hidden sm:table-cell',
+-            cell: (row) => formatNumber(row.clients)
+-        }
+-    ];
+-
+-    const pageClass = useMemo(() => `reports-page${ isDark ? ' is-dark' : '' }`, [isDark]);
+-
+-    const allTimeRevenue = report?.revenue.allTime?.amount ?? 0;
+-    const monthRevenue = report?.revenue.thisMonth?.amount ?? 0;
+-
+-    const hasActivity = revenueSeries.some((v) => v > 0) || spendSeries.some((v) => v > 0);
+-
+-    return (
+-    <PageShell name={pageClass}>
+-            {!fetched ? (
+-              <div className="grid min-h-[40vh] place-items-center">
+-                <Spinner className="h-8 w-8 text-muted-foreground" />
+-              </div>
+-            ) : fetchError ? (
+-              <Card className="mx-auto max-w-md">
+-                <CardContent className="flex flex-col items-center gap-3 p-8 pt-8 text-center">
+-                  <TrendingDown className="h-8 w-8 text-danger" aria-hidden />
+-                  <div className="text-base font-semibold">{t('somethingWentWrong')}</div>
+-                  <p className="text-sm text-muted-foreground">{fetchError}</p>
+-                  <Button onClick={() => reportQuery.refetch()}>{t('refresh')}</Button>
+-                </CardContent>
+-              </Card>
+-            ) : (
+-              <div className="flex flex-col gap-3 sm:gap-4">
+-                {/* Summary metrics */}
+-                <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-6">
+-                  <StatCard
+-                    icon={<DollarSign className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.reports.totalIncome')}
+-                    value={<>{formatNumber(allTimeRevenue)} <span className="text-base font-medium text-muted-foreground">{unit}</span></>}
+-                  />
+-                  <StatCard
+-                    icon={<TrendingUp className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.reports.periods.thisMonth')}
+-                    value={<>{formatNumber(monthRevenue)} <span className="text-base font-medium text-muted-foreground">{unit}</span></>}
+-                  />
+-                  <StatCard
+-                    icon={<Wallet className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.reports.outstanding')}
+-                    value={<>{formatNumber(report?.outstanding ?? 0)} <span className="text-base font-medium text-muted-foreground">{unit}</span></>}
+-                  />
+-                  <StatCard
+-                    icon={<Users className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.users.totalUsers')}
+-                    value={formatNumber(report?.totalUsers ?? 0)}
+-                  />
+-                  <StatCard
+-                    icon={<Crown className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.reports.totalClients')}
+-                    value={formatNumber(report?.totalClients ?? 0)}
+-                  />
+-                  <StatCard
+-                    icon={<TrendingDown className="h-5 w-5" aria-hidden />}
+-                    label={t('pages.reports.pending')}
+-                    value={formatNumber(report?.pendingCount ?? 0)}
+-                  />
+-                </div>
+-
+-                {/* Daily chart */}
+-                <Card>
+-                  <div className="flex items-center justify-between gap-2 p-4 sm:p-5">
+-                    <CardTitle>{t('pages.reports.dailyTitle')}</CardTitle>
+-                    <Button
+-                      variant="secondary"
+-                      size="sm"
+-                      loading={reportQuery.isFetching}
+-                      onClick={() => reportQuery.refetch()}
+-                    >
+-                      <RefreshCw className="h-4 w-4" aria-hidden />
+-                      <span className="hidden sm:inline">{t('refresh')}</span>
+-                    </Button>
+-                  </div>
+-                  <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+-                    {hasActivity ? (
+-                      <Sparkline
+-                        data={revenueSeries}
+-                        data2={spendSeries}
+-                        labels={dayLabels}
+-                        name1={t('pages.reports.revenue')}
+-                        name2={t('pages.reports.spend')}
+-                        height={260}
+-                        showAxes
+-                        showTooltip
+-                        valueMax={null}
+-                        yFormatter={(v) => formatNumber(v)}
+-                        tooltipFormatter={(v) => formatMoney(v)}
+-                        strokeWidth={2}
+-                      />
+-                    ) : (
+-                      <div className="py-12 text-center text-sm text-muted-foreground">
+-                        {t('pages.reports.noActivity')}
+-                      </div>
+-                    )}
+-                  </CardContent>
+-                </Card>
+-
+-                {/* Breakdown + top resellers */}
+-                <div className="grid grid-cols-1 gap-3 sm:gap-4 lg:grid-cols-[7fr_5fr]">
+-                  <Card>
+-                    <CardHeader className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5">
+-                      <CardTitle>{t('pages.reports.breakdownTitle')}</CardTitle>
+-                      <SearchInput
+-                        className="w-full sm:w-52"
+-                        aria-label={t('search')}
+-                        placeholder={t('search')}
+-                        value={periodQ}
+-                        onChange={(e) => setPeriodQ(e.target.value)}
+-                      />
+-                    </CardHeader>
+-                    <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+-                      <Table<PeriodRow>
+-                        columns={periodColumns}
+-                        data={filteredPeriodRows}
+-                        rowKey={(row) => row.key}
+-                        pageSize={15}
+-                        empty={
+-                          <div className="py-6 text-center text-muted-foreground">{t('noData')}</div>
+-                        }
+-                      />
+-                    </CardContent>
+-                  </Card>
+-
+-                  <Card>
+-                    <CardHeader className="flex flex-wrap items-center justify-between gap-2 p-4 sm:p-5">
+-                      <CardTitle>{t('pages.reports.topResellersTitle')}</CardTitle>
+-                      <SearchInput
+-                        className="w-full sm:w-52"
+-                        aria-label={t('search')}
+-                        placeholder={t('search')}
+-                        value={resellerQ}
+-                        onChange={(e) => setResellerQ(e.target.value)}
+-                      />
+-                    </CardHeader>
+-                    <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+-                      <Table<ResellerStat>
+-                        columns={resellerColumns}
+-                        data={filteredResellers}
+-                        rowKey={(row) => String(row.userId)}
+-                        pageSize={15}
+-                        empty={
+-                          <div className={cn('flex flex-col items-center gap-2 py-6 text-muted-foreground')}>
+-                            <Crown className="h-7 w-7 opacity-50" aria-hidden />
+-                            <span>{t('pages.reports.noResellers')}</span>
+-                          </div>
+-                        }
+-                      />
+-                    </CardContent>
+-                  </Card>
+-                </div>
+-              </div>
+-            )}
+-    </PageShell>
+-    );
+-}
+diff --git a/frontend/src/routes.tsx b/frontend/src/routes.tsx
+index 449d009c..a9ecf488 100644
+--- a/frontend/src/routes.tsx
++++ b/frontend/src/routes.tsx
+@@ -8,7 +8,6 @@ const InboundsPage = lazy(() => import('@/pages/inbounds/InboundsPage'));
+ const ClientsPage = lazy(() => import('@/pages/clients/ClientsPage'));
+ const GroupsPage = lazy(() => import('@/pages/groups/GroupsPage'));
+ const UsersPage = lazy(() => import('@/pages/users/UsersPage'));
+-const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
+ const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
+ const BillingPage = lazy(() => import('@/pages/billing/BillingPage'));
+ const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
+@@ -25,6 +24,7 @@ const AdminManualDepositsPage = lazy(() => import('@/pages/admin/ManualDepositsP
+ const TicketsPage = lazy(() => import('@/pages/tickets/TicketsPage'));
+ const TicketDetailPage = lazy(() => import('@/pages/tickets/TicketDetailPage'));
+ const SupportDashboardPage = lazy(() => import('@/pages/tickets/SupportDashboardPage'));
++const FinancePage = lazy(() => import('@/pages/finance/FinancePage'));
+ const ThemePreviewPage = lazy(() => import('@/pages/theme-preview/ThemePreviewPage'));
+ 
+ function withSuspense(node: React.ReactNode)
+@@ -42,7 +42,6 @@ const routes: RouteObject[] = [
+             { path: 'clients', element: withSuspense(<ClientsPage />) },
+             { path: 'groups', element: withSuspense(<GroupsPage />) },
+             { path: 'users', element: withSuspense(<UsersPage />) },
+-            { path: 'reports', element: withSuspense(<ReportsPage />) },
+             { path: 'profile', element: withSuspense(<ProfilePage />) },
+             { path: 'billing', element: withSuspense(<BillingPage />) },
+             { path: 'nodes', element: withSuspense(<NodesPage />) },
+@@ -58,7 +57,8 @@ const routes: RouteObject[] = [
+             { path: 'manual-deposits', element: withSuspense(<AdminManualDepositsPage />) },
+             { path: 'tickets', element: withSuspense(<TicketsPage />) },
+             { path: 'tickets/:id', element: withSuspense(<TicketDetailPage />) },
+-            { path: 'support', element: withSuspense(<SupportDashboardPage />) }
++            { path: 'support', element: withSuspense(<SupportDashboardPage />) },
++            { path: 'finance', element: withSuspense(<FinancePage />) }
+         ]
+     },
+     // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it
+diff --git a/web/controller/admin.go b/web/controller/admin.go
+index 48b99830..36f14500 100644
+--- a/web/controller/admin.go
++++ b/web/controller/admin.go
+@@ -5,6 +5,7 @@ import (
+ 	"net/http"
+ 	"strconv"
+ 
++	"github.com/mhsanaei/3x-ui/v3/database/model"
+ 	"github.com/mhsanaei/3x-ui/v3/web/middleware"
+ 	"github.com/mhsanaei/3x-ui/v3/web/service"
+ 	"github.com/mhsanaei/3x-ui/v3/web/session"
+@@ -165,13 +166,17 @@ func (a *AdminController) adjustBalance(c *gin.Context) {
+ 	if desc == "" {
+ 		desc = "admin adjustment"
+ 	}
++	actor := ""
++	if self := session.GetLoginUser(c); self != nil {
++		actor = self.Username
++	}
+ 	switch form.Op {
+ 	case "add":
+-		_, err = a.walletService.Credit(id, form.Amount, desc)
++		_, err = a.walletService.CreditWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminCredit, Actor: actor})
+ 	case "deduct":
+-		_, err = a.walletService.Debit(id, form.Amount, desc)
++		_, err = a.walletService.DebitWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminDebit, Actor: actor})
+ 	case "set":
+-		_, err = a.walletService.SetBalance(id, form.Amount, desc)
++		_, err = a.walletService.SetBalanceWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminSet, Actor: actor})
+ 	default:
+ 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.users.toasts.invalidOp"))
+ 		return
+diff --git a/web/controller/api.go b/web/controller/api.go
+index c97ca220..b94ac6ec 100644
+--- a/web/controller/api.go
++++ b/web/controller/api.go
+@@ -120,6 +120,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
+ 	// Support ticketing (helpdesk): requester + staff + admin routes. Per-route
+ 	// RBAC + per-request ownership live inside the controller.
+ 	NewTicketController(api)
++	// Financial control center (admin + read-only moderator): dashboards,
++	// analytics, ledger, cashflow, consistency, exports. Gated by finance.view_all.
++	NewFinanceController(api)
+ 
+ 	// Extra routes
+ 	api.POST("/backuptotgbot", middleware.RequireAdmin(), a.BackuptoTgbot)
+diff --git a/web/controller/finance.go b/web/controller/finance.go
+new file mode 100644
+index 00000000..92f3fd5a
+--- /dev/null
++++ b/web/controller/finance.go
+@@ -0,0 +1,208 @@
++package controller
++
++import (
++	"net/http"
++	"strconv"
++
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++	"github.com/mhsanaei/3x-ui/v3/web/middleware"
++	"github.com/mhsanaei/3x-ui/v3/web/service"
++
++	"github.com/gin-gonic/gin"
++)
++
++// FinanceController is the admin/moderator financial control center. Everything
++// here is READ-ONLY reporting — money only moves through the ledger-backed
++// WalletService elsewhere. The whole group requires finance.view_all (admin +
++// moderator). Members/resellers use their own scoped endpoints (own
++// transactions/orders) which live in other controllers.
++type FinanceController struct {
++	financeService service.FinanceService
++}
++
++// NewFinanceController registers the finance routes on the API group.
++func NewFinanceController(g *gin.RouterGroup) *FinanceController {
++	a := &FinanceController{}
++	a.initRouter(g)
++	return a
++}
++
++func (a *FinanceController) initRouter(g *gin.RouterGroup) {
++	fin := g.Group("/finance")
++	fin.Use(middleware.RequirePermission(model.PermFinanceView))
++
++	fin.GET("/dashboard", a.dashboard)
++	fin.GET("/timeseries", a.timeSeries)
++	fin.GET("/payment-breakdown", a.paymentBreakdown)
++	fin.GET("/segments", a.segments)
++	fin.GET("/top/products", a.topProducts)
++	fin.GET("/top/customers", a.topCustomers)
++	fin.GET("/top/resellers", a.topResellers)
++	fin.GET("/top/depositors", a.topDepositors)
++	fin.GET("/cashflow", a.cashflow)
++	fin.GET("/consistency", a.consistency)
++	fin.GET("/deposits", a.deposits)
++	fin.GET("/users/:id", a.userProfile)
++
++	// CSV exports.
++	fin.GET("/export/transactions", a.exportTransactions)
++	fin.GET("/export/orders", a.exportOrders)
++	fin.GET("/export/deposits", a.exportDeposits)
++	fin.GET("/export/users", a.exportUsers)
++}
++
++func (a *FinanceController) dashboard(c *gin.Context) {
++	d, err := a.financeService.Dashboard()
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, d, nil)
++}
++
++func (a *FinanceController) timeSeries(c *gin.Context) {
++	days, _ := strconv.Atoi(c.Query("days"))
++	rows, err := a.financeService.TimeSeries(days)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) paymentBreakdown(c *gin.Context) {
++	rows, err := a.financeService.PaymentBreakdown()
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) segments(c *gin.Context) {
++	seg, err := a.financeService.Segments()
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, seg, nil)
++}
++
++func (a *FinanceController) topProducts(c *gin.Context) {
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	rows, err := a.financeService.TopProducts(limit)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) topCustomers(c *gin.Context) {
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	rows, err := a.financeService.TopCustomers(limit)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) topResellers(c *gin.Context) {
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	rows, err := a.financeService.TopResellers(limit)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) topDepositors(c *gin.Context) {
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	rows, err := a.financeService.TopDepositors(limit)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, rows, nil)
++}
++
++func (a *FinanceController) cashflow(c *gin.Context) {
++	from, _ := strconv.ParseInt(c.Query("from"), 10, 64)
++	to, _ := strconv.ParseInt(c.Query("to"), 10, 64)
++	cf, err := a.financeService.Cashflow(from, to)
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, cf, nil)
++}
++
++func (a *FinanceController) consistency(c *gin.Context) {
++	chk, err := a.financeService.ConsistencyCheck()
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, chk, nil)
++}
++
++func (a *FinanceController) deposits(c *gin.Context) {
++	limit, _ := strconv.Atoi(c.Query("limit"))
++	offset, _ := strconv.Atoi(c.Query("offset"))
++	userId, _ := strconv.Atoi(c.Query("userId"))
++	from, _ := strconv.ParseInt(c.Query("from"), 10, 64)
++	to, _ := strconv.ParseInt(c.Query("to"), 10, 64)
++	items, total, err := a.financeService.DepositsFeed(service.FinanceDepositFilter{
++		Method: c.Query("method"),
++		Status: c.Query("status"),
++		Role:   c.Query("role"),
++		UserId: userId,
++		Search: c.Query("search"),
++		From:   from,
++		To:     to,
++		Limit:  limit,
++		Offset: offset,
++	})
++	if err != nil {
++		jsonMsg(c, I18nWeb(c, "fail"), err)
++		return
++	}
++	jsonObj(c, gin.H{"items": items, "total": total}, nil)
++}
++
++func (a *FinanceController) userProfile(c *gin.Context) {
++	id, _ := strconv.Atoi(c.Param("id"))
++	p, err := a.financeService.UserProfile(id)
++	if err != nil {
++		c.AbortWithStatus(http.StatusNotFound)
++		return
++	}
++	jsonObj(c, p, nil)
++}
++
++// ---- CSV exports ----------------------------------------------------------
++
++func sendCSV(c *gin.Context, filename string, data []byte) {
++	c.Header("Content-Type", "text/csv; charset=utf-8")
++	c.Header("Content-Disposition", "attachment; filename="+filename)
++	c.Header("Cache-Control", "no-store")
++	c.Writer.Write(data)
++}
++
++func (a *FinanceController) exportTransactions(c *gin.Context) {
++	sendCSV(c, "transactions.csv", a.financeService.ExportTransactionsCSV())
++}
++
++func (a *FinanceController) exportOrders(c *gin.Context) {
++	sendCSV(c, "orders.csv", a.financeService.ExportOrdersCSV())
++}
++
++func (a *FinanceController) exportDeposits(c *gin.Context) {
++	sendCSV(c, "deposits.csv", a.financeService.ExportDepositsCSV())
++}
++
++func (a *FinanceController) exportUsers(c *gin.Context) {
++	sendCSV(c, "users.csv", a.financeService.ExportUsersCSV())
++}
+diff --git a/web/controller/payment.go b/web/controller/payment.go
+index ae82730e..0614984a 100644
+--- a/web/controller/payment.go
++++ b/web/controller/payment.go
+@@ -208,7 +208,8 @@ func (a *PaymentController) zarinpalCallback(c *gin.Context) {
+ 		return
+ 	}
+ 	if transitioned {
+-		if _, cErr := a.walletService.Credit(p.UserId, p.Amount, "ZarinPal top-up ref:"+refID); cErr != nil {
++		if _, cErr := a.walletService.CreditWithMeta(p.UserId, p.Amount, "ZarinPal top-up ref:"+refID,
++			service.TxMeta{Source: model.TxSourceGateway, RefId: refID}); cErr != nil {
+ 			// Money was captured but crediting failed — log loudly for manual reconciliation.
+ 			logger.Errorf("zarinpal: payment %s verified (ref %s) but crediting user %d with %d failed: %v",
+ 				authority, refID, p.UserId, p.Amount, cErr)
+diff --git a/web/controller/plisio_webhook.go b/web/controller/plisio_webhook.go
+index ce5a1654..6fc262c9 100644
+--- a/web/controller/plisio_webhook.go
++++ b/web/controller/plisio_webhook.go
+@@ -112,14 +112,16 @@ func (a *PlisioWebhookController) callback(c *gin.Context) {
+ 	if transitioned {
+ 		// Deposit and bonus are recorded as two distinct ledger rows for a clear
+ 		// auditable history (each call is atomic with its balance update).
+-		if _, cErr := a.walletService.Credit(p.UserId, p.Amount,
+-			fmt.Sprintf("Plisio crypto deposit (%s) ref:%s", p.Currency, txnID)); cErr != nil {
++		if _, cErr := a.walletService.CreditWithMeta(p.UserId, p.Amount,
++			fmt.Sprintf("Plisio crypto deposit (%s) ref:%s", p.Currency, txnID),
++			service.TxMeta{Source: model.TxSourceCrypto, RefId: txnID}); cErr != nil {
+ 			logger.Errorf("plisio: order %s confirmed but crediting user %d deposit %d failed: %v",
+ 				orderNumber, p.UserId, p.Amount, cErr)
+ 		}
+ 		if bonus > 0 {
+-			if _, cErr := a.walletService.Credit(p.UserId, bonus,
+-				fmt.Sprintf("Plisio crypto deposit bonus %d%% ref:%s", pct, txnID)); cErr != nil {
++			if _, cErr := a.walletService.CreditWithMeta(p.UserId, bonus,
++				fmt.Sprintf("Plisio crypto deposit bonus %d%% ref:%s", pct, txnID),
++				service.TxMeta{Source: model.TxSourceBonus, RefId: txnID}); cErr != nil {
+ 				logger.Errorf("plisio: order %s bonus credit of %d to user %d failed: %v",
+ 					orderNumber, bonus, p.UserId, cErr)
+ 			}
+diff --git a/web/controller/xui.go b/web/controller/xui.go
+index 83f39e18..0472bb5b 100644
+--- a/web/controller/xui.go
++++ b/web/controller/xui.go
+@@ -41,7 +41,6 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
+ 	g.GET("/clients", a.panelSPA)
+ 	g.GET("/groups", a.panelSPA)
+ 	g.GET("/users", a.panelSPA)
+-	g.GET("/reports", a.panelSPA)
+ 	g.GET("/profile", a.panelSPA)
+ 	g.GET("/billing", a.panelSPA)
+ 	g.GET("/nodes", a.panelSPA)
+@@ -63,6 +62,8 @@ func (a *XUIController) initRouter(g *gin.RouterGroup) {
+ 	g.GET("/tickets", a.panelSPA)
+ 	g.GET("/tickets/*any", a.panelSPA)
+ 	g.GET("/support", a.panelSPA)
++	// Financial control center.
++	g.GET("/finance", a.panelSPA)
+ 
+ 	// SPA pages built by Vite don't have a server-rendered <meta name="csrf-token">,
+ 	// so they fetch the session token via this endpoint at startup and replay it
+diff --git a/web/service/deposit.go b/web/service/deposit.go
+index 03817b15..0aa2bdc3 100644
+--- a/web/service/deposit.go
++++ b/web/service/deposit.go
+@@ -37,6 +37,10 @@ var (
+ // fat-fingered upload can't exhaust disk/memory.
+ const MaxReceiptSize = 5 << 20
+ 
++// LargeDepositThreshold (credits) above which an approved deposit raises an admin
++// alert. Documented fraud/finance-monitoring config point.
++const LargeDepositThreshold int64 = 10_000_000
++
+ // DepositService owns the company payment cards and the manual card-to-card
+ // deposit lifecycle. Approving a request is the ONLY path that credits a wallet,
+ // and it does so atomically (state transition + ledger write in one DB
+@@ -440,7 +444,8 @@ func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest,
+ 			return ErrDepositNotPending
+ 		}
+ 		desc := fmt.Sprintf("Manual deposit #%d approved", id)
+-		if _, e := s.walletService.applyDelta(tx, dep.UserId, dep.Amount, model.TxCredit, desc); e != nil {
++		meta := TxMeta{Source: model.TxSourceManualDeposit, RefId: itoa(id), Actor: itoa(adminId)}
++		if _, e := s.walletService.applyDelta(tx, dep.UserId, dep.Amount, model.TxCredit, desc, meta); e != nil {
+ 			return e
+ 		}
+ 		dep.Status = model.ManualDepositApproved
+@@ -464,6 +469,16 @@ func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest,
+ 		"/manual-deposit",
+ 		map[string]any{"amount": formatAmount(result.Amount)},
+ 	)
++	// Fraud/finance alert: a large deposit pings every admin's bell.
++	if result.Amount >= LargeDepositThreshold {
++		_ = s.notificationService.NotifyAdmins(
++			"notifications.largeDeposit.title",
++			"notifications.largeDeposit.body",
++			model.NotificationWarning,
++			"/finance",
++			map[string]any{"amount": formatAmount(result.Amount)},
++		)
++	}
+ 	return result, nil
+ }
+ 
+diff --git a/web/service/finance.go b/web/service/finance.go
+new file mode 100644
+index 00000000..37e1b7cd
+--- /dev/null
++++ b/web/service/finance.go
+@@ -0,0 +1,900 @@
++package service
++
++import (
++	"bytes"
++	"encoding/csv"
++	"errors"
++	"sort"
++	"strconv"
++	"strings"
++	"time"
++
++	"github.com/mhsanaei/3x-ui/v3/database"
++	"github.com/mhsanaei/3x-ui/v3/database/model"
++
++	"gorm.io/gorm"
++)
++
++// ErrFinanceUserNotFound is returned when a requested user profile doesn't exist.
++var ErrFinanceUserNotFound = errors.New("user not found")
++
++// FinanceService is the read-only financial control center: it aggregates the
++// authoritative source tables (payments, manual deposits, orders, referrals,
++// transactions ledger, users, clients) into dashboards, analytics, cashflow,
++// segmentation, a unified deposit feed, per-user profiles, consistency checks
++// and CSV exports. It never mutates money — that only happens through the
++// ledger-backed WalletService.
++type FinanceService struct{}
++
++// FinanceHighValueThreshold is the lifetime-deposit cutoff (in credits) above
++// which a customer is classed "high value". Documented config point.
++const FinanceHighValueThreshold int64 = 5_000_000
++
++// ---- small query helpers -------------------------------------------------
++
++func sumInt64(q *gorm.DB, expr string) int64 {
++	var v struct{ V int64 }
++	q.Select("COALESCE(SUM(" + expr + "),0) AS v").Scan(&v)
++	return v.V
++}
++
++func countRows(q *gorm.DB) int64 {
++	var n int64
++	q.Count(&n)
++	return n
++}
++
++func startOfMonthMilli() int64 {
++	t := time.Now()
++	y, m, _ := t.Date()
++	return time.Date(y, m, 1, 0, 0, 0, 0, t.Location()).UnixMilli()
++}
++
++func startOfYearMilli() int64 {
++	t := time.Now()
++	return time.Date(t.Year(), 1, 1, 0, 0, 0, 0, t.Location()).UnixMilli()
++}
++
++// confirmedDepositVolume returns the gross real-money deposit volume since `since`
++// (0 = all time): approved manual card-to-card deposits + paid gateway/crypto
++// payments. Bonuses are NOT counted (granted credit, not received money).
++func (s *FinanceService) confirmedDepositVolume(since int64) int64 {
++	db := database.GetDB()
++	manual := db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositApproved)
++	gateway := db.Model(&model.Payment{}).Where("status = ?", model.PaymentPaid)
++	if since > 0 {
++		manual = manual.Where("approved_at >= ?", since)
++		gateway = gateway.Where("created_at >= ?", since)
++	}
++	return sumInt64(manual, "amount") + sumInt64(gateway, "amount")
++}
++
++// ---- master dashboard -----------------------------------------------------
++
++// FinanceDashboard is the platform-wide financial snapshot.
++type FinanceDashboard struct {
++	TotalRevenue   int64 `json:"totalRevenue"`
++	TodayRevenue   int64 `json:"todayRevenue"`
++	WeekRevenue    int64 `json:"weekRevenue"`
++	MonthRevenue   int64 `json:"monthRevenue"`
++	YearRevenue    int64 `json:"yearRevenue"`
++	GrossRevenue   int64 `json:"grossRevenue"`
++	NetRevenue     int64 `json:"netRevenue"`
++	LifetimeRevenue int64 `json:"lifetimeRevenue"`
++
++	TotalDeposits     int64 `json:"totalDeposits"`     // volume (confirmed)
++	TotalWithdrawals  int64 `json:"totalWithdrawals"`  // manual admin debits
++	TotalWalletBalance int64 `json:"totalWalletBalance"`
++
++	PendingDeposits  int64 `json:"pendingDeposits"`
++	ApprovedDeposits int64 `json:"approvedDeposits"`
++	RejectedDeposits int64 `json:"rejectedDeposits"`
++
++	TotalBonuses             int64 `json:"totalBonuses"`
++	TotalReferralCommissions int64 `json:"totalReferralCommissions"`
++	TotalRefunds             int64 `json:"totalRefunds"`
++	TotalProductSales        int64 `json:"totalProductSales"`
++	ProductSalesCount        int64 `json:"productSalesCount"`
++
++	TotalUsers   int64 `json:"totalUsers"`
++	PayingUsers  int64 `json:"payingUsers"`
++	ActiveUsers  int64 `json:"activeUsers"`
++	ARPU         int64 `json:"arpu"`
++	AOV          int64 `json:"aov"`
++
++	// Operations (consumption side, ported from the old reports page): total
++	// wallet balance consumed via debits, plus client/service counts.
++	TotalSpend      int64 `json:"totalSpend"`
++	TotalClients    int64 `json:"totalClients"`
++	NewClientsMonth int64 `json:"newClientsMonth"`
++}
++
++func (s *FinanceService) Dashboard() (*FinanceDashboard, error) {
++	db := database.GetDB()
++	d := &FinanceDashboard{}
++
++	d.GrossRevenue = s.confirmedDepositVolume(0)
++	d.TotalRevenue = d.GrossRevenue
++	d.LifetimeRevenue = d.GrossRevenue
++	d.TodayRevenue = s.confirmedDepositVolume(startOfDayMilli(0))
++	d.WeekRevenue = s.confirmedDepositVolume(startOfDayMilli(7))
++	d.MonthRevenue = s.confirmedDepositVolume(startOfMonthMilli())
++	d.YearRevenue = s.confirmedDepositVolume(startOfYearMilli())
++	d.TotalDeposits = d.GrossRevenue
++
++	d.TotalRefunds = sumInt64(db.Model(&model.Transaction{}).Where("source = ?", model.TxSourceRefund), "amount")
++	d.NetRevenue = d.GrossRevenue - d.TotalRefunds
++	d.TotalWithdrawals = sumInt64(db.Model(&model.Transaction{}).Where("source = ?", model.TxSourceAdminDebit), "amount")
++	d.TotalWalletBalance = sumInt64(db.Model(&model.User{}), "balance")
++	d.TotalBonuses = sumInt64(db.Model(&model.Payment{}).Where("status = ?", model.PaymentPaid), "bonus_amount")
++	d.TotalReferralCommissions = sumInt64(db.Model(&model.Transaction{}).Where("source = ?", model.TxSourceReferral), "amount")
++
++	d.PendingDeposits = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositPending)) +
++		countRows(db.Model(&model.Payment{}).Where("status = ?", model.PaymentPending))
++	d.ApprovedDeposits = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositApproved)) +
++		countRows(db.Model(&model.Payment{}).Where("status = ?", model.PaymentPaid))
++	d.RejectedDeposits = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositRejected)) +
++		countRows(db.Model(&model.Payment{}).Where("status = ?", model.PaymentFailed))
++
++	d.TotalProductSales = sumInt64(db.Model(&model.Order{}).Where("status = ?", model.OrderCompleted), "amount")
++	d.ProductSalesCount = countRows(db.Model(&model.Order{}).Where("status = ?", model.OrderCompleted))
++
++	d.TotalUsers = countRows(db.Model(&model.User{}))
++	deposits := s.depositByUser()
++	d.PayingUsers = int64(len(deposits))
++	// Active = engaged: at least one completed order or one confirmed deposit.
++	buyers := s.orderCountByUser()
++	active := map[int]bool{}
++	for u := range deposits {
++		active[u] = true
++	}
++	for u := range buyers {
++		active[u] = true
++	}
++	d.ActiveUsers = int64(len(active))
++
++	if d.PayingUsers > 0 {
++		d.ARPU = d.GrossRevenue / d.PayingUsers
++	}
++	if d.ProductSalesCount > 0 {
++		d.AOV = d.TotalProductSales / d.ProductSalesCount
++	}
++
++	// Operations: balance consumed (all debits) + client/service counts.
++	d.TotalSpend = sumInt64(db.Model(&model.Transaction{}).Where("type = ?", model.TxDebit), "amount")
++	d.TotalClients = countRows(db.Model(&model.ClientRecord{}))
++	d.NewClientsMonth = countRows(db.Model(&model.ClientRecord{}).Where("created_at >= ?", startOfMonthMilli()))
++	return d, nil
++}
++
++// depositByUser maps user id -> lifetime confirmed deposit volume.
++func (s *FinanceService) depositByUser() map[int]int64 {
++	db := database.GetDB()
++	out := map[int]int64{}
++	type row struct {
++		UserId int
++		V      int64
++	}
++	var rows []row
++	db.Model(&model.ManualDepositRequest{}).Select("user_id, COALESCE(SUM(amount),0) AS v").
++		Where("status = ?", model.ManualDepositApproved).Group("user_id").Scan(&rows)
++	for _, r := range rows {
++		out[r.UserId] += r.V
++	}
++	rows = nil
++	db.Model(&model.Payment{}).Select("user_id, COALESCE(SUM(amount),0) AS v").
++		Where("status = ?", model.PaymentPaid).Group("user_id").Scan(&rows)
++	for _, r := range rows {
++		out[r.UserId] += r.V
++	}
++	return out
++}
++
++// orderCountByUser maps user id -> completed-order count.
++func (s *FinanceService) orderCountByUser() map[int]int64 {
++	db := database.GetDB()
++	out := map[int]int64{}
++	type row struct {
++		UserId int
++		C      int64
++	}
++	var rows []row
++	db.Model(&model.Order{}).Select("user_id, COUNT(*) AS c").
++		Where("status = ?", model.OrderCompleted).Group("user_id").Scan(&rows)
++	for _, r := range rows {
++		out[r.UserId] = r.C
++	}
++	return out
++}
++
++// ---- time series (charts) -------------------------------------------------
++
++// FinanceDayPoint is one day's bucket for the dashboard charts.
++type FinanceDayPoint struct {
++	Date     string `json:"date"` // yyyy-mm-dd
++	Revenue  int64  `json:"revenue"`
++	Deposits int64  `json:"deposits"`
++	Orders   int64  `json:"orders"`
++	Users    int64  `json:"users"`
++}
++
++// TimeSeries buckets the last `days` days (DB-agnostic: rows are fetched in the
++// window and bucketed in Go, so no engine-specific date SQL is needed).
++func (s *FinanceService) TimeSeries(days int) ([]FinanceDayPoint, error) {
++	if days <= 0 || days > 365 {
++		days = 30
++	}
++	db := database.GetDB()
++	since := startOfDayMilli(days - 1)
++	loc := time.Now().Location()
++	dayKey := func(ms int64) string { return time.UnixMilli(ms).In(loc).Format("2006-01-02") }
++
++	points := map[string]*FinanceDayPoint{}
++	for i := days - 1; i >= 0; i-- {
++		k := time.Now().In(loc).AddDate(0, 0, -i).Format("2006-01-02")
++		points[k] = &FinanceDayPoint{Date: k}
++	}
++	bump := func(ms int64, f func(p *FinanceDayPoint)) {
++		if p := points[dayKey(ms)]; p != nil {
++			f(p)
++		}
++	}
++
++	type amtRow struct {
++		At  int64
++		Amt int64
++	}
++	var rows []amtRow
++	db.Model(&model.ManualDepositRequest{}).Select("approved_at AS at, amount AS amt").
++		Where("status = ? AND approved_at >= ?", model.ManualDepositApproved, since).Scan(&rows)
++	for _, r := range rows {
++		bump(r.At, func(p *FinanceDayPoint) { p.Revenue += r.Amt; p.Deposits += r.Amt })
++	}
++	rows = nil
++	db.Model(&model.Payment{}).Select("created_at AS at, amount AS amt").
++		Where("status = ? AND created_at >= ?", model.PaymentPaid, since).Scan(&rows)
++	for _, r := range rows {
++		bump(r.At, func(p *FinanceDayPoint) { p.Revenue += r.Amt; p.Deposits += r.Amt })
++	}
++	rows = nil
++	db.Model(&model.Order{}).Select("created_at AS at, amount AS amt").
++		Where("status = ? AND created_at >= ?", model.OrderCompleted, since).Scan(&rows)
++	for _, r := range rows {
++		bump(r.At, func(p *FinanceDayPoint) { p.Orders++ })
++	}
++	var uats []int64
++	db.Model(&model.User{}).Where("created_at >= ?", since).Pluck("created_at", &uats)
++	for _, at := range uats {
++		bump(at, func(p *FinanceDayPoint) { p.Users++ })
++	}
++
++	out := make([]FinanceDayPoint, 0, days)
++	keys := make([]string, 0, len(points))
++	for k := range points {
++		keys = append(keys, k)
++	}
++	sort.Strings(keys)
++	for _, k := range keys {
++		out = append(out, *points[k])
++	}
++	return out, nil
++}
++
++// ---- payment-method breakdown --------------------------------------------
++
++type FinanceMethodStat struct {
++	Method   string `json:"method"`
++	Count    int64  `json:"count"`    // confirmed count
++	Volume   int64  `json:"volume"`   // confirmed volume
++	Bonus    int64  `json:"bonus"`
++	Pending  int64  `json:"pending"`
++	Rejected int64  `json:"rejected"`
++}
++
++func (s *FinanceService) PaymentBreakdown() ([]FinanceMethodStat, error) {
++	db := database.GetDB()
++	out := []FinanceMethodStat{}
++
++	manual := FinanceMethodStat{Method: "manual"}
++	manual.Count = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositApproved))
++	manual.Volume = sumInt64(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositApproved), "amount")
++	manual.Pending = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositPending))
++	manual.Rejected = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositRejected))
++	out = append(out, manual)
++
++	for _, gw := range []string{"zarinpal", "plisio"} {
++		m := FinanceMethodStat{Method: gw}
++		base := func() *gorm.DB { return db.Model(&model.Payment{}).Where("gateway = ?", gw) }
++		m.Count = countRows(base().Where("status = ?", model.PaymentPaid))
++		m.Volume = sumInt64(base().Where("status = ?", model.PaymentPaid), "amount")
++		m.Bonus = sumInt64(base().Where("status = ?", model.PaymentPaid), "bonus_amount")
++		m.Pending = countRows(base().Where("status = ?", model.PaymentPending))
++		m.Rejected = countRows(base().Where("status = ?", model.PaymentFailed))
++		out = append(out, m)
++	}
++	return out, nil
++}
++
++// ---- segmentation ---------------------------------------------------------
++
++type FinanceSegments struct {
++	TotalUsers              int64 `json:"totalUsers"`
++	RegisteredNeverDeposited int64 `json:"registeredNeverDeposited"`
++	DepositedNeverPurchased int64 `json:"depositedNeverPurchased"`
++	PurchasedOnce           int64 `json:"purchasedOnce"`
++	RepeatBuyers            int64 `json:"repeatBuyers"`
++	HighValue               int64 `json:"highValue"`
++	Inactive90d             int64 `json:"inactive90d"`
++	Resellers               int64 `json:"resellers"`
++	Members                 int64 `json:"members"`
++	Moderators              int64 `json:"moderators"`
++	Admins                  int64 `json:"admins"`
++}
++
++func (s *FinanceService) Segments() (*FinanceSegments, error) {
++	db := database.GetDB()
++	seg := &FinanceSegments{}
++	seg.TotalUsers = countRows(db.Model(&model.User{}))
++
++	deposits := s.depositByUser()
++	seg.RegisteredNeverDeposited = seg.TotalUsers - int64(len(deposits))
++	if seg.RegisteredNeverDeposited < 0 {
++		seg.RegisteredNeverDeposited = 0
++	}
++	for _, v := range deposits {
++		if v >= FinanceHighValueThreshold {
++			seg.HighValue++
++		}
++	}
++
++	// Completed-order aggregates per buyer.
++	type ordRow struct {
++		UserId int
++		C      int64
++		LastAt int64
++	}
++	var ords []ordRow
++	db.Model(&model.Order{}).Select("user_id, COUNT(*) AS c, MAX(created_at) AS last_at").
++		Where("status = ?", model.OrderCompleted).Group("user_id").Scan(&ords)
++	buyers := map[int]bool{}
++	cutoff := startOfDayMilli(90)
++	for _, r := range ords {
++		buyers[r.UserId] = true
++		if r.C == 1 {
++			seg.PurchasedOnce++
++		} else if r.C >= 2 {
++			seg.RepeatBuyers++
++		}
++		if r.LastAt < cutoff {
++			seg.Inactive90d++
++		}
++	}
++	for u := range deposits {
++		if !buyers[u] {
++			seg.DepositedNeverPurchased++
++		}
++	}
++
++	// Role counts.
++	type roleRow struct {
++		Role string
++		C    int64
++	}
++	var rr []roleRow
++	db.Model(&model.User{}).Select("role, COUNT(*) AS c").Group("role").Scan(&rr)
++	for _, r := range rr {
++		switch model.NormalizeRole(r.Role) {
++		case model.RoleReseller:
++			seg.Resellers += r.C
++		case model.RoleMember:
++			seg.Members += r.C
++		case model.RoleModerator:
++			seg.Moderators += r.C
++		case model.RoleAdmin:
++			seg.Admins += r.C
++		}
++	}
++	return seg, nil
++}
++
++// ---- top lists ------------------------------------------------------------
++
++type FinanceTopProduct struct {
++	ProductId int    `json:"productId"`
++	Name      string `json:"name"`
++	Sales     int64  `json:"sales"`
++	Revenue   int64  `json:"revenue"`
++}
++
++func (s *FinanceService) TopProducts(limit int) ([]FinanceTopProduct, error) {
++	if limit <= 0 || limit > 100 {
++		limit = 10
++	}
++	var rows []FinanceTopProduct
++	err := database.GetDB().
++		Table("orders AS o").
++		Select("o.product_id AS product_id, MAX(o.product_name) AS name, COUNT(*) AS sales, COALESCE(SUM(o.amount),0) AS revenue").
++		Where("o.status = ?", model.OrderCompleted).
++		Group("o.product_id").Order("revenue DESC").Limit(limit).Scan(&rows).Error
++	return rows, err
++}
++
++type FinanceTopUser struct {
++	UserId   int    `json:"userId"`
++	Username string `json:"username"`
++	Role     string `json:"role"`
++	Value    int64  `json:"value"`
++	Count    int64  `json:"count"`
++}
++
++func (s *FinanceService) TopCustomers(limit int) ([]FinanceTopUser, error) {
++	if limit <= 0 || limit > 100 {
++		limit = 10
++	}
++	var rows []FinanceTopUser
++	err := database.GetDB().
++		Table("orders AS o").
++		Joins("LEFT JOIN users u ON u.id = o.user_id").
++		Select("o.user_id AS user_id, MAX(u.username) AS username, MAX(u.role) AS role, COALESCE(SUM(o.amount),0) AS value, COUNT(*) AS count").
++		Where("o.status = ?", model.OrderCompleted).
++		Group("o.user_id").Order("value DESC").Limit(limit).Scan(&rows).Error
++	for i := range rows {
++		rows[i].Role = model.NormalizeRole(rows[i].Role)
++	}
++	return rows, err
++}
++
++func (s *FinanceService) TopResellers(limit int) ([]FinanceTopUser, error) {
++	if limit <= 0 || limit > 100 {
++		limit = 10
++	}
++	var rows []FinanceTopUser
++	err := database.GetDB().
++		Table("transactions AS t").
++		Joins("LEFT JOIN users u ON u.id = t.user_id").
++		Select("t.user_id AS user_id, MAX(u.username) AS username, MAX(u.role) AS role, COALESCE(SUM(t.amount),0) AS value, COUNT(*) AS count").
++		Where("t.source = ?", model.TxSourceReferral).
++		Group("t.user_id").Order("value DESC").Limit(limit).Scan(&rows).Error
++	for i := range rows {
++		rows[i].Role = model.NormalizeRole(rows[i].Role)
++	}
++	return rows, err
++}
++
++// TopDepositors ranks users by lifetime confirmed deposit volume.
++func (s *FinanceService) TopDepositors(limit int) ([]FinanceTopUser, error) {
++	if limit <= 0 || limit > 100 {
++		limit = 10
++	}
++	deposits := s.depositByUser()
++	rows := make([]FinanceTopUser, 0, len(deposits))
++	for uid, v := range deposits {
++		rows = append(rows, FinanceTopUser{UserId: uid, Value: v})
++	}
++	sort.Slice(rows, func(i, j int) bool { return rows[i].Value > rows[j].Value })
++	if len(rows) > limit {
++		rows = rows[:limit]
++	}
++	// Resolve usernames for the top slice only.
++	ids := make([]int, 0, len(rows))
++	for _, r := range rows {
++		ids = append(ids, r.UserId)
++	}
++	users := map[int]struct {
++		Username string
++		Role     string
++	}{}
++	type ur struct {
++		Id       int
++		Username string
++		Role     string
++	}
++	var urs []ur
++	database.GetDB().Model(&model.User{}).Select("id, username, role").Where("id IN ?", ids).Scan(&urs)
++	for _, u := range urs {
++		users[u.Id] = struct {
++			Username string
++			Role     string
++		}{u.Username, model.NormalizeRole(u.Role)}
++	}
++	for i := range rows {
++		rows[i].Username = users[rows[i].UserId].Username
++		rows[i].Role = users[rows[i].UserId].Role
++	}
++	return rows, nil
++}
++
++// ---- cashflow -------------------------------------------------------------
++
++type FinanceCashflow struct {
++	From         int64 `json:"from"`
++	To           int64 `json:"to"`
++	Income       int64 `json:"income"`       // confirmed deposits in range
++	ProductSales int64 `json:"productSales"` // completed order amount in range
++	Bonuses      int64 `json:"bonuses"`
++	Refunds      int64 `json:"refunds"`
++	Net          int64 `json:"net"` // income - refunds
++	Deposits     int64 `json:"deposits"`
++	Orders       int64 `json:"orders"`
++}
++
++// Cashflow reports money movement within [from, to] (ms). to<=0 means "now".
++func (s *FinanceService) Cashflow(from, to int64) (*FinanceCashflow, error) {
++	if to <= 0 {
++		to = time.Now().UnixMilli()
++	}
++	db := database.GetDB()
++	cf := &FinanceCashflow{From: from, To: to}
++	manualA := db.Model(&model.ManualDepositRequest{}).Where("status = ? AND approved_at >= ? AND approved_at <= ?", model.ManualDepositApproved, from, to)
++	gatewayP := db.Model(&model.Payment{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.PaymentPaid, from, to)
++	cf.Income = sumInt64(manualA, "amount") + sumInt64(gatewayP, "amount")
++	cf.Deposits = countRows(db.Model(&model.ManualDepositRequest{}).Where("status = ? AND approved_at >= ? AND approved_at <= ?", model.ManualDepositApproved, from, to)) +
++		countRows(db.Model(&model.Payment{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.PaymentPaid, from, to))
++	cf.Bonuses = sumInt64(db.Model(&model.Payment{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.PaymentPaid, from, to), "bonus_amount")
++	cf.Refunds = sumInt64(db.Model(&model.Transaction{}).Where("source = ? AND created_at >= ? AND created_at <= ?", model.TxSourceRefund, from, to), "amount")
++	cf.ProductSales = sumInt64(db.Model(&model.Order{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.OrderCompleted, from, to), "amount")
++	cf.Orders = countRows(db.Model(&model.Order{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.OrderCompleted, from, to))
++	cf.Net = cf.Income - cf.Refunds
++	return cf, nil
++}
++
++// ---- consistency / accounting checks --------------------------------------
++
++type FinanceConsistency struct {
++	SumUserBalances   int64 `json:"sumUserBalances"`
++	LedgerNet         int64 `json:"ledgerNet"` // credits - debits
++	Difference        int64 `json:"difference"`
++	Balanced          bool  `json:"balanced"`
++	NegativeBalances  int64 `json:"negativeBalances"`
++	DuplicateTracking int64 `json:"duplicateTracking"`
++	OrphanedOrders    int64 `json:"orphanedOrders"`
++}
++
++// ConsistencyCheck verifies the ledger against current balances and surfaces
++// integrity anomalies. A non-zero Difference is expected only when balances were
++// seeded directly (e.g. admin-created users with an initial balance) rather than
++// via the ledger — that's the documented exception.
++func (s *FinanceService) ConsistencyCheck() (*FinanceConsistency, error) {
++	db := database.GetDB()
++	c := &FinanceConsistency{}
++	c.SumUserBalances = sumInt64(db.Model(&model.User{}), "balance")
++	credits := sumInt64(db.Model(&model.Transaction{}).Where("type = ?", model.TxCredit), "amount")
++	debits := sumInt64(db.Model(&model.Transaction{}).Where("type = ?", model.TxDebit), "amount")
++	c.LedgerNet = credits - debits
++	c.Difference = c.SumUserBalances - c.LedgerNet
++	c.Balanced = c.Difference == 0
++	c.NegativeBalances = countRows(db.Model(&model.User{}).Where("balance < 0"))
++
++	// Duplicate tracking numbers among manual deposits (potential double-submit).
++	type dupRow struct{ N int64 }
++	var dups []dupRow
++	db.Model(&model.ManualDepositRequest{}).
++		Select("COUNT(*) AS n").Where("tracking_number <> ''").
++		Group("tracking_number").Having("COUNT(*) > 1").Scan(&dups)
++	c.DuplicateTracking = int64(len(dups))
++
++	// Orders pointing at a product that no longer exists.
++	c.OrphanedOrders = countRows(db.Model(&model.Order{}).
++		Where("product_id NOT IN (?)", db.Model(&model.Product{}).Select("id")))
++	return c, nil
++}
++
++// ---- unified deposit feed -------------------------------------------------
++
++type FinanceDeposit struct {
++	Method    string `json:"method"` // manual | zarinpal | plisio
++	RefId     int    `json:"refId"`
++	UserId    int    `json:"userId"`
++	Username  string `json:"username"`
++	Role      string `json:"role"`
++	Amount    int64  `json:"amount"`
++	Bonus     int64  `json:"bonus"`
++	Currency  string `json:"currency"`
++	Status    string `json:"status"` // pending | approved | rejected
++	CreatedAt int64  `json:"createdAt"`
++}
++
++type FinanceDepositFilter struct {
++	Method string // manual | zarinpal | plisio | ""
++	Status string // pending | approved | rejected | ""
++	Role   string
++	UserId int
++	Search string
++	From   int64
++	To     int64
++	Limit  int
++	Offset int
++}
++
++// normalizeStatus maps gateway/manual statuses onto a single vocabulary.
++func gatewayStatusToUnified(s string) string {
++	switch s {
++	case model.PaymentPaid:
++		return "approved"
++	case model.PaymentFailed:
++		return "rejected"
++	default:
++		return "pending"
++	}
++}
++
++// DepositsFeed merges manual + gateway deposits into one filtered, paginated,
++// newest-first feed. Both tables are queried with the filters applied, capped at
++// offset+limit each, then merged and sliced — bounded work suitable for an admin
++// console.
++func (s *FinanceService) DepositsFeed(f FinanceDepositFilter) ([]FinanceDeposit, int64, error) {
++	if f.Limit <= 0 || f.Limit > 200 {
++		f.Limit = 25
++	}
++	if f.Offset < 0 {
++		f.Offset = 0
++	}
++	db := database.GetDB()
++	out := []FinanceDeposit{}
++	var total int64
++
++	includeManual := f.Method == "" || f.Method == "manual"
++	includeGateway := f.Method == "" || f.Method == "zarinpal" || f.Method == "plisio"
++
++	if includeManual && (f.Status == "" || f.Status == "pending" || f.Status == "approved" || f.Status == "rejected") {
++		q := db.Table("manual_deposit_requests AS d").Joins("LEFT JOIN users u ON u.id = d.user_id")
++		switch f.Status {
++		case "approved":
++			q = q.Where("d.status = ?", model.ManualDepositApproved)
++		case "rejected":
++			q = q.Where("d.status = ?", model.ManualDepositRejected)
++		case "pending":
++			q = q.Where("d.status = ?", model.ManualDepositPending)
++		}
++		q = applyDepositCommonFilters(q, "d", "u", f)
++		var cnt int64
++		q.Session(&gorm.Session{}).Count(&cnt)
++		total += cnt
++		type mrow struct {
++			Id        int
++			UserId    int
++			Username  string
++			Role      string
++			Amount    int64
++			Status    string
++			CreatedAt int64
++		}
++		var rows []mrow
++		q.Select("d.id, d.user_id, u.username, u.role, d.amount, d.status, d.created_at").
++			Order("d.created_at DESC").Limit(f.Offset + f.Limit).Scan(&rows)
++		for _, r := range rows {
++			status := "pending"
++			switch r.Status {
++			case model.ManualDepositApproved:
++				status = "approved"
++			case model.ManualDepositRejected:
++				status = "rejected"
++			}
++			out = append(out, FinanceDeposit{
++				Method: "manual", RefId: r.Id, UserId: r.UserId, Username: r.Username,
++				Role: model.NormalizeRole(r.Role), Amount: r.Amount, Status: status, CreatedAt: r.CreatedAt,
++			})
++		}
++	}
++
++	if includeGateway {
++		q := db.Table("payments AS d").Joins("LEFT JOIN users u ON u.id = d.user_id")
++		if f.Method == "zarinpal" || f.Method == "plisio" {
++			q = q.Where("d.gateway = ?", f.Method)
++		}
++		switch f.Status {
++		case "approved":
++			q = q.Where("d.status = ?", model.PaymentPaid)
++		case "rejected":
++			q = q.Where("d.status = ?", model.PaymentFailed)
++		case "pending":
++			q = q.Where("d.status = ?", model.PaymentPending)
++		}
++		q = applyDepositCommonFilters(q, "d", "u", f)
++		var cnt int64
++		q.Session(&gorm.Session{}).Count(&cnt)
++		total += cnt
++		type grow struct {
++			Id        int
++			UserId    int
++			Username  string
++			Role      string
++			Gateway   string
++			Amount    int64
++			BonusAmount int64
++			Currency  string
++			Status    string
++			CreatedAt int64
++		}
++		var rows []grow
++		q.Select("d.id, d.user_id, u.username, u.role, d.gateway, d.amount, d.bonus_amount, d.currency, d.status, d.created_at").
++			Order("d.created_at DESC").Limit(f.Offset + f.Limit).Scan(&rows)
++		for _, r := range rows {
++			out = append(out, FinanceDeposit{
++				Method: r.Gateway, RefId: r.Id, UserId: r.UserId, Username: r.Username,
++				Role: model.NormalizeRole(r.Role), Amount: r.Amount, Bonus: r.BonusAmount, Currency: r.Currency,
++				Status: gatewayStatusToUnified(r.Status), CreatedAt: r.CreatedAt,
++			})
++		}
++	}
++
++	sort.Slice(out, func(i, j int) bool { return out[i].CreatedAt > out[j].CreatedAt })
++	if f.Offset < len(out) {
++		end := f.Offset + f.Limit
++		if end > len(out) {
++			end = len(out)
++		}
++		out = out[f.Offset:end]
++	} else {
++		out = []FinanceDeposit{}
++	}
++	return out, total, nil
++}
++
++func applyDepositCommonFilters(q *gorm.DB, d, u string, f FinanceDepositFilter) *gorm.DB {
++	if f.UserId > 0 {
++		q = q.Where(d+".user_id = ?", f.UserId)
++	}
++	if f.Role != "" {
++		q = q.Where(u+".role = ?", f.Role)
++	}
++	if f.From > 0 {
++		q = q.Where(d+".created_at >= ?", f.From)
++	}
++	if f.To > 0 {
++		q = q.Where(d+".created_at <= ?", f.To)
++	}
++	if s := strings.TrimSpace(f.Search); s != "" {
++		q = q.Where(u+".username LIKE ? OR CAST("+d+".user_id AS TEXT) = ?", "%"+s+"%", s)
++	}
++	return q
++}
++
++// ---- user financial profile ----------------------------------------------
++
++type FinanceUserProfile struct {
++	Id                 int    `json:"id"`
++	Username           string `json:"username"`
++	FullName           string `json:"fullName"`
++	Role               string `json:"role"`
++	Balance            int64  `json:"balance"`
++	CreatedAt          int64  `json:"createdAt"`
++	ReferredByUserId   int    `json:"referredByUserId"`
++	ReferredByUsername string `json:"referredByUsername"`
++	ReferralCode       string `json:"referralCode"`
++
++	TotalDeposited  int64 `json:"totalDeposited"`
++	TotalSpent      int64 `json:"totalSpent"`
++	TotalPurchased  int64 `json:"totalPurchased"`
++	TotalOrders     int64 `json:"totalOrders"`
++	ActiveServices  int64 `json:"activeServices"`
++	ExpiredServices int64 `json:"expiredServices"`
++	LastPaymentAt   int64 `json:"lastPaymentAt"`
++	LTV             int64 `json:"ltv"`
++
++	Ledger    []model.Transaction `json:"ledger"`
++	Purchases []model.Order       `json:"purchases"`
++}
++
++func (s *FinanceService) UserProfile(userId int) (*FinanceUserProfile, error) {
++	db := database.GetDB()
++	var u model.User
++	if err := db.Where("id = ?", userId).First(&u).Error; err != nil {
++		return nil, ErrFinanceUserNotFound
++	}
++	p := &FinanceUserProfile{
++		Id: u.Id, Username: u.Username, FullName: u.FullName, Role: u.CanonicalRole(),
++		Balance: u.Balance, CreatedAt: u.CreatedAt, ReferredByUserId: u.ReferredByUserId,
++		ReferralCode: u.ReferralCode,
++	}
++	if u.ReferredByUserId > 0 {
++		var ref model.User
++		if db.Select("username").Where("id = ?", u.ReferredByUserId).First(&ref).Error == nil {
++			p.ReferredByUsername = ref.Username
++		}
++	}
++
++	manualDep := sumInt64(db.Model(&model.ManualDepositRequest{}).Where("user_id = ? AND status = ?", userId, model.ManualDepositApproved), "amount")
++	gatewayDep := sumInt64(db.Model(&model.Payment{}).Where("user_id = ? AND status = ?", userId, model.PaymentPaid), "amount")
++	p.TotalDeposited = manualDep + gatewayDep
++	p.LTV = p.TotalDeposited
++	p.TotalSpent = sumInt64(db.Model(&model.Order{}).Where("user_id = ? AND status = ?", userId, model.OrderCompleted), "amount")
++	p.TotalPurchased = countRows(db.Model(&model.Order{}).Where("user_id = ? AND status = ?", userId, model.OrderCompleted))
++	p.TotalOrders = countRows(db.Model(&model.Order{}).Where("user_id = ?", userId))
++
++	now := time.Now().UnixMilli()
++	p.ActiveServices = countRows(db.Model(&model.ClientRecord{}).Where("owner_id = ? AND enable = ? AND (expiry_time = 0 OR expiry_time > ?)", userId, true, now))
++	p.ExpiredServices = countRows(db.Model(&model.ClientRecord{}).Where("owner_id = ? AND expiry_time > 0 AND expiry_time <= ?", userId, now))
++
++	var lastManual, lastGateway int64
++	db.Model(&model.ManualDepositRequest{}).Select("COALESCE(MAX(approved_at),0)").Where("user_id = ? AND status = ?", userId, model.ManualDepositApproved).Scan(&lastManual)
++	db.Model(&model.Payment{}).Select("COALESCE(MAX(created_at),0)").Where("user_id = ? AND status = ?", userId, model.PaymentPaid).Scan(&lastGateway)
++	p.LastPaymentAt = lastManual
++	if lastGateway > p.LastPaymentAt {
++		p.LastPaymentAt = lastGateway
++	}
++
++	db.Where("user_id = ?", userId).Order("id DESC").Limit(50).Find(&p.Ledger)
++	db.Where("user_id = ?", userId).Order("id DESC").Limit(50).Find(&p.Purchases)
++	if p.Ledger == nil {
++		p.Ledger = []model.Transaction{}
++	}
++	if p.Purchases == nil {
++		p.Purchases = []model.Order{}
++	}
++	return p, nil
++}
++
++// ---- CSV exports ----------------------------------------------------------
++
++func csvBytes(header []string, rows [][]string) []byte {
++	var buf bytes.Buffer
++	buf.WriteString("\xEF\xBB\xBF") // UTF-8 BOM so Excel reads it correctly
++	w := csv.NewWriter(&buf)
++	_ = w.Write(header)
++	_ = w.WriteAll(rows)
++	w.Flush()
++	return buf.Bytes()
++}
++
++const exportRowCap = 50000
++
++func (s *FinanceService) ExportTransactionsCSV() []byte {
++	var txs []model.Transaction
++	database.GetDB().Order("id DESC").Limit(exportRowCap).Find(&txs)
++	rows := make([][]string, 0, len(txs))
++	for _, t := range txs {
++		rows = append(rows, []string{
++			strconv.Itoa(t.Id), strconv.Itoa(t.UserId), t.Type, strconv.FormatInt(t.Amount, 10),
++			strconv.FormatInt(t.BalanceBefore, 10), strconv.FormatInt(t.BalanceAfter, 10),
++			t.Source, t.RefId, t.Actor, t.Description, fmtMilli(t.CreatedAt),
++		})
++	}
++	return csvBytes([]string{"id", "user_id", "type", "amount", "balance_before", "balance_after", "source", "ref_id", "actor", "description", "created_at"}, rows)
++}
++
++func (s *FinanceService) ExportOrdersCSV() []byte {
++	var orders []model.Order
++	database.GetDB().Order("id DESC").Limit(exportRowCap).Find(&orders)
++	rows := make([][]string, 0, len(orders))
++	for _, o := range orders {
++		rows = append(rows, []string{
++			strconv.Itoa(o.Id), strconv.Itoa(o.UserId), strconv.Itoa(o.ProductId), o.ProductName,
++			strconv.FormatInt(o.Amount, 10), o.Status, o.ClientEmail, fmtMilli(o.CreatedAt),
++		})
++	}
++	return csvBytes([]string{"id", "user_id", "product_id", "product_name", "amount", "status", "client_email", "created_at"}, rows)
++}
++
++func (s *FinanceService) ExportDepositsCSV() []byte {
++	all, _, _ := s.DepositsFeed(FinanceDepositFilter{Limit: 200})
++	rows := make([][]string, 0, len(all))
++	for _, d := range all {
++		rows = append(rows, []string{
++			d.Method, strconv.Itoa(d.RefId), strconv.Itoa(d.UserId), d.Username, d.Role,
++			strconv.FormatInt(d.Amount, 10), strconv.FormatInt(d.Bonus, 10), d.Currency, d.Status, fmtMilli(d.CreatedAt),
++		})
++	}
++	return csvBytes([]string{"method", "ref_id", "user_id", "username", "role", "amount", "bonus", "currency", "status", "created_at"}, rows)
++}
++
++func (s *FinanceService) ExportUsersCSV() []byte {
++	var users []model.User
++	database.GetDB().Order("id ASC").Limit(exportRowCap).Find(&users)
++	deposits := s.depositByUser()
++	rows := make([][]string, 0, len(users))
++	for _, u := range users {
++		rows = append(rows, []string{
++			strconv.Itoa(u.Id), u.Username, u.FullName, u.CanonicalRole(),
++			strconv.FormatInt(u.Balance, 10), strconv.FormatInt(deposits[u.Id], 10), fmtMilli(u.CreatedAt),
++		})
++	}
++	return csvBytes([]string{"id", "username", "full_name", "role", "balance", "total_deposited", "created_at"}, rows)
++}
++
++func fmtMilli(ms int64) string {
++	if ms <= 0 {
++		return ""
++	}
++	return time.UnixMilli(ms).Format("2006-01-02 15:04:05")
++}
+diff --git a/web/service/order.go b/web/service/order.go
+index 3f2163e1..83dc3efc 100644
+--- a/web/service/order.go
++++ b/web/service/order.go
+@@ -66,8 +66,9 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
+ 	if commission <= 0 {
+ 		return
+ 	}
+-	if _, err := s.walletService.Credit(referrer.Id, commission,
+-		fmt.Sprintf("referral commission %d%% — %s order #%d", percent, buyer.Username, order.Id)); err != nil {
++	if _, err := s.walletService.CreditWithMeta(referrer.Id, commission,
++		fmt.Sprintf("referral commission %d%% — %s order #%d", percent, buyer.Username, order.Id),
++		TxMeta{Source: model.TxSourceReferral, RefId: fmt.Sprintf("%d", order.Id), Actor: buyer.Username}); err != nil {
+ 		logger.Errorf("order: referral commission of %d to reseller %d failed: %v", commission, referrer.Id, err)
+ 	}
+ }
+@@ -92,8 +93,9 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
+ 
+ 	var charged int64
+ 	if product.Price > 0 {
+-		if _, err := s.walletService.Debit(buyer.Id, product.Price,
+-			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id)); err != nil {
++		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
++			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id),
++			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
+ 			return nil, err // ErrInsufficientBalance bubbles up to the controller
+ 		}
+ 		charged = product.Price
+@@ -163,8 +165,9 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
+ 
+ 	var charged int64
+ 	if product.Price > 0 {
+-		if _, err := s.walletService.Debit(buyer.Id, product.Price,
+-			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id)); err != nil {
++		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
++			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id),
++			TxMeta{Source: model.TxSourceRenewal, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
+ 			return nil, err
+ 		}
+ 		charged = product.Price
+@@ -310,8 +313,9 @@ func (s *OrderService) refund(userId int, amount int64, product *model.Product)
+ 	if amount <= 0 {
+ 		return
+ 	}
+-	if _, err := s.walletService.Credit(userId, amount,
+-		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id)); err != nil {
++	if _, err := s.walletService.CreditWithMeta(userId, amount,
++		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id),
++		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
+ 		logger.Errorf("order: refund of %d to user %d failed (manual reconciliation needed): %v", amount, userId, err)
+ 	}
+ }
+diff --git a/web/service/wallet.go b/web/service/wallet.go
+index ed83e0f5..80fcffdb 100644
+--- a/web/service/wallet.go
++++ b/web/service/wallet.go
+@@ -24,6 +24,15 @@ type WalletService struct{}
+ 
+ const walletMaxRetries = 4
+ 
++// TxMeta carries accounting attribution recorded on the ledger entry: the
++// canonical Source (model.TxSource*), a Reference id pointing at the originating
++// record (deposit/order/payment), and the Actor for admin-initiated changes.
++type TxMeta struct {
++	Source string
++	RefId  string
++	Actor  string
++}
++
+ // GetBalance returns the current balance for a user.
+ func (s *WalletService) GetBalance(userId int) (int64, error) {
+ 	var u model.User
+@@ -39,7 +48,7 @@ func (s *WalletService) GetBalance(userId int) (int64, error) {
+ // balance update is a compare-and-swap (WHERE balance = before); a 0-row result
+ // means another writer moved the balance first and surfaces as
+ // ErrBalanceConflict for the retry wrapper.
+-func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType, desc string) (*model.Transaction, error) {
++func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType, desc string, meta TxMeta) (*model.Transaction, error) {
+ 	var u model.User
+ 	if err := tx.Where("id = ?", userId).First(&u).Error; err != nil {
+ 		return nil, err
+@@ -69,6 +78,9 @@ func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType,
+ 		Description:   desc,
+ 		BalanceBefore: before,
+ 		BalanceAfter:  after,
++		Source:        meta.Source,
++		RefId:         meta.RefId,
++		Actor:         meta.Actor,
+ 	}
+ 	if err := tx.Create(rec).Error; err != nil {
+ 		return nil, err
+@@ -91,12 +103,18 @@ func (s *WalletService) withRetry(fn func(tx *gorm.DB) error) error {
+ 
+ // Credit adds amount (>0) to a user's balance and records a credit transaction.
+ func (s *WalletService) Credit(userId int, amount int64, desc string) (*model.Transaction, error) {
++	return s.CreditWithMeta(userId, amount, desc, TxMeta{})
++}
++
++// CreditWithMeta is Credit with accounting attribution (source/ref/actor) stamped
++// onto the ledger entry.
++func (s *WalletService) CreditWithMeta(userId int, amount int64, desc string, meta TxMeta) (*model.Transaction, error) {
+ 	if amount <= 0 {
+ 		return nil, ErrInvalidAmount
+ 	}
+ 	var rec *model.Transaction
+ 	err := s.withRetry(func(tx *gorm.DB) error {
+-		r, e := s.applyDelta(tx, userId, amount, model.TxCredit, desc)
++		r, e := s.applyDelta(tx, userId, amount, model.TxCredit, desc, meta)
+ 		rec = r
+ 		return e
+ 	})
+@@ -106,12 +124,17 @@ func (s *WalletService) Credit(userId int, amount int64, desc string) (*model.Tr
+ // Debit subtracts amount (>0) from a user's balance, recording a debit
+ // transaction. Returns ErrInsufficientBalance when the balance is too low.
+ func (s *WalletService) Debit(userId int, amount int64, desc string) (*model.Transaction, error) {
++	return s.DebitWithMeta(userId, amount, desc, TxMeta{})
++}
++
++// DebitWithMeta is Debit with accounting attribution.
++func (s *WalletService) DebitWithMeta(userId int, amount int64, desc string, meta TxMeta) (*model.Transaction, error) {
+ 	if amount <= 0 {
+ 		return nil, ErrInvalidAmount
+ 	}
+ 	var rec *model.Transaction
+ 	err := s.withRetry(func(tx *gorm.DB) error {
+-		r, e := s.applyDelta(tx, userId, -amount, model.TxDebit, desc)
++		r, e := s.applyDelta(tx, userId, -amount, model.TxDebit, desc, meta)
+ 		rec = r
+ 		return e
+ 	})
+@@ -121,6 +144,11 @@ func (s *WalletService) Debit(userId int, amount int64, desc string) (*model.Tra
+ // SetBalance forces a user's balance to target (>=0), recording the difference
+ // as a credit or debit. A no-op (target == current) records nothing.
+ func (s *WalletService) SetBalance(userId int, target int64, desc string) (*model.Transaction, error) {
++	return s.SetBalanceWithMeta(userId, target, desc, TxMeta{})
++}
++
++// SetBalanceWithMeta is SetBalance with accounting attribution.
++func (s *WalletService) SetBalanceWithMeta(userId int, target int64, desc string, meta TxMeta) (*model.Transaction, error) {
+ 	if target < 0 {
+ 		return nil, ErrInvalidAmount
+ 	}
+@@ -139,7 +167,7 @@ func (s *WalletService) SetBalance(userId int, target int64, desc string) (*mode
+ 		if delta < 0 {
+ 			txType = model.TxDebit
+ 		}
+-		r, e := s.applyDelta(tx, userId, delta, txType, desc)
++		r, e := s.applyDelta(tx, userId, delta, txType, desc, meta)
+ 		rec = r
+ 		return e
+ 	})
+diff --git a/web/translation/en-US.json b/web/translation/en-US.json
+index c3e7337e..734e2f97 100644
+--- a/web/translation/en-US.json
++++ b/web/translation/en-US.json
+@@ -136,6 +136,7 @@
+     "manualDeposits": "Manual Deposits",
+     "tickets": "Support Tickets",
+     "support": "Support Desk",
++    "finance": "Finance",
+     "logout": "Log Out",
+     "link": "Manage",
+     "donate": "Donate",
+@@ -184,9 +185,120 @@
+     "ticketMention": {
+       "title": "You were mentioned",
+       "body": "{actor} mentioned you on ticket {number}."
++    },
++    "largeDeposit": {
++      "title": "Large deposit approved",
++      "body": "A large deposit of {amount} was approved. Review it in Finance."
+     }
+   },
+   "pages": {
++    "finance": {
++      "title": "Finance Control Center",
++      "subtitle": "Every deposit, sale, balance change and profit in one place.",
++      "tabOverview": "Overview",
++      "tabDeposits": "Deposits",
++      "tabAnalytics": "Analytics",
++      "tabCashflow": "Cashflow",
++      "totalRevenue": "Total Revenue",
++      "today": "Today",
++      "week": "This Week",
++      "month": "This Month",
++      "year": "This Year",
++      "netRevenue": "Net Revenue",
++      "totalDeposits": "Total Deposits",
++      "walletBalance": "Wallet Balance (All Users)",
++      "bonuses": "Total Bonuses",
++      "referralCommissions": "Referral Commissions",
++      "refunds": "Total Refunds",
++      "productSales": "Product Sales",
++      "totalSpend": "Balance Consumed",
++      "totalClients": "Total Clients",
++      "newClients": "New Clients (month)",
++      "totalUsers": "Total Users",
++      "payingUsers": "Paying Users",
++      "activeUsers": "Active Users",
++      "arpu": "ARPU",
++      "aov": "Avg Order Value",
++      "pendingDeposits": "Pending Deposits",
++      "approvedDeposits": "Approved Deposits",
++      "rejectedDeposits": "Rejected Deposits",
++      "chartRevenue": "Revenue (30d)",
++      "chartDeposits": "Deposits (30d)",
++      "chartOrders": "Orders (30d)",
++      "chartUsers": "New Users (30d)",
++      "segments": "User Segments",
++      "seg_registeredNeverDeposited": "Registered, never deposited",
++      "seg_depositedNeverPurchased": "Deposited, never purchased",
++      "seg_purchasedOnce": "Purchased once",
++      "seg_repeatBuyers": "Repeat buyers",
++      "seg_highValue": "High-value customers",
++      "seg_inactive90d": "Inactive (90d)",
++      "seg_resellers": "Resellers",
++      "seg_members": "Members",
++      "ledgerBalanced": "Ledger balanced",
++      "ledgerDrift": "Ledger drift detected",
++      "balances": "Sum of balances",
++      "ledgerNet": "Ledger net",
++      "difference": "Difference",
++      "negativeBalances": "Negative balances",
++      "duplicateTracking": "Duplicate tracking numbers",
++      "orphanedOrders": "Orphaned orders",
++      "paymentBreakdown": "Payment Methods",
++      "method": "Method",
++      "confirmed": "Confirmed",
++      "volume": "Volume",
++      "pending": "Pending",
++      "rejected": "Rejected",
++      "topProducts": "Top Products",
++      "sales": "Sales",
++      "revenue": "Revenue",
++      "topCustomers": "Top Customers",
++      "topDepositors": "Top Depositors",
++      "topResellers": "Top Resellers",
++      "user": "User",
++      "spent": "Spent",
++      "deposited": "Deposited",
++      "commission": "Commission",
++      "userProfile": "User Profile",
++      "profile": "Profile",
++      "financialSummary": "Financial Summary",
++      "registered": "Registered",
++      "referredBy": "Referred by",
++      "referralCode": "Referral code",
++      "totalDeposited": "Total Deposited",
++      "totalSpent": "Total Spent",
++      "ltv": "Lifetime Value",
++      "orders": "Orders (paid / total)",
++      "services": "Services",
++      "active": "active",
++      "expired": "expired",
++      "lastPayment": "Last Payment",
++      "recentLedger": "Recent Ledger",
++      "amount": "Amount",
++      "statusLabel": "Status",
++      "date": "Date",
++      "allMethods": "All methods",
++      "allStatuses": "All statuses",
++      "searchUser": "Search user…",
++      "exportCsv": "Export CSV",
++      "totalRows": "{count} records",
++      "dstatus_approved": "Approved",
++      "dstatus_pending": "Pending",
++      "dstatus_rejected": "Rejected",
++      "range_today": "Today",
++      "range_d7": "7 Days",
++      "range_d30": "30 Days",
++      "range_d90": "90 Days",
++      "income": "Income",
++      "netProfit": "Net Profit",
++      "depositsCount": "Deposits",
++      "ordersCount": "Orders",
++      "exportTransactions": "Transactions",
++      "exportOrders": "Orders",
++      "exportUsers": "Users",
++      "cashflowNote": "About these figures",
++      "cashflowExplain": "Income is confirmed real-money deposits (manual + gateway/crypto). Net profit subtracts refunds. Bonuses are granted credit (a liability), not received cash. Product sales are internal wallet spend."
++    },
+     "tickets": {
+       "title": "Support Tickets",
+       "subtitle": "Open a ticket and our team will help you here.",
+diff --git a/web/translation/fa-IR.json b/web/translation/fa-IR.json
+index 3992c669..016fd9d8 100644
+--- a/web/translation/fa-IR.json
++++ b/web/translation/fa-IR.json
+@@ -128,7 +128,8 @@
+     "manualDeposit": "واریز دستی",
+     "manualDeposits": "واریزهای دستی",
+     "tickets": "تیکت‌های پشتیبانی",
+-    "support": "میز پشتیبانی"
++    "support": "میز پشتیبانی",
++    "finance": "مالی"
+   },
+   "notifications": {
+     "title": "اعلان‌ها",
+@@ -173,9 +174,120 @@
+     "ticketMention": {
+       "title": "شما منشن شدید",
+       "body": "{actor} شما را روی تیکت {number} منشن کرد."
++    },
++    "largeDeposit": {
++      "title": "واریز بزرگ تأیید شد",
++      "body": "واریزی بزرگ به مبلغ {amount} تأیید شد. در بخش مالی بررسی کنید."
+     }
+   },
+   "pages": {
++    "finance": {
++      "title": "مرکز کنترل مالی",
++      "subtitle": "هر واریز، فروش، تغییر موجودی و سود در یک‌جا.",
++      "tabOverview": "نمای کلی",
++      "tabDeposits": "واریزها",
++      "tabAnalytics": "تحلیل‌ها",
++      "tabCashflow": "جریان نقدی",
++      "totalRevenue": "درآمد کل",
++      "today": "امروز",
++      "week": "این هفته",
++      "month": "این ماه",
++      "year": "امسال",
++      "netRevenue": "درآمد خالص",
++      "totalDeposits": "کل واریزها",
++      "walletBalance": "موجودی کیف‌پول (همه کاربران)",
++      "bonuses": "کل پاداش‌ها",
++      "referralCommissions": "کمیسیون معرفی",
++      "refunds": "کل بازپرداخت‌ها",
++      "productSales": "فروش محصولات",
++      "totalSpend": "موجودی مصرف‌شده",
++      "totalClients": "کل کلاینت‌ها",
++      "newClients": "کلاینت‌های جدید (ماه)",
++      "totalUsers": "کل کاربران",
++      "payingUsers": "کاربران پرداخت‌کننده",
++      "activeUsers": "کاربران فعال",
++      "arpu": "میانگین درآمد هر کاربر",
++      "aov": "میانگین ارزش سفارش",
++      "pendingDeposits": "واریزهای در انتظار",
++      "approvedDeposits": "واریزهای تأییدشده",
++      "rejectedDeposits": "واریزهای ردشده",
++      "chartRevenue": "درآمد (۳۰ روز)",
++      "chartDeposits": "واریزها (۳۰ روز)",
++      "chartOrders": "سفارش‌ها (۳۰ روز)",
++      "chartUsers": "کاربران جدید (۳۰ روز)",
++      "segments": "بخش‌بندی کاربران",
++      "seg_registeredNeverDeposited": "ثبت‌نام‌کرده، بدون واریز",
++      "seg_depositedNeverPurchased": "واریزکرده، بدون خرید",
++      "seg_purchasedOnce": "یک‌بار خرید",
++      "seg_repeatBuyers": "خریداران مکرر",
++      "seg_highValue": "مشتریان پرارزش",
++      "seg_inactive90d": "غیرفعال (۹۰ روز)",
++      "seg_resellers": "نمایندگان",
++      "seg_members": "اعضا",
++      "ledgerBalanced": "دفتر کل متوازن است",
++      "ledgerDrift": "مغایرت در دفتر کل",
++      "balances": "مجموع موجودی‌ها",
++      "ledgerNet": "خالص دفتر کل",
++      "difference": "اختلاف",
++      "negativeBalances": "موجودی منفی",
++      "duplicateTracking": "شماره پیگیری تکراری",
++      "orphanedOrders": "سفارش‌های بی‌مرجع",
++      "paymentBreakdown": "روش‌های پرداخت",
++      "method": "روش",
++      "confirmed": "تأییدشده",
++      "volume": "حجم",
++      "pending": "در انتظار",
++      "rejected": "ردشده",
++      "topProducts": "محصولات برتر",
++      "sales": "فروش",
++      "revenue": "درآمد",
++      "topCustomers": "مشتریان برتر",
++      "topDepositors": "واریزکنندگان برتر",
++      "topResellers": "نمایندگان برتر",
++      "user": "کاربر",
++      "spent": "هزینه‌شده",
++      "deposited": "واریزشده",
++      "commission": "کمیسیون",
++      "userProfile": "پروفایل کاربر",
++      "profile": "پروفایل",
++      "financialSummary": "خلاصه مالی",
++      "registered": "تاریخ ثبت‌نام",
++      "referredBy": "معرف",
++      "referralCode": "کد معرفی",
++      "totalDeposited": "کل واریز",
++      "totalSpent": "کل هزینه",
++      "ltv": "ارزش طول عمر",
++      "orders": "سفارش‌ها (پرداخت‌شده / کل)",
++      "services": "سرویس‌ها",
++      "active": "فعال",
++      "expired": "منقضی",
++      "lastPayment": "آخرین پرداخت",
++      "recentLedger": "دفتر کل اخیر",
++      "amount": "مبلغ",
++      "statusLabel": "وضعیت",
++      "date": "تاریخ",
++      "allMethods": "همه روش‌ها",
++      "allStatuses": "همه وضعیت‌ها",
++      "searchUser": "جستجوی کاربر…",
++      "exportCsv": "خروجی CSV",
++      "totalRows": "{count} رکورد",
++      "dstatus_approved": "تأییدشده",
++      "dstatus_pending": "در انتظار",
++      "dstatus_rejected": "ردشده",
++      "range_today": "امروز",
++      "range_d7": "۷ روز",
++      "range_d30": "۳۰ روز",
++      "range_d90": "۹۰ روز",
++      "income": "درآمد",
++      "netProfit": "سود خالص",
++      "depositsCount": "واریزها",
++      "ordersCount": "سفارش‌ها",
++      "exportTransactions": "تراکنش‌ها",
++      "exportOrders": "سفارش‌ها",
++      "exportUsers": "کاربران",
++      "cashflowNote": "درباره این ارقام",
++      "cashflowExplain": "درآمد یعنی واریزهای واقعی تأییدشده (دستی + درگاه/کریپتو). سود خالص بازپرداخت‌ها را کم می‌کند. پاداش‌ها اعتبار اعطایی (بدهی) هستند، نه پول دریافتی. فروش محصولات هزینه‌کرد داخلی کیف‌پول است."
++    },
+     "tickets": {
+       "title": "تیکت‌های پشتیبانی",
+       "subtitle": "یک تیکت باز کنید تا تیم ما همین‌جا کمکتان کند.",

@@ -16,6 +16,7 @@ export type Permission =
   | 'stats.view_all'
   | 'transaction.view_all'
   | 'deposit.manage'
+  | 'finance.view_all'
   | 'ticket.create'
   | 'ticket.view_own'
   | 'ticket.manage'

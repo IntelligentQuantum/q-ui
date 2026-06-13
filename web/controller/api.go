@@ -120,6 +120,9 @@ func (a *APIController) initRouter(g *gin.RouterGroup, customGeo *service.Custom
 	// Support ticketing (helpdesk): requester + staff + admin routes. Per-route
 	// RBAC + per-request ownership live inside the controller.
 	NewTicketController(api)
+	// Financial control center (admin + read-only moderator): dashboards,
+	// analytics, ledger, cashflow, consistency, exports. Gated by finance.view_all.
+	NewFinanceController(api)
 
 	// Extra routes
 	api.POST("/backuptotgbot", middleware.RequireAdmin(), a.BackuptoTgbot)

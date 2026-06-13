@@ -8,7 +8,6 @@ const InboundsPage = lazy(() => import('@/pages/inbounds/InboundsPage'));
 const ClientsPage = lazy(() => import('@/pages/clients/ClientsPage'));
 const GroupsPage = lazy(() => import('@/pages/groups/GroupsPage'));
 const UsersPage = lazy(() => import('@/pages/users/UsersPage'));
-const ReportsPage = lazy(() => import('@/pages/reports/ReportsPage'));
 const ProfilePage = lazy(() => import('@/pages/profile/ProfilePage'));
 const BillingPage = lazy(() => import('@/pages/billing/BillingPage'));
 const NodesPage = lazy(() => import('@/pages/nodes/NodesPage'));
@@ -25,6 +24,7 @@ const AdminManualDepositsPage = lazy(() => import('@/pages/admin/ManualDepositsP
 const TicketsPage = lazy(() => import('@/pages/tickets/TicketsPage'));
 const TicketDetailPage = lazy(() => import('@/pages/tickets/TicketDetailPage'));
 const SupportDashboardPage = lazy(() => import('@/pages/tickets/SupportDashboardPage'));
+const FinancePage = lazy(() => import('@/pages/finance/FinancePage'));
 const ThemePreviewPage = lazy(() => import('@/pages/theme-preview/ThemePreviewPage'));
 
 function withSuspense(node: React.ReactNode)
@@ -42,7 +42,6 @@ const routes: RouteObject[] = [
             { path: 'clients', element: withSuspense(<ClientsPage />) },
             { path: 'groups', element: withSuspense(<GroupsPage />) },
             { path: 'users', element: withSuspense(<UsersPage />) },
-            { path: 'reports', element: withSuspense(<ReportsPage />) },
             { path: 'profile', element: withSuspense(<ProfilePage />) },
             { path: 'billing', element: withSuspense(<BillingPage />) },
             { path: 'nodes', element: withSuspense(<NodesPage />) },
@@ -58,7 +57,8 @@ const routes: RouteObject[] = [
             { path: 'manual-deposits', element: withSuspense(<AdminManualDepositsPage />) },
             { path: 'tickets', element: withSuspense(<TicketsPage />) },
             { path: 'tickets/:id', element: withSuspense(<TicketDetailPage />) },
-            { path: 'support', element: withSuspense(<SupportDashboardPage />) }
+            { path: 'support', element: withSuspense(<SupportDashboardPage />) },
+            { path: 'finance', element: withSuspense(<FinancePage />) }
         ]
     },
     // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it

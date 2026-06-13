@@ -112,14 +112,16 @@ func (a *PlisioWebhookController) callback(c *gin.Context) {
 	if transitioned {
 		// Deposit and bonus are recorded as two distinct ledger rows for a clear
 		// auditable history (each call is atomic with its balance update).
-		if _, cErr := a.walletService.Credit(p.UserId, p.Amount,
-			fmt.Sprintf("Plisio crypto deposit (%s) ref:%s", p.Currency, txnID)); cErr != nil {
+		if _, cErr := a.walletService.CreditWithMeta(p.UserId, p.Amount,
+			fmt.Sprintf("Plisio crypto deposit (%s) ref:%s", p.Currency, txnID),
+			service.TxMeta{Source: model.TxSourceCrypto, RefId: txnID}); cErr != nil {
 			logger.Errorf("plisio: order %s confirmed but crediting user %d deposit %d failed: %v",
 				orderNumber, p.UserId, p.Amount, cErr)
 		}
 		if bonus > 0 {
-			if _, cErr := a.walletService.Credit(p.UserId, bonus,
-				fmt.Sprintf("Plisio crypto deposit bonus %d%% ref:%s", pct, txnID)); cErr != nil {
+			if _, cErr := a.walletService.CreditWithMeta(p.UserId, bonus,
+				fmt.Sprintf("Plisio crypto deposit bonus %d%% ref:%s", pct, txnID),
+				service.TxMeta{Source: model.TxSourceBonus, RefId: txnID}); cErr != nil {
 				logger.Errorf("plisio: order %s bonus credit of %d to user %d failed: %v",
 					orderNumber, bonus, p.UserId, cErr)
 			}

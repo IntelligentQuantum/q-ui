@@ -14,7 +14,8 @@ const (
 	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
 	PermStatsViewAll  Permission = "stats.view_all"
 	PermTxnViewAll    Permission = "transaction.view_all"
-	PermDepositManage Permission = "deposit.manage" // review/approve/reject manual deposits + manage payment cards
+	PermDepositManage Permission = "deposit.manage"  // review/approve/reject manual deposits + manage payment cards
+	PermFinanceView   Permission = "finance.view_all" // finance control center: dashboards, analytics, ledger, exports
 
 	// Support ticketing (helpdesk).
 	PermTicketCreate  Permission = "ticket.create"  // open + reply to own tickets
@@ -52,6 +53,7 @@ var rolePermissions = map[string]map[Permission]bool{
 		PermTicketCreate:   true,
 		PermTicketViewOwn:  true,
 		PermTicketManage:   true, // support staff
+		PermFinanceView:    true, // read-only finance reports
 	},
 	RoleReseller: {
 		PermProductView:     true,
@@ -114,7 +116,7 @@ func (u *User) Permissions() []Permission {
 // and to keep Permissions() output deterministic.
 var allPermissions = []Permission{
 	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
-	PermDepositManage,
+	PermDepositManage, PermFinanceView,
 	PermTicketCreate, PermTicketViewOwn, PermTicketManage, PermTicketAdmin,
 	PermProductManage, PermProductView, PermProductPurchase,
 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,

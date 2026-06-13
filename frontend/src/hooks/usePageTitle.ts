@@ -10,7 +10,6 @@ const TITLE_KEYS: Record<string, string> = {
     '/clients': 'menu.clients',
     '/groups': 'menu.groups',
     '/users': 'menu.users',
-    '/reports': 'menu.reports',
     '/profile': 'menu.profile',
     '/billing': 'menu.billing',
     '/nodes': 'menu.nodes',
@@ -20,7 +19,12 @@ const TITLE_KEYS: Record<string, string> = {
     '/store': 'menu.store',
     '/orders': 'menu.orders',
     '/products': 'menu.products',
-    '/services': 'menu.services'
+    '/services': 'menu.services',
+    '/finance': 'menu.finance',
+    '/tickets': 'menu.tickets',
+    '/support': 'menu.support',
+    '/manual-deposit': 'menu.manualDeposit',
+    '/manual-deposits': 'menu.manualDeposits'
 };
 
 export function usePageTitle()

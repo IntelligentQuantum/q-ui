@@ -66,8 +66,9 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
 	if commission <= 0 {
 		return
 	}
-	if _, err := s.walletService.Credit(referrer.Id, commission,
-		fmt.Sprintf("referral commission %d%% — %s order #%d", percent, buyer.Username, order.Id)); err != nil {
+	if _, err := s.walletService.CreditWithMeta(referrer.Id, commission,
+		fmt.Sprintf("referral commission %d%% — %s order #%d", percent, buyer.Username, order.Id),
+		TxMeta{Source: model.TxSourceReferral, RefId: fmt.Sprintf("%d", order.Id), Actor: buyer.Username}); err != nil {
 		logger.Errorf("order: referral commission of %d to reseller %d failed: %v", commission, referrer.Id, err)
 	}
 }
@@ -92,8 +93,9 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
 
 	var charged int64
 	if product.Price > 0 {
-		if _, err := s.walletService.Debit(buyer.Id, product.Price,
-			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id)); err != nil {
+		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
+			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id),
+			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
 			return nil, err // ErrInsufficientBalance bubbles up to the controller
 		}
 		charged = product.Price
@@ -163,8 +165,9 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 
 	var charged int64
 	if product.Price > 0 {
-		if _, err := s.walletService.Debit(buyer.Id, product.Price,
-			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id)); err != nil {
+		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
+			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id),
+			TxMeta{Source: model.TxSourceRenewal, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
 			return nil, err
 		}
 		charged = product.Price
@@ -310,8 +313,9 @@ func (s *OrderService) refund(userId int, amount int64, product *model.Product) 
 	if amount <= 0 {
 		return
 	}
-	if _, err := s.walletService.Credit(userId, amount,
-		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id)); err != nil {
+	if _, err := s.walletService.CreditWithMeta(userId, amount,
+		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id),
+		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
 		logger.Errorf("order: refund of %d to user %d failed (manual reconciliation needed): %v", amount, userId, err)
 	}
 }

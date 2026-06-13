@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"strconv"
 
+	"github.com/mhsanaei/3x-ui/v3/database/model"
 	"github.com/mhsanaei/3x-ui/v3/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/web/service"
 	"github.com/mhsanaei/3x-ui/v3/web/session"
@@ -165,13 +166,17 @@ func (a *AdminController) adjustBalance(c *gin.Context) {
 	if desc == "" {
 		desc = "admin adjustment"
 	}
+	actor := ""
+	if self := session.GetLoginUser(c); self != nil {
+		actor = self.Username
+	}
 	switch form.Op {
 	case "add":
-		_, err = a.walletService.Credit(id, form.Amount, desc)
+		_, err = a.walletService.CreditWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminCredit, Actor: actor})
 	case "deduct":
-		_, err = a.walletService.Debit(id, form.Amount, desc)
+		_, err = a.walletService.DebitWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminDebit, Actor: actor})
 	case "set":
-		_, err = a.walletService.SetBalance(id, form.Amount, desc)
+		_, err = a.walletService.SetBalanceWithMeta(id, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminSet, Actor: actor})
 	default:
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.users.toasts.invalidOp"))
 		return

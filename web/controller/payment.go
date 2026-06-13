@@ -208,7 +208,8 @@ func (a *PaymentController) zarinpalCallback(c *gin.Context) {
 		return
 	}
 	if transitioned {
-		if _, cErr := a.walletService.Credit(p.UserId, p.Amount, "ZarinPal top-up ref:"+refID); cErr != nil {
+		if _, cErr := a.walletService.CreditWithMeta(p.UserId, p.Amount, "ZarinPal top-up ref:"+refID,
+			service.TxMeta{Source: model.TxSourceGateway, RefId: refID}); cErr != nil {
 			// Money was captured but crediting failed — log loudly for manual reconciliation.
 			logger.Errorf("zarinpal: payment %s verified (ref %s) but crediting user %d with %d failed: %v",
 				authority, refID, p.UserId, p.Amount, cErr)

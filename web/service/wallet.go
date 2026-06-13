@@ -24,6 +24,15 @@ type WalletService struct{}
 
 const walletMaxRetries = 4
 
+// TxMeta carries accounting attribution recorded on the ledger entry: the
+// canonical Source (model.TxSource*), a Reference id pointing at the originating
+// record (deposit/order/payment), and the Actor for admin-initiated changes.
+type TxMeta struct {
+	Source string
+	RefId  string
+	Actor  string
+}
+
 // GetBalance returns the current balance for a user.
 func (s *WalletService) GetBalance(userId int) (int64, error) {
 	var u model.User
@@ -39,7 +48,7 @@ func (s *WalletService) GetBalance(userId int) (int64, error) {
 // balance update is a compare-and-swap (WHERE balance = before); a 0-row result
 // means another writer moved the balance first and surfaces as
 // ErrBalanceConflict for the retry wrapper.
-func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType, desc string) (*model.Transaction, error) {
+func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType, desc string, meta TxMeta) (*model.Transaction, error) {
 	var u model.User
 	if err := tx.Where("id = ?", userId).First(&u).Error; err != nil {
 		return nil, err
@@ -69,6 +78,9 @@ func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType,
 		Description:   desc,
 		BalanceBefore: before,
 		BalanceAfter:  after,
+		Source:        meta.Source,
+		RefId:         meta.RefId,
+		Actor:         meta.Actor,
 	}
 	if err := tx.Create(rec).Error; err != nil {
 		return nil, err
@@ -91,12 +103,18 @@ func (s *WalletService) withRetry(fn func(tx *gorm.DB) error) error {
 
 // Credit adds amount (>0) to a user's balance and records a credit transaction.
 func (s *WalletService) Credit(userId int, amount int64, desc string) (*model.Transaction, error) {
+	return s.CreditWithMeta(userId, amount, desc, TxMeta{})
+}
+
+// CreditWithMeta is Credit with accounting attribution (source/ref/actor) stamped
+// onto the ledger entry.
+func (s *WalletService) CreditWithMeta(userId int, amount int64, desc string, meta TxMeta) (*model.Transaction, error) {
 	if amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
 	var rec *model.Transaction
 	err := s.withRetry(func(tx *gorm.DB) error {
-		r, e := s.applyDelta(tx, userId, amount, model.TxCredit, desc)
+		r, e := s.applyDelta(tx, userId, amount, model.TxCredit, desc, meta)
 		rec = r
 		return e
 	})
@@ -106,12 +124,17 @@ func (s *WalletService) Credit(userId int, amount int64, desc string) (*model.Tr
 // Debit subtracts amount (>0) from a user's balance, recording a debit
 // transaction. Returns ErrInsufficientBalance when the balance is too low.
 func (s *WalletService) Debit(userId int, amount int64, desc string) (*model.Transaction, error) {
+	return s.DebitWithMeta(userId, amount, desc, TxMeta{})
+}
+
+// DebitWithMeta is Debit with accounting attribution.
+func (s *WalletService) DebitWithMeta(userId int, amount int64, desc string, meta TxMeta) (*model.Transaction, error) {
 	if amount <= 0 {
 		return nil, ErrInvalidAmount
 	}
 	var rec *model.Transaction
 	err := s.withRetry(func(tx *gorm.DB) error {
-		r, e := s.applyDelta(tx, userId, -amount, model.TxDebit, desc)
+		r, e := s.applyDelta(tx, userId, -amount, model.TxDebit, desc, meta)
 		rec = r
 		return e
 	})
@@ -121,6 +144,11 @@ func (s *WalletService) Debit(userId int, amount int64, desc string) (*model.Tra
 // SetBalance forces a user's balance to target (>=0), recording the difference
 // as a credit or debit. A no-op (target == current) records nothing.
 func (s *WalletService) SetBalance(userId int, target int64, desc string) (*model.Transaction, error) {
+	return s.SetBalanceWithMeta(userId, target, desc, TxMeta{})
+}
+
+// SetBalanceWithMeta is SetBalance with accounting attribution.
+func (s *WalletService) SetBalanceWithMeta(userId int, target int64, desc string, meta TxMeta) (*model.Transaction, error) {
 	if target < 0 {
 		return nil, ErrInvalidAmount
 	}
@@ -139,7 +167,7 @@ func (s *WalletService) SetBalance(userId int, target int64, desc string) (*mode
 		if delta < 0 {
 			txType = model.TxDebit
 		}
-		r, e := s.applyDelta(tx, userId, delta, txType, desc)
+		r, e := s.applyDelta(tx, userId, delta, txType, desc, meta)
 		rec = r
 		return e
 	})

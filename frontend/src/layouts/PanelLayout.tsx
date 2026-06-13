@@ -15,7 +15,6 @@ function canAccess(me: MeInfo, path: string): boolean
     switch (path)
     {
         case '/':
-        case '/reports':
             return has('stats.view_all'); // admin only
         case '/inbounds':
         case '/groups':
@@ -40,6 +39,8 @@ function canAccess(me: MeInfo, path: string): boolean
             return has('ticket.view_own'); // every role with tickets
         case '/support':
             return has('ticket.manage'); // support staff — moderator/admin
+        case '/finance':
+            return has('finance.view_all'); // admin + read-only moderator
         case '/orders':
             return has('order.view_own'); // everyone with order visibility
         case '/services':
