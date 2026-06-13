@@ -41,6 +41,7 @@ export interface AllSetting {
   ldapVlessField: string;
   pageSize: number;
   panelProxy: string;
+  panelTitle: string;
   plisioEnable: boolean;
   plisioSandbox: boolean;
   plisioSecretKey: string;
@@ -155,6 +156,7 @@ export interface AllSettingView {
   ldapVlessField: string;
   pageSize: number;
   panelProxy: string;
+  panelTitle: string;
   plisioEnable: boolean;
   plisioSandbox: boolean;
   plisioSecretKey: string;
@@ -458,6 +460,7 @@ export interface Setting {
 export interface User {
   balance: number;
   costPerGbOverride: number;
+  createdAt: number;
   email: string;
   fullName: string;
   id: number;

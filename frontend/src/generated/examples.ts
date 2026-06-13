@@ -36,6 +36,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "ldapVlessField": "",
     "pageSize": 0,
     "panelProxy": "",
+    "panelTitle": "",
     "plisioEnable": false,
     "plisioSandbox": false,
     "plisioSecretKey": "",
@@ -149,6 +150,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "ldapVlessField": "",
     "pageSize": 0,
     "panelProxy": "",
+    "panelTitle": "",
     "plisioEnable": false,
     "plisioSandbox": false,
     "plisioSecretKey": "",
@@ -447,6 +449,7 @@ export const EXAMPLES: Record<string, unknown> = {
   "User": {
     "balance": 0,
     "costPerGbOverride": 0,
+    "createdAt": 0,
     "email": "",
     "fullName": "",
     "id": 0,

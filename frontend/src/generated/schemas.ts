@@ -143,6 +143,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Proxy URL for the panel's own outbound requests (GitHub/Telegram)",
         "type": "string"
       },
+      "panelTitle": {
+        "description": "Configurable brand/title shown on login, register and sidebar",
+        "type": "string"
+      },
       "plisioEnable": {
         "description": "Plisio cryptocurrency gateway (balance top-up) + configurable crypto deposit bonus\nEnable Plisio crypto top-up",
         "type": "boolean"
@@ -474,6 +478,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelProxy",
+      "panelTitle",
       "plisioEnable",
       "plisioSandbox",
       "plisioSecretKey",
@@ -708,6 +713,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "panelProxy": {
         "description": "Proxy URL for the panel's own outbound requests (GitHub/Telegram)",
+        "type": "string"
+      },
+      "panelTitle": {
+        "description": "Configurable brand/title shown on login, register and sidebar",
         "type": "string"
       },
       "plisioEnable": {
@@ -1048,6 +1057,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelProxy",
+      "panelTitle",
       "plisioEnable",
       "plisioSandbox",
       "plisioSecretKey",
@@ -2081,6 +2091,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "costPerGbOverride": {
         "type": "integer"
       },
+      "createdAt": {
+        "description": "CreatedAt is the registration timestamp (ms). Backfilled to 0 for accounts\nthat predate this column; set automatically on new signups.",
+        "type": "integer"
+      },
       "email": {
         "type": "string"
       },
@@ -2112,6 +2126,7 @@ export const SCHEMAS: Record<string, unknown> = {
     "required": [
       "balance",
       "costPerGbOverride",
+      "createdAt",
       "email",
       "fullName",
       "id",

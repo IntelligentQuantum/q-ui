@@ -51,6 +51,7 @@ export const AllSettingSchema = z.object({
   ldapVlessField: z.string(),
   pageSize: z.number().int().min(0).max(1000),
   panelProxy: z.string(),
+  panelTitle: z.string(),
   plisioEnable: z.boolean(),
   plisioSandbox: z.boolean(),
   plisioSecretKey: z.string(),
@@ -166,6 +167,7 @@ export const AllSettingViewSchema = z.object({
   ldapVlessField: z.string(),
   pageSize: z.number().int().min(0).max(1000),
   panelProxy: z.string(),
+  panelTitle: z.string(),
   plisioEnable: z.boolean(),
   plisioSandbox: z.boolean(),
   plisioSecretKey: z.string(),
@@ -489,6 +491,7 @@ export type Setting = z.infer<typeof SettingSchema>;
 export const UserSchema = z.object({
   balance: z.number().int(),
   costPerGbOverride: z.number().int(),
+  createdAt: z.number().int(),
   email: z.string(),
   fullName: z.string(),
   id: z.number().int(),

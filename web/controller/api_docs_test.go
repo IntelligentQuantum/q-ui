@@ -135,13 +135,20 @@ func TestAPIRoutesDocumented(t *testing.T) {
 			"GET /": true, "GET /register": true, "GET /panel/": true,
 			"GET /panel/inbounds": true, "GET /panel/clients": true,
 			"GET /panel/groups": true, "GET /panel/users": true,
-			"GET /panel/reports": true, "GET /panel/profile": true,
+			"GET /panel/profile": true,
 			"GET /panel/billing": true, "GET /panel/nodes": true,
 			"GET /panel/settings": true, "GET /panel/xray": true,
 			"GET /panel/api-docs": true,
 			"GET /panel/store":    true, "GET /panel/orders": true,
 			"GET /panel/products": true,
 			"GET /panel/services": true,
+			// Manual deposit, helpdesk and finance SPA shell routes.
+			"GET /panel/manual-deposit":  true,
+			"GET /panel/manual-deposits": true,
+			"GET /panel/tickets":         true,
+			"GET /panel/tickets/*any":    true,
+			"GET /panel/support":         true,
+			"GET /panel/finance":         true,
 		}
 		if spaPages[key] {
 			continue
