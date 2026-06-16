@@ -626,7 +626,7 @@ export default function InboundFormModal({
       {network === 'httpupgrade' && <HttpUpgradeForm />}
       {network === 'kcp' && <KcpForm />}
       <ExternalProxyForm toggleExternalProxy={toggleExternalProxy} />
-      <SockoptForm toggleSockopt={toggleSockopt} />
+      <SockoptForm toggleSockopt={toggleSockopt} network={network} />
       <FinalMaskFormRhf name="streamSettings.finalmask" network={network} protocol={protocol} />
     </div>
     );
