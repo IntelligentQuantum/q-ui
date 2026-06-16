@@ -162,7 +162,7 @@ export default function InboundFormModal({
 
     const wPort = watch('port');
     const wListen = (watch('listen') ?? '') as string;
-    const isUdsListen = wListen.startsWith('/');
+    const isUdsListen = wListen.startsWith('/') || wListen.startsWith('@');
     const wNodeId = (watch('nodeId') ?? null) as number | null;
     const wTag = (watch('tag') ?? '') as string;
     const wSsNetwork = watch('settings.network');
