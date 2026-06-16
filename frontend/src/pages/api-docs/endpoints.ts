@@ -280,6 +280,11 @@ export const sections: readonly Section[] = [
                 ],
                 body: '{\n  "fallbacks": [\n    { "childId": 11, "path": "/vlws", "xver": 2 },\n    { "childId": 12, "alpn": "h2", "dest": "8443" }\n  ]\n}',
                 response: '{\n  "success": true,\n  "msg": "Inbound updated"\n}'
+            },
+            {
+                method: 'POST',
+                path: '/panel/api/inbounds/pushClientTraffics',
+                summary: 'Node-to-master push of per-client traffic deltas (admin only). A child node calls this on its master panel to report the traffic its clients consumed since the last sync.'
             }
         ]
     },
@@ -775,6 +780,19 @@ export const sections: readonly Section[] = [
                 response: '{\n  "success": true,\n  "obj": {\n    "user1": 1700000000,\n    "user2": 1699999000\n  }\n}'
             },
             {
+                method: 'POST',
+                path: '/panel/api/clients/:email/externalLinks',
+                summary: 'Replace the stored external subscription links for a client (admin only). Used by the clients page to attach extra subscription URLs surfaced alongside the generated ones.',
+                params: [
+                    { name: 'email', in: 'path', type: 'string', desc: 'Client email.' }
+                ]
+            },
+            {
+                method: 'POST',
+                path: '/panel/api/clients/clientIpsByGuid',
+                summary: 'Per-node IP attribution for a client, grouped by the hosting node\'s panelGuid (admin only). Pairs with the per-node client-IP feature so the clients page can show which node each live IP was seen on.'
+            },
+            {
                 method: 'GET',
                 path: '/panel/api/clients/traffic/:email',
                 summary: 'Traffic counters for a client identified by email.',
@@ -908,6 +926,11 @@ export const sections: readonly Section[] = [
                     { name: 'metric', in: 'path', type: 'string', desc: 'cpu | mem.' },
                     { name: 'bucket', in: 'path', type: 'number', desc: 'Bucket size in seconds. Allowed: 2, 30, 60, 120, 180, 300.' }
                 ]
+            },
+            {
+                method: 'POST',
+                path: '/panel/api/nodes/inbounds',
+                summary: 'List the inbounds available on a remote node (admin only) so the multi-panel UI can map/attach them when wiring a node into the panel.'
             }
         ]
     },
@@ -1070,6 +1093,16 @@ export const sections: readonly Section[] = [
                 ],
                 body: '{\n  "enabled": false\n}',
                 response: '{\n  "success": true\n}'
+            },
+            {
+                method: 'POST',
+                path: '/panel/setting/testSmtp',
+                summary: 'Send a test email using the submitted SMTP settings to verify the mail configuration before saving (admin only).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/setting/testTgBot',
+                summary: 'Send a test message via the configured Telegram bot to verify the token/chat settings (admin only).'
             }
         ]
     },
@@ -1300,6 +1333,26 @@ export const sections: readonly Section[] = [
                 method: 'POST',
                 path: '/panel/xray/outbound-subs/parse',
                 summary: 'Parse a subscription URL or body into outbound entries without persisting them.'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/testOutbounds',
+                summary: 'Probe the configured outbounds (e.g. latency/connectivity) and return per-outbound results (admin only).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/balancerStatus',
+                summary: 'Report the current health/selection state of Xray routing balancers (admin only).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/balancerOverride',
+                summary: 'Force a balancer to a specific outbound (manual override) until cleared (admin only).'
+            },
+            {
+                method: 'POST',
+                path: '/panel/xray/routeTest',
+                summary: 'Evaluate the routing rules against a sample request to show which outbound/balancer it would select (admin only).'
             }
         ]
     }
