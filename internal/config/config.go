@@ -65,17 +65,17 @@ func IsSkipHSTS() bool {
 }
 
 func GetPortOverride() (port int, configured bool, err error) {
-	value, ok := os.LookupEnv("XUI_PORT")
+	value, ok := os.LookupEnv("QUI_PORT")
 	if !ok || strings.TrimSpace(value) == "" {
 		return 0, false, nil
 	}
 
 	port, err = strconv.Atoi(strings.TrimSpace(value))
 	if err != nil {
-		return 0, true, fmt.Errorf("parse XUI_PORT: %w", err)
+		return 0, true, fmt.Errorf("parse QUI_PORT: %w", err)
 	}
 	if port < 1 || port > 65535 {
-		return 0, true, fmt.Errorf("XUI_PORT must be between 1 and 65535")
+		return 0, true, fmt.Errorf("QUI_PORT must be between 1 and 65535")
 	}
 
 	return port, true, nil
@@ -198,6 +198,7 @@ var legacyEnvSuffixes = []string{
 	"LOG_LEVEL", "DEBUG", "SKIP_HSTS", "BIN_FOLDER", "DB_FOLDER", "DB_TYPE", "DB_DSN",
 	"LOG_FOLDER", "MAIN_FOLDER", "SERVICE", "IN_DOCKER", "ENABLE_FAIL2BAN",
 	"DB_MAX_IDLE_CONNS", "DB_MAX_OPEN_CONNS", "TEST_PG_DSN",
+	"PORT", "INIT_WEB_BASE_PATH",
 }
 
 // BridgeLegacyEnv honors legacy XUI_* environment variables when the new QUI_*

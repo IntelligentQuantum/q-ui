@@ -38,7 +38,7 @@ var defaultValueMap = map[string]string{
 	"webKeyFile":                    "",
 	"secret":                        random.Seq(32),
 	"apiToken":                      "",
-	"webBasePath":                   normalizeBasePath(getEnv("XUI_INIT_WEB_BASE_PATH", "/")),
+	"webBasePath":                   normalizeBasePath(getEnv("QUI_INIT_WEB_BASE_PATH", "/")),
 	"panelTitle":                    "Q-UI",
 	"sessionMaxAge":                 "360",
 	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",

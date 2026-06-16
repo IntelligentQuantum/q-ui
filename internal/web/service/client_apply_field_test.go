@@ -14,8 +14,8 @@ import (
 // inbound's JSON, so the stale siblings reverted the change on the next sync.
 func TestResetClientExpiryTimeByEmail_MultiInbound(t *testing.T) {
 	dbDir := t.TempDir()
-	t.Setenv("XUI_DB_FOLDER", dbDir)
-	if err := database.InitDB(filepath.Join(dbDir, "x-ui.db")); err != nil {
+	t.Setenv("QUI_DB_FOLDER", dbDir)
+	if err := database.InitDB(filepath.Join(dbDir, "q-ui.db")); err != nil {
 		t.Fatalf("InitDB: %v", err)
 	}
 	t.Cleanup(func() { _ = database.CloseDB() })

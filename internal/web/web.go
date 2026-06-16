@@ -480,10 +480,10 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	}
 	if envPort, configured, envErr := config.GetPortOverride(); configured {
 		if envErr != nil {
-			logger.Warning("Ignoring invalid XUI_PORT; using configured web port:", port, envErr)
+			logger.Warning("Ignoring invalid QUI_PORT; using configured web port:", port, envErr)
 		} else {
 			port = envPort
-			logger.Info("Using XUI_PORT override for web panel port:", port)
+			logger.Info("Using QUI_PORT override for web panel port:", port)
 		}
 	}
 	listenAddr := net.JoinHostPort(listen, strconv.Itoa(port))

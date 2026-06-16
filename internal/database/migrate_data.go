@@ -21,7 +21,7 @@ import (
 )
 
 // migrationModels is the FK-aware order in which tables are created and copied
-// during `x-ui migrate-db --dsn` (SQLite → PostgreSQL data migration) and in
+// during `q-ui migrate-db --dsn` (SQLite → PostgreSQL data migration) and in
 // related tests.
 //
 // Important: When adding a new top-level model (like OutboundSubscription),
