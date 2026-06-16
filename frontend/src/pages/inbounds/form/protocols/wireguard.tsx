@@ -103,6 +103,7 @@ export default function WireguardFields({ wgPubKey, regenInboundWg, regenWgPeerK
                 </button>
               )}
             </div>
+            <RHFText name={`settings.peers.${ idx }.comment`} label={t('pages.clients.comment')} />
             <Field name={`settings.peers.${ idx }.privateKey`} label={t('pages.xray.wireguard.secretKey')}>
               <div className="flex gap-2">
                 <Input className="flex-1" {...register(`settings.peers.${ idx }.privateKey`)} />

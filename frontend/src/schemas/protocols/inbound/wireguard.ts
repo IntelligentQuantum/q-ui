@@ -10,7 +10,11 @@ export const WireguardInboundPeerSchema = z.object({
     publicKey: z.string().min(1),
     preSharedKey: z.string().optional(),
     allowedIPs: z.array(z.string()).default([]),
-    keepAlive: z.number().int().min(0).optional()
+    keepAlive: z.number().int().min(0).optional(),
+    // Panel-only annotation (#5168): which client/device this peer belongs to.
+    // Rides along in the settings JSON like privateKey does; xray-core ignores
+    // unknown peer fields.
+    comment: z.string().optional()
 });
 export type WireguardInboundPeer = z.infer<typeof WireguardInboundPeerSchema>;
 
