@@ -27,6 +27,16 @@ export class AllSetting
     public tgBotLoginNotify = true;
     public tgCpu = 80;
     public tgLang = 'en-US';
+    public tgEnabledEvents = '';
+    public smtpEnable = false;
+    public smtpHost = '';
+    public smtpPort = 587;
+    public smtpUsername = '';
+    public smtpPassword = '';
+    public smtpTo = '';
+    public smtpEncryptionType = 'starttls';
+    public smtpEnabledEvents = '';
+    public smtpCpu = 80;
     public twoFactorEnable = false;
     public twoFactorToken = '';
     public registrationEnable = false;
@@ -116,6 +126,7 @@ export class AllSetting
     public hasWarpSecret = false;
     public hasNordSecret = false;
     public hasPlisioSecretKey = false;
+    public hasSmtpPassword = false;
 
     constructor(data?: unknown)
     {

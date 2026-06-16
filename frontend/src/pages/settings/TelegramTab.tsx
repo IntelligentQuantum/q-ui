@@ -3,9 +3,12 @@ import { useTranslation } from 'react-i18next';
 import { SettingRow } from '@/components/ui';
 import { Bell, Settings } from 'lucide-react';
 
-import { LanguageManager } from '@/utils';
+import { LanguageManager, HttpUtil } from '@/utils';
 import type { AllSetting } from '@/models/setting';
 import {
+    Alert,
+    Button,
+    EventBusCheckboxes,
     Input,
     PasswordInput,
     Select,
@@ -24,6 +27,27 @@ export default function TelegramTab({ allSetting, updateSetting }: TelegramTabPr
     const { t } = useTranslation();
 
     const [activeTab, setActiveTab] = useState('1');
+    const [testLoading, setTestLoading] = useState(false);
+    const [testResult, setTestResult] = useState<{ success: boolean; msg: string } | null>(null);
+
+    async function handleTestTgBot()
+    {
+        setTestLoading(true);
+        setTestResult(null);
+        try
+        {
+            const res = await HttpUtil.post('/panel/setting/testTgBot') as { success?: boolean; msg?: string };
+            setTestResult({ success: !!res?.success, msg: res?.msg || '' });
+        }
+        catch (e: unknown)
+        {
+            setTestResult({ success: false, msg: e instanceof Error ? e.message : t('pages.settings.requestFailed') });
+        }
+        finally
+        {
+            setTestLoading(false);
+        }
+    }
 
     const langOptions = useMemo(
         () => LanguageManager.supportedLanguages.map((l: { value: string; name: string; icon: string }) => ({
@@ -84,6 +108,12 @@ export default function TelegramTab({ allSetting, updateSetting }: TelegramTabPr
             <Input value={allSetting.tgBotAPIServer} placeholder="https://api.example.com"
               onChange={(e) => updateSetting({ tgBotAPIServer: e.target.value })} />
           </SettingRow>
+          <div className="space-y-3 pt-4">
+            <Button loading={testLoading} onClick={handleTestTgBot}>{t('pages.settings.testTgBot')}</Button>
+            {testResult && (
+              <Alert variant={testResult.success ? 'success' : 'danger'} title={testResult.msg} />
+            )}
+          </div>
         </div>
       )}
 
@@ -105,6 +135,14 @@ export default function TelegramTab({ allSetting, updateSetting }: TelegramTabPr
           <SettingRow title={t('pages.settings.tgNotifyCpu')} description={t('pages.settings.tgNotifyCpuDesc')}>
             <Input type="number" min={0} max={100} value={allSetting.tgCpu}
               onChange={(e) => updateSetting({ tgCpu: Number(e.target.value) || 0 })} />
+          </SettingRow>
+          <SettingRow title={t('pages.settings.tgEventBusNotify')} description={t('pages.settings.tgEventBusNotifyDesc')}>
+            <EventBusCheckboxes
+              value={allSetting.tgEnabledEvents}
+              onChange={(v) => updateSetting({ tgEnabledEvents: v })}
+              extra={{ 'cpu.high': { key: 'tgCpu', value: allSetting.tgCpu } }}
+              onExtraChange={(key, v) => updateSetting({ [key]: v } as Partial<AllSetting>)}
+            />
           </SettingRow>
         </div>
       )}

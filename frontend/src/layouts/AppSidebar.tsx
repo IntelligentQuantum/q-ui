@@ -20,6 +20,7 @@ import {
     LayoutGrid,
     LifeBuoy,
     LogOut,
+    Mail,
     type LucideIcon,
     MessageSquare,
     Network,
@@ -209,6 +210,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
             { key: '/settings#manual-deposit', icon: Banknote, label: t('pages.settings.manualDepositSettings') },
             { key: '/settings#ticket-categories', icon: Ticket, label: t('pages.settings.ticketCategoriesSettings') },
             { key: '/settings#telegram', icon: MessageSquare, label: t('pages.settings.TGBotSettings') },
+            { key: '/settings#email', icon: Mail, label: t('pages.settings.emailSettings') },
             { key: '/settings#subscription', icon: Cloud, label: t('pages.settings.subSettings') }
         ];
         if (showSubFormats)

@@ -25,6 +25,7 @@ import PaymentsTab from './PaymentsTab';
 import ManualDepositTab from './ManualDepositTab';
 import TicketCategoriesTab from './TicketCategoriesTab';
 import TelegramTab from './TelegramTab';
+import EmailTab from './EmailTab';
 import SubscriptionGeneralTab from './SubscriptionGeneralTab';
 import SubscriptionFormatsTab from './SubscriptionFormatsTab';
 
@@ -32,7 +33,7 @@ interface ApiMsg {
   success?: boolean;
 }
 
-const tabSlugs = ['general', 'security', 'reseller', 'payments', 'manual-deposit', 'ticket-categories', 'telegram', 'subscription', 'subscription-formats'];
+const tabSlugs = ['general', 'security', 'reseller', 'payments', 'manual-deposit', 'ticket-categories', 'telegram', 'email', 'subscription', 'subscription-formats'];
 
 function isIp(h: string): boolean
 {
@@ -272,6 +273,7 @@ export default function SettingsPage()
             case 'manual-deposit': return <ManualDepositTab />;
             case 'ticket-categories': return <TicketCategoriesTab />;
             case 'telegram': return <TelegramTab allSetting={allSetting} updateSetting={updateSetting} />;
+            case 'email': return <EmailTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'subscription': return <SubscriptionGeneralTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'subscription-formats': return <SubscriptionFormatsTab allSetting={allSetting} updateSetting={updateSetting} />;
             default: return <GeneralTab allSetting={allSetting} updateSetting={updateSetting} />;

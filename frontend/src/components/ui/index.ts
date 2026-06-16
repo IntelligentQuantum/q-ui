@@ -79,6 +79,8 @@ export type { QRCodeProps } from './QRCode';
 export { Accordion } from './Accordion';
 export type { AccordionProps, AccordionItem } from './Accordion';
 
+export { EventBusCheckboxes } from './EventBusCheckboxes';
+
 export { DropdownMenu } from './DropdownMenu';
 export type { DropdownMenuProps, DropdownItem } from './DropdownMenu';
 
