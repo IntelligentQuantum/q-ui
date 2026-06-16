@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // release.mjs — cut a q-ui release.
 //
-// Bumps config/version, runs pre-flight checks, commits everything, creates the
+// Bumps internal/config/version, runs pre-flight checks, commits everything, creates the
 // vX.Y.Z tag and pushes it. The GitHub "Release" workflow then builds and
 // publishes the release artifacts (it also stamps the binary version from the
 // tag, so this bump just keeps the repo/dev version in sync).
@@ -38,7 +38,7 @@ const out = (cmd) => execSync(cmd, { cwd: root, encoding: 'utf8' }).trim();
 // Increment a semver string by the given level.
 function bumpVersion(curr, level) {
   const m = /^(\d+)\.(\d+)\.(\d+)$/.exec(curr);
-  if (!m) die(`config/version "${curr}" isn't X.Y.Z — pass an explicit version (e.g. 1.0.8).`);
+  if (!m) die(`internal/config/version "${curr}" isn't X.Y.Z — pass an explicit version (e.g. 1.0.8).`);
   let [major, minor, patch] = [Number(m[1]), Number(m[2]), Number(m[3])];
   if (level === 'major') { major += 1; minor = 0; patch = 0; }
   else if (level === 'minor') { minor += 1; patch = 0; }
@@ -48,7 +48,7 @@ function bumpVersion(curr, level) {
 
 // ---- setup ----
 try { out('git rev-parse --is-inside-work-tree'); } catch { die('Not inside a git repository.'); }
-const versionFile = path.join(root, 'config', 'version');
+const versionFile = path.join(root, 'internal', 'config', 'version');
 const current = readFileSync(versionFile, 'utf8').trim();
 
 // ---- resolve the target version ----
@@ -87,9 +87,9 @@ if (skipChecks) {
 
 // ---- bump version ----
 if (current === version) {
-  log(`config/version already ${version}`);
+  log(`internal/config/version already ${version}`);
 } else {
-  log(`Bumping config/version: ${current} -> ${version}`);
+  log(`Bumping internal/config/version: ${current} -> ${version}`);
   if (!dryRun) writeFileSync(versionFile, `${version}\n`);
 }
 
