@@ -13,7 +13,7 @@ const SO = 'streamSettings.sockopt';
 const TRANSPORT_PROXY_FIELD: Record<string, string> = {
     tcp: 'tcpSettings',
     ws: 'wsSettings',
-    httpupgrade: 'httpupgradeSettings',
+    httpupgrade: 'httpupgradeSettings'
 };
 // Transports on which xray-core honors sockopt.trustedXForwardedFor.
 const TRUSTED_HEADER_NETWORKS = ['ws', 'httpupgrade', 'xhttp'];
@@ -48,7 +48,10 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
         {
             setValue(`${ SO }.trustedXForwardedFor`, []);
             setValue(`${ SO }.acceptProxyProtocol`, false);
-            if (transportField) setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, false);
+            if (transportField)
+            {
+                setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, false);
+            }
             return;
         }
 
@@ -56,10 +59,16 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
         {
             const current = getValues(`${ SO }.trustedXForwardedFor`);
             const list = Array.isArray(current) ? [...(current as string[])] : [];
-            if (!list.includes('CF-Connecting-IP')) list.push('CF-Connecting-IP');
+            if (!list.includes('CF-Connecting-IP'))
+            {
+                list.push('CF-Connecting-IP');
+            }
             setValue(`${ SO }.trustedXForwardedFor`, list);
             setValue(`${ SO }.acceptProxyProtocol`, false);
-            if (transportField) setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, false);
+            if (transportField)
+            {
+                setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, false);
+            }
             return;
         }
 
@@ -67,7 +76,10 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
         // PROXY-recovered IP (xray reads the header last on ws/httpupgrade/xhttp).
         setValue(`${ SO }.trustedXForwardedFor`, []);
         setValue(`${ SO }.acceptProxyProtocol`, true);
-        if (transportField) setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, true);
+        if (transportField)
+        {
+            setValue(`streamSettings.${ transportField }.acceptProxyProtocol`, true);
+        }
     };
 
     const addCustom = () =>
@@ -89,25 +101,26 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
       </div>
       {on && (
         <>
-          {(() => {
-            const sockopt = (getValues(SO) ?? {}) as Record<string, unknown>;
-            const transportField = TRANSPORT_PROXY_FIELD[network];
-            const transportPP = transportField
-                ? getValues(`streamSettings.${ transportField }.acceptProxyProtocol`) === true
-                : false;
-            const proxyOn = sockopt.acceptProxyProtocol === true || transportPP;
-            const trusted = Array.isArray(sockopt.trustedXForwardedFor)
-                ? (sockopt.trustedXForwardedFor as string[])
-                : [];
-            const value: RealClientIpPreset = proxyOn
-                ? 'proxy'
-                : trusted.length > 0
-                  ? 'cloudflare'
-                  : 'off';
-            const trustedMismatch =
+          {(() =>
+          {
+              const sockopt = (getValues(SO) ?? {}) as Record<string, unknown>;
+              const transportField = TRANSPORT_PROXY_FIELD[network];
+              const transportPP = transportField
+                  ? getValues(`streamSettings.${ transportField }.acceptProxyProtocol`) === true
+                  : false;
+              const proxyOn = sockopt.acceptProxyProtocol === true || transportPP;
+              const trusted = Array.isArray(sockopt.trustedXForwardedFor)
+                  ? (sockopt.trustedXForwardedFor as string[])
+                  : [];
+              const value: RealClientIpPreset = proxyOn
+                  ? 'proxy'
+                  : trusted.length > 0
+                      ? 'cloudflare'
+                      : 'off';
+              const trustedMismatch =
                 trusted.length > 0 && !TRUSTED_HEADER_NETWORKS.includes(network);
-            const proxyMismatch = proxyOn && network === 'kcp';
-            return (
+              const proxyMismatch = proxyOn && network === 'kcp';
+              return (
               <>
                 <div className="flex flex-col gap-1.5">
                   <Tooltip content={t('pages.inbounds.form.realClientIpHint')}>
@@ -120,7 +133,7 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
                     tabs={[
                         { key: 'off', label: t('pages.inbounds.form.realClientIpPresetOff') },
                         { key: 'cloudflare', label: t('pages.inbounds.form.realClientIpPresetCloudflare') },
-                        { key: 'proxy', label: t('pages.inbounds.form.realClientIpPresetProxyProtocol') },
+                        { key: 'proxy', label: t('pages.inbounds.form.realClientIpPresetProxyProtocol') }
                     ]}
                   />
                 </div>
@@ -131,7 +144,7 @@ export default function SockoptForm({ toggleSockopt, network = '' }: { toggleSoc
                   <Alert variant="warning">{t('pages.inbounds.form.realClientIpProxyProtocolTransportWarn')}</Alert>
                 )}
               </>
-            );
+              );
           })()}
           <RHFNumber name={`${ SO }.mark`} label={t('pages.inbounds.form.routeMark')} min={0} />
           <RHFNumber name={`${ SO }.tcpKeepAliveInterval`} label={t('pages.inbounds.form.tcpKeepAliveInterval')} min={0} />

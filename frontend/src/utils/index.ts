@@ -884,7 +884,7 @@ export class SizeFormatter
 
     public static sizeFormat(size: number | null | undefined): string
     {
-        if (size == null || size <= 0)
+        if (size == null || !Number.isFinite(size) || size <= 0)
         {
             return '0 B';
         }
@@ -909,6 +909,11 @@ export class SizeFormatter
             return (size / SizeFormatter.ONE_TB).toFixed(2) + ' TB';
         }
         return (size / SizeFormatter.ONE_PB).toFixed(2) + ' PB';
+    }
+
+    public static speedFormat(bps: number | null | undefined): string
+    {
+        return SizeFormatter.sizeFormat(bps) + '/s';
     }
 }
 

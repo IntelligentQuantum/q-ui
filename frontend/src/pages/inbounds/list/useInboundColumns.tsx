@@ -8,6 +8,7 @@ import { useDatepicker } from '@/hooks/useDatepicker';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
 import { RowActionsCell } from './RowActions';
+import { InboundSpeedTag, isActiveSpeed } from './InboundSpeedTag';
 import {
     readStreamHints,
     networkLabel,
@@ -16,13 +17,14 @@ import {
     tunnelNetworkLabel,
     mixedNetworkLabel
 } from './helpers';
-import type { ClientCountEntry, DBInboundRecord, RowAction } from './types';
+import type { ClientCountEntry, DBInboundRecord, InboundSpeedEntry, RowAction } from './types';
 
 interface UseInboundColumnsParams {
   hasAnyRemark: boolean;
   hasActiveNode: boolean;
   nodesById: Map<number, NodeRecord>;
   clientCount: Record<number, ClientCountEntry>;
+  inboundSpeed: Record<number, InboundSpeedEntry>;
   subEnable: boolean;
   expireDiff: number;
   trafficDiff: number;
@@ -58,6 +60,7 @@ export function useInboundColumns({
     hasActiveNode,
     nodesById,
     clientCount,
+    inboundSpeed,
     subEnable,
     expireDiff,
     trafficDiff,
@@ -281,6 +284,21 @@ export function useInboundColumns({
                 )
             },
             {
+                key: 'speed',
+                header: t('pages.inbounds.speed'),
+                align: 'center',
+                hideBelow: 'lg',
+                cell: (record) =>
+                {
+                    const speed = inboundSpeed[record.id];
+                    if (!isActiveSpeed(speed))
+                    {
+                        return <Badge variant="neutral">—</Badge>;
+                    }
+                    return <InboundSpeedTag speed={speed} withTooltip />;
+                }
+            },
+            {
                 key: 'expiryTime',
                 header: t('pages.inbounds.expireDate'),
                 align: 'center',
@@ -303,5 +321,5 @@ export function useInboundColumns({
         );
 
         return cols;
-    }, [t, hasAnyRemark, hasActiveNode, nodesById, clientCount, subEnable, expireDiff, trafficDiff, datepicker, onRowAction, onSwitchEnable]);
+    }, [t, hasAnyRemark, hasActiveNode, nodesById, clientCount, inboundSpeed, subEnable, expireDiff, trafficDiff, datepicker, onRowAction, onSwitchEnable]);
 }

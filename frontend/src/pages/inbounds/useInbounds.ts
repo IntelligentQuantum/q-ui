@@ -11,6 +11,7 @@ import { keys } from '@/api/queryKeys';
 import { SlimInboundListSchema, LastOnlineMapSchema, InboundDetailSchema } from '@/schemas/inbound';
 import { OnlinesSchema, OnlineByNodeSchema, ActiveInboundsByNodeSchema } from '@/schemas/client';
 import { DefaultsPayloadSchema, type DefaultsPayload } from '@/schemas/defaults';
+import type { InboundSpeedEntry } from './list/types';
 
 export interface SubSettings {
   enable: boolean;
@@ -25,6 +26,18 @@ export interface SubSettings {
 }
 
 type DBInboundInstance = InstanceType<typeof DBInbound>;
+
+// Server-side traffic polling interval in seconds. XrayTrafficJob broadcasts
+// per-inbound deltas accumulated over this window, so dividing by it yields
+// bytes/sec.
+const TRAFFIC_POLL_INTERVAL_S = 5;
+
+interface TrafficDelta {
+  Tag: string;
+  Up: number;
+  Down: number;
+  IsInbound?: boolean;
+}
 
 interface ClientRollup {
   clients: number;
@@ -212,6 +225,7 @@ export function useInbounds()
 
     const [clientCount, setClientCount] = useState<Record<number, ClientRollup>>({});
     const [statsVersion, setStatsVersion] = useState(0);
+    const [inboundSpeed, setInboundSpeed] = useState<Record<number, InboundSpeedEntry>>({});
 
     const [onlineClients, setOnlineClients] = useState<string[]>([]);
     const onlineClientsRef = useRef<string[]>([]);
@@ -475,7 +489,46 @@ export function useInbounds()
             {
                 return;
             }
-            const p = payload as { onlineClients?: string[]; onlineByGuid?: Record<string, string[]>; activeInbounds?: Record<string, string[]>; lastOnlineMap?: Record<string, number> };
+            const p = payload as {
+                traffics?: TrafficDelta[];
+                onlineClients?: string[];
+                onlineByGuid?: Record<string, string[]>;
+                activeInbounds?: Record<string, string[]>;
+                lastOnlineMap?: Record<string, number>;
+            };
+            // Full-replace each poll so idle inbounds (and an empty array after
+            // an Xray stat reset) clear their speed instead of showing a stale
+            // value. Tag-keyed: Xray reports per-inbound up/down by tag.
+            if (Array.isArray(p.traffics))
+            {
+                const byTag = new Map<string, TrafficDelta>();
+                for (const tr of p.traffics)
+                {
+                    if (!tr || typeof tr.Tag !== 'string')
+                    {
+                        continue;
+                    }
+                    if (tr.IsInbound === false)
+                    {
+                        continue;
+                    }
+                    byTag.set(tr.Tag, tr);
+                }
+                const nextSpeed: Record<number, InboundSpeedEntry> = {};
+                for (const ib of dbInboundsRef.current)
+                {
+                    const delta = byTag.get(ib.tag);
+                    if (!delta)
+                    {
+                        continue;
+                    }
+                    nextSpeed[ib.id] = {
+                        up: (delta.Up || 0) / TRAFFIC_POLL_INTERVAL_S,
+                        down: (delta.Down || 0) / TRAFFIC_POLL_INTERVAL_S
+                    };
+                }
+                setInboundSpeed(nextSpeed);
+            }
             if (Array.isArray(p.onlineClients))
             {
                 onlineClientsRef.current = p.onlineClients;
@@ -634,6 +687,7 @@ export function useInbounds()
         clientCount,
         onlineClients,
         lastOnlineMap,
+        inboundSpeed,
         statsVersion,
         totals,
         expireDiff,
