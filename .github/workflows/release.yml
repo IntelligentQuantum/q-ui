@@ -151,12 +151,15 @@ jobs:
             rm -f Xray-linux-s390x.zip
           fi
           rm -f geoip.dat geosite.dat
-          wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
-          wget -q https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
-          wget -q -O geoip_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat
-          wget -q -O geosite_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat
-          wget -q -O geoip_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
-          wget -q -O geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
+          # Retry on transient 404s: the upstream rules repos can briefly 404
+          # while their `latest` release republishes.
+          WGET="wget -q --tries=5 --waitretry=10 --retry-on-http-error=404,429,500,502,503"
+          $WGET https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat
+          $WGET https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat
+          $WGET -O geoip_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat
+          $WGET -O geosite_IR.dat https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat
+          $WGET -O geoip_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat
+          $WGET -O geosite_RU.dat https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat
           mv xray xray-linux-${{ matrix.platform }}
           # mtg (MTProto sidecar) - only for arches mtg publishes
           MTG_VER="2.2.8"
@@ -269,23 +272,37 @@ jobs:
           mkdir q-ui\bin
           cd q-ui\bin
 
+          # Resilient downloader: the GitHub release CDN can briefly 404 while an
+          # upstream rules repo (e.g. russia-v2ray-rules-dat) republishes its
+          # `latest` release, so retry on ANY failure including 404.
+          function Get-File($Uri, $OutFile) {
+            for ($i = 1; $i -le 5; $i++) {
+              try { Invoke-WebRequest -Uri $Uri -OutFile $OutFile -UseBasicParsing; return }
+              catch {
+                Write-Host "Download failed: $Uri (attempt $i/5): $($_.Exception.Message)"
+                if ($i -eq 5) { throw }
+                Start-Sleep -Seconds 10
+              }
+            }
+          }
+
           # Download Xray for Windows
           $Xray_URL = "https://github.com/XTLS/Xray-core/releases/download/v26.6.1/"
-          Invoke-WebRequest -Uri "${Xray_URL}Xray-windows-64.zip" -OutFile "Xray-windows-64.zip"
+          Get-File "${Xray_URL}Xray-windows-64.zip" "Xray-windows-64.zip"
           Expand-Archive -Path "Xray-windows-64.zip" -DestinationPath .
           Remove-Item "Xray-windows-64.zip"
           Remove-Item geoip.dat, geosite.dat -ErrorAction SilentlyContinue
-          Invoke-WebRequest -Uri "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" -OutFile "geoip.dat"
-          Invoke-WebRequest -Uri "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" -OutFile "geosite.dat"
-          Invoke-WebRequest -Uri "https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat" -OutFile "geoip_IR.dat"
-          Invoke-WebRequest -Uri "https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat" -OutFile "geosite_IR.dat"
-          Invoke-WebRequest -Uri "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat" -OutFile "geoip_RU.dat"
-          Invoke-WebRequest -Uri "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat" -OutFile "geosite_RU.dat"
+          Get-File "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geoip.dat" "geoip.dat"
+          Get-File "https://github.com/Loyalsoldier/v2ray-rules-dat/releases/latest/download/geosite.dat" "geosite.dat"
+          Get-File "https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geoip.dat" "geoip_IR.dat"
+          Get-File "https://github.com/chocolate4u/Iran-v2ray-rules/releases/latest/download/geosite.dat" "geosite_IR.dat"
+          Get-File "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geoip.dat" "geoip_RU.dat"
+          Get-File "https://github.com/runetfreedom/russia-v2ray-rules-dat/releases/latest/download/geosite.dat" "geosite_RU.dat"
           Rename-Item xray.exe xray-windows-amd64.exe
 
           # Download mtg (MTProto sidecar) for Windows
           $MTG_VER = "2.2.8"
-          Invoke-WebRequest -Uri "https://github.com/9seconds/mtg/releases/download/v$MTG_VER/mtg-$MTG_VER-windows-amd64.zip" -OutFile "mtg-windows-amd64.zip"
+          Get-File "https://github.com/9seconds/mtg/releases/download/v$MTG_VER/mtg-$MTG_VER-windows-amd64.zip" "mtg-windows-amd64.zip"
           Expand-Archive -Path "mtg-windows-amd64.zip" -DestinationPath "mtg-tmp"
           $mtgExe = Get-ChildItem -Path "mtg-tmp" -Recurse -Filter "mtg.exe" | Select-Object -First 1
           Move-Item $mtgExe.FullName "mtg-windows-amd64.exe"
