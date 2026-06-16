@@ -12,35 +12,35 @@ not want to build a golden image — it works on any cloud-init platform.
 
 1. The VM boots a stock Ubuntu/Debian cloud image.
 2. cloud-init writes and runs `/opt/xui-bootstrap.sh`, which exports
-   `XUI_NONINTERACTIVE=1` and pipes the project's `install.sh` into `bash`.
+   `QUI_NONINTERACTIVE=1` and pipes the project's `install.sh` into `bash`.
 3. `install.sh` runs end-to-end with **zero prompts**, picking secure random
    values for any credential you didn't pin.
-4. The generated credentials are written to `/etc/x-ui/install-result.env`
+4. The generated credentials are written to `/etc/q-ui/install-result.env`
    (mode 600), echoed to the **serial console**, and appended to `/etc/motd`.
 
 Retrieve them after boot with either:
 
 ```bash
-sudo cat /etc/x-ui/install-result.env     # over SSH
+sudo cat /etc/q-ui/install-result.env     # over SSH
 ```
 
 …or read the provider's **serial console** output (handy before you have SSH).
 
 ## Customising
 
-Edit the `export XUI_*` lines inside the `write_files` block of
+Edit the `export QUI_*` lines inside the `write_files` block of
 [`cloud-init.yaml`](cloud-init.yaml). All knobs are optional; unset ⇒ random/secure default.
 
 | Env var | Default | Meaning |
 | --- | --- | --- |
-| `XUI_SSL_MODE` | `none` | `none` (plain HTTP), `ip` (Let's Encrypt IP cert), `domain` |
-| `XUI_USERNAME` | random | Admin username |
-| `XUI_PASSWORD` | random | Admin password |
-| `XUI_PANEL_PORT` | random high port | Panel listen port |
-| `XUI_WEB_BASE_PATH` | random | Panel base path (obscures the URL) |
-| `XUI_DOMAIN` | — | Required when `XUI_SSL_MODE=domain` |
-| `XUI_ACME_EMAIL` | — | Let's Encrypt account email (domain mode) |
-| `XUI_DB_TYPE` / `XUI_DB_DSN` | `sqlite` | Set `postgres` + DSN to use PostgreSQL |
+| `QUI_SSL_MODE` | `none` | `none` (plain HTTP), `ip` (Let's Encrypt IP cert), `domain` |
+| `QUI_USERNAME` | random | Admin username |
+| `QUI_PASSWORD` | random | Admin password |
+| `QUI_PANEL_PORT` | random high port | Panel listen port |
+| `QUI_WEB_BASE_PATH` | random | Panel base path (obscures the URL) |
+| `QUI_DOMAIN` | — | Required when `QUI_SSL_MODE=domain` |
+| `QUI_ACME_EMAIL` | — | Let's Encrypt account email (domain mode) |
+| `QUI_DB_TYPE` / `QUI_DB_DSN` | `sqlite` | Set `postgres` + DSN to use PostgreSQL |
 
 > **TLS note:** `none` serves the panel over plain HTTP on a random high port —
 > fine behind a reverse proxy or an SSH tunnel, but put TLS in front of it before

@@ -21,7 +21,7 @@ Install on a fresh instance at creation time. No image to build.
 3. Create the instance.
 4. After it boots, read the credentials:
    ```bash
-   ssh ubuntu@<public-ip> 'sudo cat /etc/x-ui/install-result.env'
+   ssh ubuntu@<public-ip> 'sudo cat /etc/q-ui/install-result.env'
    ```
 5. **Open the panel port** (see the firewall note below) and log in.
 
@@ -38,7 +38,7 @@ aws lightsail create-instances \
 ```
 
 By default the panel uses a **random** high port (in `install-result.env`). To
-pin a known port so you can pre-open it, set `export XUI_PANEL_PORT=54321` inside
+pin a known port so you can pre-open it, set `export QUI_PANEL_PORT=54321` inside
 `launch-script.sh`.
 
 ---
@@ -67,8 +67,8 @@ aws lightsail create-instances-from-snapshot \
   --availability-zone eu-central-1a --region eu-central-1
 ```
 
-Each launched instance runs `x-ui-firstboot` and writes its unique credentials to
-`/etc/x-ui/credentials.txt` + `/etc/motd`. With `--panel-port` the port is the
+Each launched instance runs `q-ui-firstboot` and writes its unique credentials to
+`/etc/q-ui/credentials.txt` + `/etc/motd`. With `--panel-port` the port is the
 same across instances (only the credentials differ), so you can pre-open it.
 
 > Lightsail snapshots are **private to your AWS account** (and region). To use one
@@ -90,5 +90,5 @@ panel runs on a different port, so you must open it:
     --port-info fromPort=54321,toPort=54321,protocol=TCP
   ```
 
-The panel port is in `/etc/x-ui/install-result.env` (Path A) or
-`/etc/x-ui/credentials.txt` (Path B), or fixed via `--panel-port` / `XUI_PANEL_PORT`.
+The panel port is in `/etc/q-ui/install-result.env` (Path A) or
+`/etc/q-ui/credentials.txt` (Path B), or fixed via `--panel-port` / `QUI_PANEL_PORT`.

@@ -850,7 +850,7 @@ config_after_update() {
 
     if [[ "$panel_needs_restart" -eq 1 ]]; then
         echo -e "${yellow}Restarting panel to apply the new web base path...${plain}"
-        systemctl restart x-ui 2> /dev/null || rc-service x-ui restart 2> /dev/null
+        systemctl restart q-ui 2> /dev/null || rc-service q-ui restart 2> /dev/null
     fi
 }
 

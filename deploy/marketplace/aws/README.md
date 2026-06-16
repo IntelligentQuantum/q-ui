@@ -22,10 +22,10 @@ Build in the seller account (or share the AMI into it):
 cd deploy/packer
 packer init .
 # amd64
-packer build -only='amazon-ebs.x-ui' \
+packer build -only='amazon-ebs.q-ui' \
   -var 'xui_version=vX.Y.Z' -var 'xui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
 # arm64 (Graviton)
-packer build -only='amazon-ebs.x-ui' \
+packer build -only='amazon-ebs.q-ui' \
   -var 'xui_version=vX.Y.Z' -var 'xui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
 ```
 
@@ -40,7 +40,7 @@ The image already satisfies the Marketplace AMI policies enforced by `harden.sh`
 - ✅ no baked `authorized_keys`, no SSH host keys (regenerated on boot)
 - ✅ base OS = current Ubuntu 24.04 LTS, patched at build time
 - ✅ no application default credentials — the panel admin is generated on first
-  boot on a random high port (no `admin/admin`, no shipped `x-ui.db`)
+  boot on a random high port (no `admin/admin`, no shipped `q-ui.db`)
 
 ## 3. Run the self-service AMI scan
 
@@ -66,7 +66,7 @@ Common scan findings and where they're handled:
 1. **Server products → Create new product → AMI** (or AMI + CloudFormation).
 2. Add title, description, categories, pricing (free or paid), regions, the AMI
    id, recommended instance types, and the **usage instructions** (tell buyers
-   to read `/etc/x-ui/credentials.txt` / MOTD after first boot for the generated
+   to read `/etc/q-ui/credentials.txt` / MOTD after first boot for the generated
    admin login, then change the password).
 3. Submit as a **Limited** (private) listing first. AWS publishes it with
    restricted visibility so only your account / allow-listed accounts see it.
@@ -74,7 +74,7 @@ Common scan findings and where they're handled:
 ## 5. Preview & launch test
 
 1. From the limited listing, **subscribe and launch** a test instance.
-2. SSH in, `sudo cat /etc/x-ui/credentials.txt`, open the panel URL, log in,
+2. SSH in, `sudo cat /etc/q-ui/credentials.txt`, open the panel URL, log in,
    confirm the panel works and the credentials are unique to that instance.
 3. Launch a second instance and confirm its credentials differ (no shared
    secrets).

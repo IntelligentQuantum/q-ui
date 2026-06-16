@@ -2,9 +2,9 @@
 //   * amazon-ebs : produces an AWS AMI (Marketplace-scannable)
 //   * qemu       : produces a qcow2 (+ raw) for Hetzner/DO/Vultr/GCP/Azure/Oracle
 //
-// The image ships WITHOUT an initialized x-ui.db and WITHOUT any baked
-// credentials. deploy/firstboot/x-ui-firstboot.{sh,service} generates unique
-// per-instance credentials on first boot, before x-ui.service starts.
+// The image ships WITHOUT an initialized q-ui.db and WITHOUT any baked
+// credentials. deploy/firstboot/q-ui-firstboot.{sh,service} generates unique
+// per-instance credentials on first boot, before q-ui.service starts.
 //
 // Provisioner order is fixed: provision.sh -> harden.sh -> cleanup.sh.
 
@@ -31,7 +31,7 @@ locals {
   qemu_iso_url    = var.qemu_iso_url != "" ? var.qemu_iso_url : "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-${var.xui_arch}.img"
 }
 
-source "amazon-ebs" "x-ui" {
+source "amazon-ebs" "q-ui" {
   region        = var.region
   instance_type = var.instance_type
   ssh_username  = var.ssh_username
@@ -65,7 +65,7 @@ source "amazon-ebs" "x-ui" {
   }
 }
 
-source "qemu" "x-ui" {
+source "qemu" "q-ui" {
   iso_url      = local.qemu_iso_url
   iso_checksum = var.qemu_iso_checksum
   disk_image   = true
@@ -115,25 +115,25 @@ source "qemu" "x-ui" {
 
 build {
   name    = "3x-ui"
-  sources = ["source.amazon-ebs.x-ui", "source.qemu.x-ui"]
+  sources = ["source.amazon-ebs.q-ui", "source.qemu.q-ui"]
 
   // Upload the first-boot unit + script so provision.sh can install them.
   provisioner "shell" {
     inline = ["mkdir -p /tmp/firstboot"]
   }
   provisioner "file" {
-    source      = "${path.root}/../firstboot/x-ui-firstboot.sh"
-    destination = "/tmp/firstboot/x-ui-firstboot.sh"
+    source      = "${path.root}/../firstboot/q-ui-firstboot.sh"
+    destination = "/tmp/firstboot/q-ui-firstboot.sh"
   }
   provisioner "file" {
-    source      = "${path.root}/../firstboot/x-ui-firstboot.service"
-    destination = "/tmp/firstboot/x-ui-firstboot.service"
+    source      = "${path.root}/../firstboot/q-ui-firstboot.service"
+    destination = "/tmp/firstboot/q-ui-firstboot.service"
   }
 
   provisioner "shell" {
     environment_vars = [
-      "XUI_VERSION=${var.xui_version}",
-      "XUI_ARCH=${var.xui_arch}",
+      "QUI_VERSION=${var.xui_version}",
+      "QUI_ARCH=${var.xui_arch}",
       "DEBIAN_FRONTEND=noninteractive",
     ]
     execute_command = "chmod +x {{ .Path }}; sudo -E bash {{ .Path }}"
@@ -148,7 +148,7 @@ build {
 
   // Convert the qcow2 to raw for clouds that need it (qemu source only).
   post-processor "shell-local" {
-    only   = ["qemu.x-ui"]
+    only   = ["qemu.q-ui"]
     inline = ["qemu-img convert -p -O raw output-qemu/${local.image_name}.qcow2 output-qemu/${local.image_name}.raw"]
   }
 

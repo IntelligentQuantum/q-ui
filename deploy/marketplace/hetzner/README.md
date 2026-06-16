@@ -24,7 +24,7 @@ hcloud server create \
 After boot, fetch the generated credentials:
 
 ```bash
-ssh root@<server-ip> 'cat /etc/x-ui/install-result.env'
+ssh root@<server-ip> 'cat /etc/q-ui/install-result.env'
 ```
 
 ## Option B — snapshot from the qcow2 / a configured server
@@ -36,17 +36,17 @@ servers from it. Two ways to get there:
    normal API, but you can boot a server, write the image to its disk in rescue
    mode, then take a snapshot — or simply use Option A, which needs no image.
 2. **From a configured server:** spin up a server, install via cloud-init
-   (Option A), verify, then **delete `/etc/x-ui/x-ui.db` and the first-boot
+   (Option A), verify, then **delete `/etc/q-ui/q-ui.db` and the first-boot
    sentinel** before snapshotting so clones regenerate their own credentials:
 
    ```bash
-   systemctl stop x-ui
-   rm -f /etc/x-ui/x-ui.db /etc/x-ui/.firstboot-done /etc/x-ui/credentials.txt
+   systemctl stop q-ui
+   rm -f /etc/q-ui/q-ui.db /etc/q-ui/.firstboot-done /etc/q-ui/credentials.txt
    # re-enable first-boot regeneration if you installed via Packer:
-   systemctl enable x-ui-firstboot 2>/dev/null || true
+   systemctl enable q-ui-firstboot 2>/dev/null || true
    ```
 
-   > ⚠️ If you snapshot a server **with** its `x-ui.db`, every clone shares the
+   > ⚠️ If you snapshot a server **with** its `q-ui.db`, every clone shares the
    > same admin credentials and session secret. Always remove the DB first.
 
 ## "App"-style listing

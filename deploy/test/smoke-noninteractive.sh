@@ -3,8 +3,8 @@
 # smoke-noninteractive.sh — verify the non-interactive install path.
 #
 # Runs install.sh inside an Ubuntu container with NO TTY (piped) and
-# XUI_NONINTERACTIVE=1, then asserts:
-#   * /etc/x-ui/install-result.env exists (mode 600) with random, non-default creds
+# QUI_NONINTERACTIVE=1, then asserts:
+#   * /etc/q-ui/install-result.env exists (mode 600) with random, non-default creds
 #   * the panel reports hasDefaultCredential: false (no admin/admin remains)
 #   * the panel HTTP server actually serves on the generated port/base path
 #
@@ -24,8 +24,8 @@ echo "== non-interactive install smoke test (image: $IMAGE) =="
 
 docker run --rm \
     -v "${REPO_ROOT}/install.sh:/root/install.sh:ro" \
-    -e XUI_NONINTERACTIVE=1 \
-    -e XUI_SSL_MODE=none \
+    -e QUI_NONINTERACTIVE=1 \
+    -e QUI_SSL_MODE=none \
     -e DEBIAN_FRONTEND=noninteractive \
     "$IMAGE" bash -euo pipefail -c '
         apt-get update -qq
@@ -36,7 +36,7 @@ docker run --rm \
         cat /root/install.sh | bash
 
         echo "--- assertions ---"
-        RESULT=/etc/x-ui/install-result.env
+        RESULT=/etc/q-ui/install-result.env
         test -f "$RESULT" || { echo "FAIL: $RESULT missing"; exit 1; }
 
         perms=$(stat -c %a "$RESULT")
@@ -44,23 +44,23 @@ docker run --rm \
 
         # shellcheck disable=SC1090
         . "$RESULT"
-        [ -n "${XUI_USERNAME:-}" ] && [ "$XUI_USERNAME" != "admin" ] \
+        [ -n "${QUI_USERNAME:-}" ] && [ "$QUI_USERNAME" != "admin" ] \
             || { echo "FAIL: username missing or still admin"; exit 1; }
-        [ -n "${XUI_PASSWORD:-}" ] && [ "$XUI_PASSWORD" != "admin" ] \
+        [ -n "${QUI_PASSWORD:-}" ] && [ "$QUI_PASSWORD" != "admin" ] \
             || { echo "FAIL: password missing or still admin"; exit 1; }
-        [ -n "${XUI_PANEL_PORT:-}" ] || { echo "FAIL: port missing"; exit 1; }
+        [ -n "${QUI_PANEL_PORT:-}" ] || { echo "FAIL: port missing"; exit 1; }
 
         # No default admin in the DB.
-        /usr/local/x-ui/x-ui setting -show | grep -q "hasDefaultCredential: false" \
+        /usr/local/q-ui/q-ui setting -show | grep -q "hasDefaultCredential: false" \
             || { echo "FAIL: hasDefaultCredential is not false"; exit 1; }
 
         echo "--- verifying the panel serves HTTP ---"
-        cd /usr/local/x-ui
-        ./x-ui > /tmp/xui.log 2>&1 &
+        cd /usr/local/q-ui
+        ./q-ui > /tmp/xui.log 2>&1 &
         xpid=$!
         for _ in $(seq 1 15); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
-                "http://127.0.0.1:${XUI_PANEL_PORT}/${XUI_WEB_BASE_PATH}/" 2>/dev/null || true)
+                "http://127.0.0.1:${QUI_PANEL_PORT}/${QUI_WEB_BASE_PATH}/" 2>/dev/null || true)
             case "$code" in 200|301|302|307|308) break ;; esac
             sleep 1
         done
@@ -71,7 +71,7 @@ docker run --rm \
             *) echo "FAIL: panel did not serve (status ${code:-none})"; tail -n 30 /tmp/xui.log; exit 1 ;;
         esac
 
-        echo "SMOKE_PASS: user=$XUI_USERNAME port=$XUI_PANEL_PORT path=$XUI_WEB_BASE_PATH"
+        echo "SMOKE_PASS: user=$QUI_USERNAME port=$QUI_PANEL_PORT path=$QUI_WEB_BASE_PATH"
     '
 
 echo "== non-interactive smoke test PASSED =="

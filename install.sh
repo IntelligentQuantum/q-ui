@@ -42,10 +42,10 @@ arch() {
 
 echo "Arch: $(arch)"
 
-# Non-interactive mode: triggered explicitly via XUI_NONINTERACTIVE=1, or
+# Non-interactive mode: triggered explicitly via QUI_NONINTERACTIVE=1, or
 # implicitly when stdin is not a TTY (e.g. `curl ... | bash`, cloud-init).
 # In this mode every prompt below is replaced by an env var or a sane default.
-if [[ "${XUI_NONINTERACTIVE:-0}" == "1" ]] || [[ ! -t 0 ]]; then
+if [[ "${QUI_NONINTERACTIVE:-0}" == "1" ]] || [[ ! -t 0 ]]; then
     NONINTERACTIVE=1
 else
     NONINTERACTIVE=0
@@ -152,23 +152,23 @@ prompt_or_default() {
 # spaces, quotes, $(...) or backticks is shell-escaped and the file stays safely
 # source-able (consumers do '. install-result.env'). For the alphanumeric random
 # values gen_random_string emits, %q is a no-op. This is a DIFFERENT file from the
-# Postgres env file (/etc/default/x-ui).
+# Postgres env file (/etc/default/q-ui).
 write_install_result() {
     local u="$1" p="$2" port="$3" wbp="$4" scheme="$5" host="$6" token="$7" dbtype="$8"
-    local result_file="/etc/x-ui/install-result.env"
+    local result_file="/etc/q-ui/install-result.env"
     local url_host="${host:-SERVER_IP_UNKNOWN}"
-    install -d -m 755 /etc/x-ui 2> /dev/null
+    install -d -m 755 /etc/q-ui 2> /dev/null
     local prev_umask
     prev_umask=$(umask)
     umask 077
     if ! {
-        printf 'XUI_USERNAME=%q\n' "$u"
-        printf 'XUI_PASSWORD=%q\n' "$p"
-        printf 'XUI_PANEL_PORT=%q\n' "$port"
-        printf 'XUI_WEB_BASE_PATH=%q\n' "$wbp"
-        printf 'XUI_ACCESS_URL=%q\n' "${scheme}://${url_host}:${port}/${wbp}"
-        printf 'XUI_API_TOKEN=%q\n' "$token"
-        printf 'XUI_DB_TYPE=%q\n' "$dbtype"
+        printf 'QUI_USERNAME=%q\n' "$u"
+        printf 'QUI_PASSWORD=%q\n' "$p"
+        printf 'QUI_PANEL_PORT=%q\n' "$port"
+        printf 'QUI_WEB_BASE_PATH=%q\n' "$wbp"
+        printf 'QUI_ACCESS_URL=%q\n' "${scheme}://${url_host}:${port}/${wbp}"
+        printf 'QUI_API_TOKEN=%q\n' "$token"
+        printf 'QUI_DB_TYPE=%q\n' "$dbtype"
     } > "$result_file"; then
         umask "$prev_umask"
         echo -e "${yellow}Warning: failed to write ${result_file}.${plain}" >&2
@@ -449,7 +449,7 @@ setup_ip_certificate() {
 
     # Choose port for HTTP-01 listener (default 80, prompt override)
     local WebPort=""
-    prompt_or_default WebPort "Port to use for ACME HTTP-01 listener (default 80): " "80" XUI_ACME_HTTP_PORT
+    prompt_or_default WebPort "Port to use for ACME HTTP-01 listener (default 80): " "80" QUI_ACME_HTTP_PORT
     WebPort="${WebPort:-80}"
     if ! [[ "${WebPort}" =~ ^[0-9]+$ ]] || ((WebPort < 1 || WebPort > 65535)); then
         echo -e "${red}Invalid port provided. Falling back to 80.${plain}"
@@ -491,7 +491,7 @@ setup_ip_certificate() {
     # Issue certificate with shortlived profile
     echo -e "${green}Issuing IP certificate for ${ipv4}...${plain}"
     ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force > /dev/null 2>&1
-    [[ -n "${XUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${XUI_ACME_EMAIL}" > /dev/null 2>&1
+    [[ -n "${QUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${QUI_ACME_EMAIL}" > /dev/null 2>&1
 
     ~/.acme.sh/acme.sh --issue \
         ${domain_args} \
@@ -581,9 +581,9 @@ ssl_cert_issue() {
     # get the domain here, and we need to verify it
     local domain=""
     if [[ "$NONINTERACTIVE" == "1" ]]; then
-        domain="${XUI_DOMAIN// /}"
+        domain="${QUI_DOMAIN// /}"
         if [[ -z "$domain" ]] || ! is_domain "$domain"; then
-            echo -e "${red}XUI_SSL_MODE=domain requires a valid XUI_DOMAIN (got: '${XUI_DOMAIN:-}').${plain}"
+            echo -e "${red}QUI_SSL_MODE=domain requires a valid QUI_DOMAIN (got: '${QUI_DOMAIN:-}').${plain}"
             return 1
         fi
     else
@@ -645,7 +645,7 @@ ssl_cert_issue() {
 
     # get the port number for the standalone server
     local WebPort=80
-    prompt_or_default WebPort "Please choose which port to use (default is 80): " "80" XUI_ACME_HTTP_PORT
+    prompt_or_default WebPort "Please choose which port to use (default is 80): " "80" QUI_ACME_HTTP_PORT
     if [[ ${WebPort} -gt 65535 || ${WebPort} -lt 1 ]]; then
         echo -e "${yellow}Your input ${WebPort} is invalid, will use default port 80.${plain}"
         WebPort=80
@@ -659,7 +659,7 @@ ssl_cert_issue() {
     if [[ ${cert_exists} -eq 0 ]]; then
         # issue the certificate
         ~/.acme.sh/acme.sh --set-default-ca --server letsencrypt --force
-        [[ -n "${XUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${XUI_ACME_EMAIL}" > /dev/null 2>&1
+        [[ -n "${QUI_ACME_EMAIL:-}" ]] && ~/.acme.sh/acme.sh --register-account -m "${QUI_ACME_EMAIL}" > /dev/null 2>&1
         ~/.acme.sh/acme.sh --issue -d ${domain} $(acme_listen_flag) --standalone --httpport ${WebPort} --force
         if [ $? -ne 0 ]; then
             echo -e "${red}Issuing certificate failed, please check logs.${plain}"
@@ -793,12 +793,12 @@ prompt_and_setup_ssl() {
     echo -e "${blue}Note:${plain} Options 1 & 2 require port 80 open. Option 3 requires manual paths."
     echo -e "${blue}Note:${plain} Option 4 serves the panel over plain HTTP — only safe behind nginx/Caddy or an SSH tunnel."
     if [[ "$NONINTERACTIVE" == "1" ]]; then
-        case "${XUI_SSL_MODE:-none}" in
+        case "${QUI_SSL_MODE:-none}" in
             domain) ssl_choice="1" ;;
             ip) ssl_choice="2" ;;
             none | "") ssl_choice="4" ;;
             *)
-                echo -e "${yellow}Unknown XUI_SSL_MODE='${XUI_SSL_MODE}', defaulting to none (HTTP).${plain}"
+                echo -e "${yellow}Unknown QUI_SSL_MODE='${QUI_SSL_MODE}', defaulting to none (HTTP).${plain}"
                 ssl_choice="4"
                 ;;
         esac
@@ -840,7 +840,7 @@ prompt_and_setup_ssl() {
 
             # Ask for optional IPv6
             local ipv6_addr=""
-            prompt_or_default ipv6_addr "Do you have an IPv6 address to include? (leave empty to skip): " "" XUI_SSL_IPV6
+            prompt_or_default ipv6_addr "Do you have an IPv6 address to include? (leave empty to skip): " "" QUI_SSL_IPV6
             ipv6_addr="${ipv6_addr// /}" # Trim whitespace
 
             # Stop panel if running (port 80 needed)
@@ -994,8 +994,8 @@ config_after_install() {
     if [[ -z "$server_ip" ]]; then
         if [[ "$NONINTERACTIVE" == "1" ]]; then
             # Panel binds 0.0.0.0 regardless; the IP is only used to compose the
-            # displayed access URL. Fall back to XUI_SERVER_IP or leave blank.
-            server_ip="${XUI_SERVER_IP:-}"
+            # displayed access URL. Fall back to QUI_SERVER_IP or leave blank.
+            server_ip="${QUI_SERVER_IP:-}"
         else
             echo -e "${yellow}Could not auto-detect server IP from any provider.${plain}"
             while [[ -z "$server_ip" ]]; do
@@ -1011,9 +1011,9 @@ config_after_install() {
 
     if [[ ${#existing_webBasePath} -lt 4 ]]; then
         if [[ "$existing_hasDefaultCredential" == "true" ]]; then
-            local config_webBasePath="${XUI_WEB_BASE_PATH:-$(gen_random_string 18)}"
-            local config_username="${XUI_USERNAME:-$(gen_random_string 10)}"
-            local config_password="${XUI_PASSWORD:-$(gen_random_string 10)}"
+            local config_webBasePath="${QUI_WEB_BASE_PATH:-$(gen_random_string 18)}"
+            local config_username="${QUI_USERNAME:-$(gen_random_string 10)}"
+            local config_password="${QUI_PASSWORD:-$(gen_random_string 10)}"
             local config_port=""
 
             local db_label="SQLite (/etc/q-ui/q-ui.db)"
@@ -1024,7 +1024,7 @@ config_after_install() {
             echo -e "  1) SQLite     (default — recommended for < 500 clients)"
             echo -e "  2) PostgreSQL (recommended for high client counts / many nodes)"
             if [[ "$NONINTERACTIVE" == "1" ]]; then
-                if [[ "${XUI_DB_TYPE:-sqlite}" == "postgres" ]]; then
+                if [[ "${QUI_DB_TYPE:-sqlite}" == "postgres" ]]; then
                     db_choice="2"
                 else
                     db_choice="1"
@@ -1052,14 +1052,14 @@ config_after_install() {
                 local pg_local_installed=0
                 while [[ -z "$xui_dsn" ]]; do
                     if [[ "$NONINTERACTIVE" == "1" ]]; then
-                        if [[ -n "${XUI_DB_DSN:-}" ]]; then
-                            xui_dsn="${XUI_DB_DSN}"
+                        if [[ -n "${QUI_DB_DSN:-}" ]]; then
+                            xui_dsn="${QUI_DB_DSN}"
                             db_label="PostgreSQL (external)"
                             break
                         fi
                         echo -e "${yellow}Installing PostgreSQL locally (non-interactive)...${plain}"
                         local pg_cred_file
-                        pg_cred_file=$(mktemp 2> /dev/null) || pg_cred_file=$(mktemp -t x-ui-pg-creds.XXXXXXXX)
+                        pg_cred_file=$(mktemp 2> /dev/null) || pg_cred_file=$(mktemp -t q-ui-pg-creds.XXXXXXXX)
                         if [[ -n "${pg_cred_file}" ]] && xui_dsn=$(PG_CRED_FILE="${pg_cred_file}" install_postgres_local); then
                             pg_local_installed=1
                             if [[ -r "${pg_cred_file}" ]]; then
@@ -1072,7 +1072,7 @@ config_after_install() {
                         fi
                         rm -f "${pg_cred_file}"
                         echo -e "${red}PostgreSQL installation failed in non-interactive mode; aborting.${plain}"
-                        echo -e "${yellow}Set XUI_DB_DSN to use an existing server, or XUI_DB_TYPE=sqlite.${plain}"
+                        echo -e "${yellow}Set QUI_DB_DSN to use an existing server, or QUI_DB_TYPE=sqlite.${plain}"
                         exit 1
                     fi
                     echo ""
@@ -1145,8 +1145,8 @@ EOF
             fi
 
             if [[ "$NONINTERACTIVE" == "1" ]]; then
-                if [[ -n "${XUI_PANEL_PORT:-}" ]]; then
-                    config_port="${XUI_PANEL_PORT}"
+                if [[ -n "${QUI_PANEL_PORT:-}" ]]; then
+                    config_port="${QUI_PANEL_PORT}"
                     echo -e "${yellow}Your Panel Port is: ${config_port}${plain}"
                 else
                     config_port=$(shuf -i 1024-62000 -n 1)
@@ -1258,8 +1258,8 @@ EOF
         fi
     else
         if [[ "$existing_hasDefaultCredential" == "true" ]]; then
-            local config_username="${XUI_USERNAME:-$(gen_random_string 10)}"
-            local config_password="${XUI_PASSWORD:-$(gen_random_string 10)}"
+            local config_username="${QUI_USERNAME:-$(gen_random_string 10)}"
+            local config_password="${QUI_PASSWORD:-$(gen_random_string 10)}"
 
             echo -e "${yellow}Default credentials detected. Security update required...${plain}"
             ${xui_folder}/q-ui setting -username "${config_username}" -password "${config_password}"
@@ -1271,11 +1271,11 @@ EOF
 
             # Persist a machine-parseable credentials file for cloud-init / MOTD.
             local config_apiToken
-            config_apiToken=$(${xui_folder}/x-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
+            config_apiToken=$(${xui_folder}/q-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
             : "${SSL_SCHEME:=https}"
             : "${SSL_HOST:=${server_ip}}"
             write_install_result "${config_username}" "${config_password}" "${existing_port}" \
-                "${existing_webBasePath}" "${SSL_SCHEME}" "${SSL_HOST}" "${config_apiToken}" "${XUI_DB_TYPE:-sqlite}"
+                "${existing_webBasePath}" "${SSL_SCHEME}" "${SSL_HOST}" "${config_apiToken}" "${QUI_DB_TYPE:-sqlite}"
         else
             echo -e "${green}Username, Password, and WebBasePath are properly set.${plain}"
         fi

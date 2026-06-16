@@ -18,15 +18,15 @@ Both sources build for **`amd64` and `arm64`** (select with `-var xui_arch=...`)
 
 3x-ui seeds a hardcoded `admin/admin` user and generates its session secret +
 panel GUID the first time it starts. If an image shipped an initialized
-`x-ui.db`, **every clone would share the same credentials and secret**. So the
+`q-ui.db`, **every clone would share the same credentials and secret**. So the
 build deliberately:
 
 - installs the panel binary + systemd unit but **never starts it** and **never
   creates a DB** (`scripts/provision.sh`);
 - wipes any stray DB/credentials/host-keys at the end (`scripts/cleanup.sh`);
-- enables `x-ui-firstboot.service`, which on first boot resets settings, sets a
+- enables `q-ui-firstboot.service`, which on first boot resets settings, sets a
   random username/password on a random high port, regenerates the secret/GUID,
-  and writes the credentials to `/etc/x-ui/credentials.txt` + `/etc/motd`
+  and writes the credentials to `/etc/q-ui/credentials.txt` + `/etc/motd`
   (`deploy/firstboot/`).
 
 ## Prerequisites
@@ -51,17 +51,17 @@ Build a specific release (recommended) or `latest`:
 
 ```bash
 # amd64 qcow2 (no cloud account needed)
-packer build -only='qemu.x-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=amd64' .
+packer build -only='qemu.q-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=amd64' .
 
 # arm64 qcow2 (run on an arm64 host for native KVM)
-packer build -only='qemu.x-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=arm64' .
+packer build -only='qemu.q-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=arm64' .
 
 # amd64 AWS AMI
-packer build -only='amazon-ebs.x-ui' \
+packer build -only='amazon-ebs.q-ui' \
   -var 'xui_version=v3.3.1' -var 'xui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
 
 # arm64 AWS AMI (Graviton)
-packer build -only='amazon-ebs.x-ui' \
+packer build -only='amazon-ebs.q-ui' \
   -var 'xui_version=v3.3.1' -var 'xui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
 ```
 
@@ -93,11 +93,11 @@ arm64 qcow2 on a native `ubuntu-24.04-arm` runner, and both AMIs from a single r
 
 On the first boot of any instance launched from the image:
 
-1. `x-ui-firstboot.service` runs **before** `x-ui.service`.
+1. `q-ui-firstboot.service` runs **before** `q-ui.service`.
 2. It generates a unique admin username/password, a random panel port, a random
    base path, and an API token.
-3. Credentials are written to `/etc/x-ui/credentials.txt` (root-only) and shown
-   in `/etc/motd`. Retrieve them with `sudo cat /etc/x-ui/credentials.txt`.
+3. Credentials are written to `/etc/q-ui/credentials.txt` (root-only) and shown
+   in `/etc/motd`. Retrieve them with `sudo cat /etc/q-ui/credentials.txt`.
 4. The panel then starts on the random port. `admin/admin` never exists.
 
 ## CI

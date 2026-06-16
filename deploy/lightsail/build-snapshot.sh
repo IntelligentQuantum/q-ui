@@ -137,12 +137,12 @@ log "provisioning complete."
 if [ -n "$PANEL_PORT" ]; then
     log "pinning panel port ${PANEL_PORT} (username/password stay random)..."
     ssh "${SSH_OPTS[@]}" -i "$KEY_FILE" "ubuntu@${IP}" \
-        "echo 'XUI_PANEL_PORT=${PANEL_PORT}' | sudo tee -a /etc/default/x-ui >/dev/null"
+        "echo 'QUI_PANEL_PORT=${PANEL_PORT}' | sudo tee -a /etc/default/q-ui >/dev/null"
 fi
 
 log "stripping instance state (shared cleanup.sh)..."
 ssh "${SSH_OPTS[@]}" -i "$KEY_FILE" "ubuntu@${IP}" \
-    'curl -fsSL https://raw.githubusercontent.com/MHSanaei/3x-ui/main/deploy/packer/scripts/cleanup.sh | sudo bash'
+    'curl -fsSL https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/deploy/packer/scripts/cleanup.sh | sudo bash'
 
 log "stopping instance..."
 aws lightsail stop-instance --instance-name "$INSTANCE_NAME" --region "$REGION" > /dev/null
@@ -186,7 +186,7 @@ if [ -n "$PANEL_PORT" ]; then
 else
     echo
     echo " Each instance picks a RANDOM panel port. After it boots, read it from"
-    echo "   sudo cat /etc/x-ui/credentials.txt"
+    echo "   sudo cat /etc/q-ui/credentials.txt"
     echo " and open that TCP port in the instance's Lightsail IPv4 firewall."
 fi
 echo "================================================================"
