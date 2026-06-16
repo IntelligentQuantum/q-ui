@@ -15,7 +15,7 @@
 #                       xray. Handy for quick Windows/macOS/Linux binaries.
 #
 # Usage:
-#   ./build.sh frontend                 Build the web UI -> web/dist
+#   ./build.sh frontend                 Build the web UI -> internal/web/dist
 #   ./build.sh native                   Build for the host OS/arch (CGO)
 #   ./build.sh linux-amd64              Linux x86-64 binary  (Docker, full)
 #   ./build.sh linux-arm64              Linux arm64  binary  (Docker, full)
@@ -31,7 +31,7 @@
 #   VENDOR=auto|on|off   Vendor modules before Docker builds so the in-container
 #                        build is offline (also dodges flaky module-proxy zips).
 #                        Default: auto (on when a host `go` toolchain exists).
-#   SKIP_FRONTEND=1      Don't (re)build web/dist for native / pure-Go targets.
+#   SKIP_FRONTEND=1      Don't (re)build internal/web/dist for native / pure-Go targets.
 #   LDFLAGS="..."        Override Go linker flags. Default when unset: "-w -s"
 #                        for native/cross builds; a fully static link
 #                        (-linkmode external -extldflags '-static') for the
@@ -66,12 +66,12 @@ warn() { printf '\033[1;33m warn:\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31mERROR:\033[0m %s\n' "$*" >&2; exit 1; }
 
 # ---------------------------------------------------------------------------
-# Frontend (Vite -> web/dist). Required before any CGO/native Go build because
-# the binary embeds web/dist via go:embed. The Docker path builds it itself.
+# Frontend (Vite -> internal/web/dist). Required before any CGO/native Go build because
+# the binary embeds internal/web/dist via go:embed. The Docker path builds it itself.
 # ---------------------------------------------------------------------------
 build_frontend() {
   command -v npm >/dev/null 2>&1 || die "npm not found — install Node.js 20+."
-  log "Building web UI -> web/dist"
+  log "Building web UI -> internal/web/dist"
   ( cd frontend && { [ -d node_modules ] || npm ci; } && npm run build )
 }
 
