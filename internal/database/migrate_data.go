@@ -25,7 +25,7 @@ import (
 // related tests.
 //
 // Important: When adding a new top-level model (like OutboundSubscription),
-// you must add it here **in addition to** the list in database/db.go:initModels().
+// you must add it here **in addition to** the list in internal/database/db.go:initModels().
 // This list is used for:
 //   - Creating the destination schema during cross-DB migration
 //   - Truncating tables
@@ -39,7 +39,6 @@ func migrationModels() []any {
 		&model.User{},
 		&model.Setting{},
 		&model.HistoryOfSeeders{},
-		&model.CustomGeoResource{},
 		&model.Node{},
 		&model.ApiToken{},
 		&model.Inbound{},
@@ -48,12 +47,14 @@ func migrationModels() []any {
 		&model.InboundClientIps{},
 		&model.ClientRecord{},
 		&model.ClientInbound{},
+		&model.ClientExternalLink{},
 		&model.InboundFallback{},
 		&model.NodeClientTraffic{},
 		&model.Transaction{},
 		&model.Payment{},
 		&model.Product{},
 		&model.Order{},
+		&model.NodeClientIp{},
 		&model.OutboundSubscription{},
 	}
 }

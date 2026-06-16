@@ -545,9 +545,11 @@ func buildStream(network, security string) map[string]any {
 	case "httpupgrade":
 		stream["httpupgradeSettings"] = map[string]any{"path": "/", "host": "", "headers": map[string]any{}}
 	case "xhttp":
+		// No scMaxEachPostBytes/scMinPostsIntervalMs seed: xray-core's own
+		// defaults apply, and the literal values fingerprint traffic (#5141).
 		stream["xhttpSettings"] = map[string]any{
 			"path": "/", "host": "", "mode": "auto", "headers": map[string]any{},
-			"xPaddingBytes": "100-1000", "scMaxEachPostBytes": "1000000",
+			"xPaddingBytes": "100-1000",
 		}
 	default:
 		stream["tcpSettings"] = map[string]any{"header": map[string]any{"type": "none"}}
@@ -779,8 +781,10 @@ func base64DecodeFlexible(s string) (string, error) {
 	return "", fmt.Errorf("base64 decode failed")
 }
 
-// SlugRemark turns a free-form remark into a conservative DNS-ish tag segment.
-var slugRe = regexp.MustCompile(`[^a-z0-9]+`)
+// SlugRemark turns a free-form remark into a tag segment, keeping Unicode
+// letters and digits (so non-ASCII remarks like Cyrillic stay readable) and
+// replacing every other run of characters with a single dash.
+var slugRe = regexp.MustCompile(`[^\p{L}\p{N}]+`)
 
 func SlugRemark(remark string) string {
 	s := strings.ToLower(strings.TrimSpace(remark))

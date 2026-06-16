@@ -9,15 +9,12 @@ import (
 	yaml "github.com/goccy/go-yaml"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/logger"
-	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 )
 
 type SubClashService struct {
-	inboundService service.InboundService
-	enableRouting  bool
-	clashRules     string
-	SubService     *SubService
+	enableRouting bool
+	clashRules    string
+	SubService    *SubService
 }
 
 func NewSubClashService(enableRouting bool, clashRules string, subService *SubService) *SubClashService {
@@ -25,29 +22,42 @@ func NewSubClashService(enableRouting bool, clashRules string, subService *SubSe
 }
 
 func (s *SubClashService) GetClash(subId string, host string) (string, string, error) {
-	// Set per-request state so resolveInboundAddress sees the node map.
-	s.SubService.PrepareForRequest(host)
-	inbounds, err := s.SubService.getInboundsBySubId(subId)
-	if err != nil || len(inbounds) == 0 {
+	subReq := s.SubService.ForRequest(host)
+	inbounds, err := subReq.getInboundsBySubId(subId)
+	if err != nil {
 		return "", "", err
+	}
+	externalLinks, err := subReq.getClientExternalLinksBySubId(subId)
+	if err != nil {
+		return "", "", err
+	}
+	if len(inbounds) == 0 && len(externalLinks) == 0 {
+		return "", "", nil
 	}
 
 	var proxies []map[string]any
 
 	seenEmails := make(map[string]struct{})
 	for _, inbound := range inbounds {
-		clients, err := s.inboundService.GetClients(inbound)
-		if err != nil {
-			logger.Error("SubClashService - GetClients: Unable to get clients from inbound")
-		}
-		if clients == nil {
+		clients := subReq.matchingClients(inbound, subId)
+		if len(clients) == 0 {
 			continue
 		}
-		s.SubService.projectThroughFallbackMaster(inbound)
+		subReq.projectThroughFallbackMaster(inbound)
 		for _, client := range clients {
-			if client.SubID == subId {
-				seenEmails[client.Email] = struct{}{}
-				proxies = append(proxies, s.getProxies(inbound, client, host)...)
+			seenEmails[client.Email] = struct{}{}
+			proxies = append(proxies, s.getProxies(subReq, inbound, client, host)...)
+		}
+	}
+	for _, ext := range externalLinks {
+		for _, el := range expandEntry(ext) {
+			name := el.Name
+			if name == "" {
+				name = ext.Email
+			}
+			if proxy := s.clashProxyFromExternal(el.Link, name); proxy != nil {
+				seenEmails[ext.Email] = struct{}{}
+				proxies = append(proxies, proxy)
 			}
 		}
 	}
@@ -62,7 +72,7 @@ func (s *SubClashService) GetClash(subId string, host string) (string, string, e
 	for e := range seenEmails {
 		emails = append(emails, e)
 	}
-	traffic, _ := s.SubService.AggregateTrafficByEmails(emails)
+	traffic, _ := subReq.AggregateTrafficByEmails(emails)
 
 	proxyNames := make([]string, 0, len(proxies)+1)
 	for _, proxy := range proxies {
@@ -129,12 +139,12 @@ func fallbackProxyName(proxy map[string]any, idx int) string {
 	return fmt.Sprintf("proxy-%d", idx+1)
 }
 
-func (s *SubClashService) getProxies(inbound *model.Inbound, client model.Client, host string) []map[string]any {
+func (s *SubClashService) getProxies(subReq *SubService, inbound *model.Inbound, client model.Client, host string) []map[string]any {
 	stream := s.streamData(inbound.StreamSettings)
 	// For node-managed inbounds the Clash proxy "server" must be the
 	// node's address, not the request host. resolveInboundAddress handles
 	// the node→subscriber-host fallback chain.
-	defaultDest := s.SubService.resolveInboundAddress(inbound)
+	defaultDest := subReq.resolveInboundAddress(inbound)
 	if defaultDest == "" {
 		defaultDest = host
 	}
@@ -176,7 +186,7 @@ func (s *SubClashService) getProxies(inbound *model.Inbound, client model.Client
 			applyExternalProxyTLSToStream(extPrxy, workingStream, security)
 		}
 
-		proxy := s.buildProxy(&workingInbound, client, workingStream, extPrxy["remark"].(string))
+		proxy := s.buildProxy(subReq, &workingInbound, client, workingStream, extPrxy["remark"].(string))
 		if len(proxy) > 0 {
 			proxies = append(proxies, proxy)
 		}
@@ -184,15 +194,15 @@ func (s *SubClashService) getProxies(inbound *model.Inbound, client model.Client
 	return proxies
 }
 
-func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client, stream map[string]any, extraRemark string) map[string]any {
+func (s *SubClashService) buildProxy(subReq *SubService, inbound *model.Inbound, client model.Client, stream map[string]any, extraRemark string) map[string]any {
 	// Hysteria has its own transport + TLS model, applyTransport /
 	// applySecurity don't fit.
 	if inbound.Protocol == model.Hysteria {
-		return s.buildHysteriaProxy(inbound, client, extraRemark)
+		return s.buildHysteriaProxy(subReq, inbound, client, extraRemark)
 	}
 
 	proxy := map[string]any{
-		"name":   s.SubService.genRemark(inbound, client.Email, extraRemark),
+		"name":   subReq.genRemark(inbound, client.Email, extraRemark),
 		"server": inbound.Listen,
 		"port":   inbound.Port,
 		"udp":    true,
@@ -216,11 +226,12 @@ func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client
 	case model.VLESS:
 		proxy["type"] = "vless"
 		proxy["uuid"] = client.ID
-		if client.Flow != "" && network == "tcp" {
-			proxy["flow"] = client.Flow
-		}
 		var inboundSettings map[string]any
 		json.Unmarshal([]byte(inbound.Settings), &inboundSettings)
+		streamSecurity, _ := stream["security"].(string)
+		if client.Flow != "" && vlessFlowAllowed(network, streamSecurity, inboundSettings) {
+			proxy["flow"] = client.Flow
+		}
 		if encryption, ok := inboundSettings["encryption"].(string); ok {
 			encryption = strings.TrimSpace(encryption)
 			if encryption != "" && encryption != "none" {
@@ -262,7 +273,7 @@ func (s *SubClashService) buildProxy(inbound *model.Inbound, client model.Client
 // directly instead of going through streamData/tlsData, because those
 // helpers prune fields (like `allowInsecure` / the salamander obfs
 // block) that the hysteria proxy wants preserved.
-func (s *SubClashService) buildHysteriaProxy(inbound *model.Inbound, client model.Client, extraRemark string) map[string]any {
+func (s *SubClashService) buildHysteriaProxy(subReq *SubService, inbound *model.Inbound, client model.Client, extraRemark string) map[string]any {
 	var inboundSettings map[string]any
 	_ = json.Unmarshal([]byte(inbound.Settings), &inboundSettings)
 
@@ -274,7 +285,7 @@ func (s *SubClashService) buildHysteriaProxy(inbound *model.Inbound, client mode
 	}
 
 	proxy := map[string]any{
-		"name":   s.SubService.genRemark(inbound, client.Email, extraRemark),
+		"name":   subReq.genRemark(inbound, client.Email, extraRemark),
 		"type":   proxyType,
 		"server": inbound.Listen,
 		"port":   inbound.Port,

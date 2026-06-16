@@ -172,6 +172,12 @@ type process struct {
 	nodeOnlineTrees map[int]map[string][]string
 	onlineMu        sync.RWMutex
 
+	// onlineAPISupport caches whether the running core implements the
+	// online-stats RPCs (GetUsersStats). A new process is created on every
+	// restart/version switch, so the flag resets to Unknown and is re-probed
+	// lazily by the first caller.
+	onlineAPISupport atomic.Int32
+
 	config     *Config
 	configPath string // if set, use this path instead of GetConfigPath() and remove on Stop
 	logWriter  *LogWriter
@@ -181,9 +187,34 @@ type process struct {
 	intentionalStop atomic.Bool
 }
 
+// OnlineAPISupport describes whether the running Xray core implements the
+// online-stats API (statsUserOnline + GetUsersStats).
+type OnlineAPISupport int32
+
+const (
+	// OnlineAPIUnknown means support has not been probed yet for this process.
+	OnlineAPIUnknown OnlineAPISupport = iota
+	// OnlineAPISupported means the core answered the online-stats RPC.
+	OnlineAPISupported
+	// OnlineAPIUnsupported means the core returned Unimplemented (older binary).
+	OnlineAPIUnsupported
+)
+
+// OnlineAPISupport returns the cached online-stats capability of this process.
+func (p *process) OnlineAPISupport() OnlineAPISupport {
+	return OnlineAPISupport(p.onlineAPISupport.Load())
+}
+
+// SetOnlineAPISupport records the probed online-stats capability of this process.
+func (p *process) SetOnlineAPISupport(v OnlineAPISupport) {
+	p.onlineAPISupport.Store(int32(v))
+}
+
 var (
 	xrayGracefulStopTimeout = 5 * time.Second
 	xrayForceStopTimeout    = 2 * time.Second
+	// OnCrash is called when xray crashes unexpectedly. Set from web layer.
+	OnCrash func(err error)
 )
 
 // newProcess creates a new internal process struct for Xray.
@@ -247,6 +278,13 @@ func (p *Process) GetAPIPort() int {
 // GetConfig returns the configuration used by the Xray process.
 func (p *Process) GetConfig() *Config {
 	return p.config
+}
+
+// SetConfig replaces the stored configuration snapshot after the running
+// process has been reconciled with it through the gRPC API (hot apply), so
+// later change detection compares against what is actually running.
+func (p *Process) SetConfig(config *Config) {
+	p.config = config
 }
 
 // GetOnlineClients returns the union of locally-online clients and
@@ -530,6 +568,9 @@ func (p *process) waitForCommand(cmd *exec.Cmd) {
 
 	logger.Error("Failure in running xray-core:", err)
 	p.exitErr = err
+	if OnCrash != nil {
+		OnCrash(err)
+	}
 }
 
 // Stop terminates the running Xray process.

@@ -3,10 +3,8 @@ package service
 import (
 	"context"
 	"crypto/sha256"
-	"crypto/subtle"
 	"crypto/tls"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,9 +17,12 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
+	"github.com/mhsanaei/3x-ui/v3/internal/util/json_util"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
 type HeartbeatPatch struct {
@@ -43,75 +44,6 @@ type HeartbeatPatch struct {
 }
 
 type NodeService struct{}
-
-var nodeHTTPClient = &http.Client{
-	Transport: &http.Transport{
-		MaxIdleConns:        64,
-		MaxIdleConnsPerHost: 4,
-		IdleConnTimeout:     60 * time.Second,
-		DialContext:         netsafe.SSRFGuardedDialContext,
-	},
-}
-
-// nodeHTTPClientFor returns the HTTP client used to reach a node, honoring its
-// per-node TLS verification mode. "verify" (or any http node) uses the shared
-// client with default certificate validation. "skip" disables validation.
-// "pin" disables the default chain check but verifies the leaf certificate's
-// SHA-256 against the stored pin, keeping MITM protection for self-signed certs.
-func nodeHTTPClientFor(n *model.Node) (*http.Client, error) {
-	mode := n.TlsVerifyMode
-	if mode == "" {
-		mode = "verify"
-	}
-	if mode == "verify" || n.Scheme == "http" {
-		return nodeHTTPClient, nil
-	}
-	tlsCfg := &tls.Config{InsecureSkipVerify: true}
-	if mode == "pin" {
-		want, err := decodeCertPin(n.PinnedCertSha256)
-		if err != nil {
-			return nil, err
-		}
-		tlsCfg.VerifyConnection = func(cs tls.ConnectionState) error {
-			if len(cs.PeerCertificates) == 0 {
-				return common.NewError("node presented no certificate")
-			}
-			sum := sha256.Sum256(cs.PeerCertificates[0].Raw)
-			if subtle.ConstantTimeCompare(sum[:], want) != 1 {
-				return common.NewError("node certificate does not match pinned SHA-256")
-			}
-			return nil
-		}
-	}
-	return &http.Client{
-		Transport: &http.Transport{
-			MaxIdleConns:        64,
-			MaxIdleConnsPerHost: 4,
-			IdleConnTimeout:     60 * time.Second,
-			DialContext:         netsafe.SSRFGuardedDialContext,
-			TLSClientConfig:     tlsCfg,
-		},
-	}, nil
-}
-
-// decodeCertPin accepts a SHA-256 certificate hash as base64 (the format used
-// by Xray's pinnedPeerCertSha256) or hex with optional colons (the openssl
-// -fingerprint style) and returns the 32 raw bytes.
-func decodeCertPin(s string) ([]byte, error) {
-	s = strings.TrimSpace(s)
-	if s == "" {
-		return nil, common.NewError("certificate pin is empty")
-	}
-	if b, err := hex.DecodeString(strings.ReplaceAll(s, ":", "")); err == nil && len(b) == sha256.Size {
-		return b, nil
-	}
-	for _, enc := range []*base64.Encoding{base64.StdEncoding, base64.RawStdEncoding, base64.URLEncoding, base64.RawURLEncoding} {
-		if b, err := enc.DecodeString(s); err == nil && len(b) == sha256.Size {
-			return b, nil
-		}
-	}
-	return nil, common.NewError("certificate pin must be a SHA-256 hash (base64 or hex)")
-}
 
 // FetchCertFingerprint connects to the node over HTTPS without verifying the
 // certificate and returns the leaf certificate's SHA-256 as base64, so the UI
@@ -347,8 +279,27 @@ func (s *NodeService) normalize(n *model.Node) error {
 		n.TlsVerifyMode = "verify"
 	}
 	n.PinnedCertSha256 = strings.TrimSpace(n.PinnedCertSha256)
+	if n.InboundSyncMode != "selected" {
+		n.InboundSyncMode = "all"
+		n.InboundTags = nil
+	} else {
+		seen := make(map[string]struct{}, len(n.InboundTags))
+		tags := make([]string, 0, len(n.InboundTags))
+		for _, tag := range n.InboundTags {
+			tag = strings.TrimSpace(tag)
+			if tag == "" {
+				continue
+			}
+			if _, ok := seen[tag]; ok {
+				continue
+			}
+			seen[tag] = struct{}{}
+			tags = append(tags, tag)
+		}
+		n.InboundTags = tags
+	}
 	if n.TlsVerifyMode == "pin" {
-		if _, err := decodeCertPin(n.PinnedCertSha256); err != nil {
+		if _, err := runtime.DecodeCertPin(n.PinnedCertSha256); err != nil {
 			return common.NewError(err.Error())
 		}
 	}
@@ -368,6 +319,10 @@ func (s *NodeService) Update(id int, in *model.Node) error {
 	if err := s.normalize(in); err != nil {
 		return err
 	}
+	inboundTagsJSON, err := json.Marshal(in.InboundTags)
+	if err != nil {
+		return err
+	}
 	db := database.GetDB()
 	existing := &model.Node{}
 	if err := db.Where("id = ?", id).First(existing).Error; err != nil {
@@ -385,6 +340,9 @@ func (s *NodeService) Update(id int, in *model.Node) error {
 		"allow_private_address": in.AllowPrivateAddress,
 		"tls_verify_mode":       in.TlsVerifyMode,
 		"pinned_cert_sha256":    in.PinnedCertSha256,
+		"inbound_sync_mode":     in.InboundSyncMode,
+		"inbound_tags":          string(inboundTagsJSON),
+		"outbound_tag":          in.OutboundTag,
 	}
 	if err := db.Model(model.Node{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return err
@@ -395,13 +353,103 @@ func (s *NodeService) Update(id int, in *model.Node) error {
 	return nil
 }
 
+func (s *NodeService) GetRemoteInboundOptions(ctx context.Context, n *model.Node) ([]runtime.RemoteInboundOption, error) {
+	if err := s.normalize(n); err != nil {
+		return nil, err
+	}
+	if n.OutboundTag == "" {
+		return runtime.NewRemote(n, nil).ListInboundOptions(ctx)
+	}
+	// Mirror ProbeWithOutbound: a node being added/edited has no persistent
+	// egress bridge yet, so route the list call through a temporary one or the
+	// remote panel stays unreachable and the request times out.
+	var options []runtime.RemoteInboundOption
+	var err error
+	s.withOutboundBridge(n.Id, n.OutboundTag, func(proxyURL string) {
+		options, err = runtime.NewRemote(n, staticEgressResolver(proxyURL)).ListInboundOptions(ctx)
+	})
+	return options, err
+}
+
+// staticEgressResolver hands a fixed proxy URL to runtime.NewRemote. An empty
+// string yields a direct connection, so it doubles as the graceful fallback
+// when a temporary bridge can't be built.
+type staticEgressResolver string
+
+func (r staticEgressResolver) NodeEgressProxyURL(int) string { return string(r) }
+
+// EnsureInboundTagAllowed adds a panel-managed inbound's tag to the node's
+// selection when the node syncs in "selected" mode. Without it, the next
+// traffic sync would filter the tag out of the snapshot and the orphan sweep
+// would silently delete the central row the panel just created or renamed.
+// Tags are only ever added (never removed): on a rename the node may keep
+// reporting the old tag until the remote update lands, and a leftover entry
+// that matches nothing is harmless.
+func (s *NodeService) EnsureInboundTagAllowed(nodeID int, tag string) error {
+	tag = strings.TrimSpace(tag)
+	if nodeID <= 0 || tag == "" {
+		return nil
+	}
+	db := database.GetDB()
+	node := &model.Node{}
+	if err := db.Where("id = ?", nodeID).First(node).Error; err != nil {
+		return err
+	}
+	if node.InboundSyncMode != "selected" {
+		return nil
+	}
+	for _, t := range node.InboundTags {
+		if t == tag {
+			return nil
+		}
+	}
+	buf, err := json.Marshal(append(node.InboundTags, tag))
+	if err != nil {
+		return err
+	}
+	return db.Model(model.Node{}).Where("id = ?", nodeID).
+		Updates(map[string]any{"inbound_tags": string(buf)}).Error
+}
+
+func FilterNodeSnapshot(n *model.Node, snap *runtime.TrafficSnapshot) {
+	if n == nil || snap == nil || n.InboundSyncMode != "selected" {
+		return
+	}
+	allowed := make(map[string]struct{}, len(n.InboundTags))
+	for _, tag := range n.InboundTags {
+		allowed[tag] = struct{}{}
+	}
+	filtered := make([]*model.Inbound, 0, len(snap.Inbounds))
+	for _, inbound := range snap.Inbounds {
+		if inbound == nil {
+			continue
+		}
+		if _, ok := allowed[inbound.Tag]; ok {
+			filtered = append(filtered, inbound)
+		}
+	}
+	snap.Inbounds = filtered
+}
+
 func (s *NodeService) Delete(id int) error {
 	db := database.GetDB()
+	// Capture the node's guid before deleting the row so we can drop its per-node
+	// IP attribution (NodeClientIp is keyed by guid, not node id).
+	var guid string
+	var n model.Node
+	if err := db.Select("guid").Where("id = ?", id).First(&n).Error; err == nil {
+		guid = n.Guid
+	}
 	if err := db.Where("id = ?", id).Delete(model.Node{}).Error; err != nil {
 		return err
 	}
 	if err := db.Where("node_id = ?", id).Delete(&model.NodeClientTraffic{}).Error; err != nil {
 		return err
+	}
+	if guid != "" {
+		if err := db.Where("node_guid = ?", guid).Delete(&model.NodeClientIp{}).Error; err != nil {
+			return err
+		}
 	}
 	if mgr := runtime.GetManager(); mgr != nil {
 		mgr.InvalidateNode(id)
@@ -413,7 +461,13 @@ func (s *NodeService) Delete(id int) error {
 
 func (s *NodeService) SetEnable(id int, enable bool) error {
 	db := database.GetDB()
-	return db.Model(model.Node{}).Where("id = ?", id).Update("enable", enable).Error
+	if err := db.Model(model.Node{}).Where("id = ?", id).Update("enable", enable).Error; err != nil {
+		return err
+	}
+	if mgr := runtime.GetManager(); mgr != nil {
+		mgr.InvalidateNode(id)
+	}
+	return nil
 }
 
 // GetWebCertFiles asks a node for its own web TLS certificate/key file paths,
@@ -574,6 +628,131 @@ func (s *NodeService) AggregateNodeMetric(id int, metric string, bucketSeconds i
 }
 
 func (s *NodeService) Probe(ctx context.Context, n *model.Node) (HeartbeatPatch, error) {
+	proxyURL := ""
+	if n.OutboundTag != "" {
+		if mgr := runtime.GetManager(); mgr != nil {
+			proxyURL = mgr.NodeEgressProxyURL(n.Id)
+		}
+	}
+	return s.probe(ctx, n, proxyURL)
+}
+
+func (s *NodeService) ProbeWithOutbound(ctx context.Context, n *model.Node, outboundTag string) (HeartbeatPatch, error) {
+	if outboundTag == "" {
+		return s.Probe(ctx, n)
+	}
+	var patch HeartbeatPatch
+	var err error
+	s.withOutboundBridge(n.Id, outboundTag, func(proxyURL string) {
+		if proxyURL == "" {
+			patch, err = s.Probe(ctx, n)
+			return
+		}
+		patch, err = s.probe(ctx, n, proxyURL)
+	})
+	return patch, err
+}
+
+// withOutboundBridge stands up a temporary loopback SOCKS5 inbound in the
+// running Xray, routes it through outboundTag, and runs fn with the bridge's
+// proxy URL before tearing it down. It is used to reach a node through its
+// connection outbound before the persistent egress bridge has been injected
+// into the config (e.g. while the node is still being added or edited). When
+// Xray isn't running or the bridge can't be built, fn runs with an empty
+// proxyURL so callers fall back to a direct connection.
+func (s *NodeService) withOutboundBridge(nodeID int, outboundTag string, fn func(proxyURL string)) {
+	proc := XrayProcess()
+	if proc == nil || !proc.IsRunning() {
+		fn("")
+		return
+	}
+	apiPort := proc.GetAPIPort()
+	if apiPort <= 0 {
+		fn("")
+		return
+	}
+
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		fn("")
+		return
+	}
+	port := listener.Addr().(*net.TCPAddr).Port
+	listener.Close()
+
+	tag := fmt.Sprintf("node-test-%d-%d", nodeID, time.Now().UnixNano())
+	proxyURL := fmt.Sprintf("socks5://127.0.0.1:%d", port)
+
+	inboundJSON, err := json.Marshal(xray.InboundConfig{
+		Listen:   json_util.RawMessage(`"127.0.0.1"`),
+		Port:     port,
+		Protocol: "socks",
+		Settings: json_util.RawMessage(`{"auth":"noauth","udp":false}`),
+		Tag:      tag,
+	})
+	if err != nil {
+		fn("")
+		return
+	}
+
+	cfg := proc.GetConfig()
+	routing := map[string]any{}
+	if len(cfg.RouterConfig) > 0 {
+		_ = json.Unmarshal(cfg.RouterConfig, &routing)
+	}
+	rules, _ := routing["rules"].([]any)
+	rule := map[string]any{
+		"type":       "field",
+		"inboundTag": []any{tag},
+	}
+	if routingTagIsBalancer(routing, outboundTag) {
+		rule["balancerTag"] = outboundTag
+	} else {
+		rule["outboundTag"] = outboundTag
+	}
+	routing["rules"] = append([]any{rule}, rules...)
+	routingJSON, err := json.Marshal(routing)
+	if err != nil {
+		fn("")
+		return
+	}
+	originalRoutingJSON := cfg.RouterConfig
+
+	api := xray.XrayAPI{}
+	if err := api.Init(apiPort); err != nil {
+		fn("")
+		return
+	}
+	defer api.Close()
+
+	if err := api.AddInbound(inboundJSON); err != nil {
+		fn("")
+		return
+	}
+	defer func() {
+		if err := api.DelInbound(tag); err != nil {
+			logger.Warning("remove temp node bridge inbound failed:", err)
+		}
+	}()
+
+	if err := api.ApplyRoutingConfig(routingJSON); err != nil {
+		fn("")
+		return
+	}
+	defer func() {
+		restore := originalRoutingJSON
+		if len(restore) == 0 {
+			restore = []byte("{}")
+		}
+		if err := api.ApplyRoutingConfig(restore); err != nil {
+			logger.Warning("restore routing after node bridge failed:", err)
+		}
+	}()
+
+	fn(proxyURL)
+}
+
+func (s *NodeService) probe(ctx context.Context, n *model.Node, proxyURL string) (HeartbeatPatch, error) {
 	patch := HeartbeatPatch{LastHeartbeat: time.Now().Unix()}
 
 	addr, err := netsafe.NormalizeHost(n.Address)
@@ -607,7 +786,7 @@ func (s *NodeService) Probe(ctx context.Context, n *model.Node) (HeartbeatPatch,
 	}
 	req.Header.Set("Accept", "application/json")
 
-	client, err := nodeHTTPClientFor(n)
+	client, err := runtime.HTTPClientForNode(n, proxyURL)
 	if err != nil {
 		patch.LastError = err.Error()
 		return patch, err

@@ -9,7 +9,9 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"testing"
 )
 
 //go:embed version
@@ -60,6 +62,23 @@ func IsDebug() bool {
 // IsSkipHSTS returns true if skipping HSTS mode is enabled via the QUI_SKIP_HSTS environment variable.
 func IsSkipHSTS() bool {
 	return os.Getenv("QUI_SKIP_HSTS") == "true"
+}
+
+func GetPortOverride() (port int, configured bool, err error) {
+	value, ok := os.LookupEnv("XUI_PORT")
+	if !ok || strings.TrimSpace(value) == "" {
+		return 0, false, nil
+	}
+
+	port, err = strconv.Atoi(strings.TrimSpace(value))
+	if err != nil {
+		return 0, true, fmt.Errorf("parse XUI_PORT: %w", err)
+	}
+	if port < 1 || port > 65535 {
+		return 0, true, fmt.Errorf("XUI_PORT must be between 1 and 65535")
+	}
+
+	return port, true, nil
 }
 
 // GetBinFolderPath returns the path to the binary folder, defaulting to "bin" if not set via QUI_BIN_FOLDER.
@@ -139,6 +158,12 @@ func GetLogFolder() string {
 	logFolderPath := os.Getenv("QUI_LOG_FOLDER")
 	if logFolderPath != "" {
 		return logFolderPath
+	}
+	// Under `go test` the Windows default below is CWD-relative ("./log"), which
+	// scatters a log/ directory through the source tree (one per tested package).
+	// Redirect test runs to a shared temp folder so the source tree stays clean.
+	if testing.Testing() {
+		return filepath.Join(os.TempDir(), "3x-ui-test-log")
 	}
 	if runtime.GOOS == "windows" {
 		return filepath.Join(".", "log")

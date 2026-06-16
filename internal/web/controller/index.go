@@ -9,6 +9,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
 
 	"github.com/gin-gonic/gin"
@@ -38,7 +39,7 @@ type IndexController struct {
 
 	settingService service.SettingService
 	userService    service.UserService
-	tgbot          service.Tgbot
+	tgbot          tgbot.Tgbot
 }
 
 // NewIndexController creates a new IndexController and initializes its routes.
@@ -95,11 +96,11 @@ func (a *IndexController) login(c *gin.Context) {
 	if blockedUntil, ok := defaultLoginLimiter.allow(remoteIP, form.Username); !ok {
 		reason := "too many failed attempts"
 		logger.Warningf("failed login: username=%q, IP=%q, reason=%q, blocked_until=%s", safeUser, remoteIP, reason, blockedUntil.Format(time.RFC3339))
-		a.tgbot.UserLoginNotify(service.LoginAttempt{
+		a.tgbot.UserLoginNotify(tgbot.LoginAttempt{
 			Username: safeUser,
 			IP:       remoteIP,
 			Time:     timeStr,
-			Status:   service.LoginFail,
+			Status:   tgbot.LoginFail,
 			Reason:   reason,
 		})
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
@@ -115,11 +116,11 @@ func (a *IndexController) login(c *gin.Context) {
 		} else {
 			logger.Warningf("failed login: username=%q, IP=%q, reason=%q", safeUser, remoteIP, reason)
 		}
-		a.tgbot.UserLoginNotify(service.LoginAttempt{
+		a.tgbot.UserLoginNotify(tgbot.LoginAttempt{
 			Username: safeUser,
 			IP:       remoteIP,
 			Time:     timeStr,
-			Status:   service.LoginFail,
+			Status:   tgbot.LoginFail,
 			Reason:   reason,
 		})
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.login.toasts.wrongUsernameOrPassword"))
@@ -128,11 +129,11 @@ func (a *IndexController) login(c *gin.Context) {
 
 	defaultLoginLimiter.registerSuccess(remoteIP, form.Username)
 	logger.Infof("%s logged in successfully, Ip Address: %s\n", safeUser, remoteIP)
-	a.tgbot.UserLoginNotify(service.LoginAttempt{
+	a.tgbot.UserLoginNotify(tgbot.LoginAttempt{
 		Username: safeUser,
 		IP:       remoteIP,
 		Time:     timeStr,
-		Status:   service.LoginSuccess,
+		Status:   tgbot.LoginSuccess,
 	})
 
 	if err := session.SetLoginUser(c, user); err != nil {

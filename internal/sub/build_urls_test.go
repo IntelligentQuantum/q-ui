@@ -69,3 +69,72 @@ func TestBuildURLs_EmptySubId(t *testing.T) {
 		t.Fatalf("empty subId must yield empty URLs, got %q %q %q", a, b, c)
 	}
 }
+
+func TestForRequestDoesNotMutateSharedService(t *testing.T) {
+	initSubDB(t)
+	base := &SubService{}
+
+	first := base.ForRequest("first.example.com")
+	second := base.ForRequest("second.example.com")
+
+	if base.address != "" || base.nodesByID != nil {
+		t.Fatalf("ForRequest mutated the shared service: address=%q nodes=%v", base.address, base.nodesByID)
+	}
+
+	firstURL, _, _ := first.BuildURLs("/sub/", "/json/", "/clash/", "ABC")
+	secondURL, _, _ := second.BuildURLs("/sub/", "/json/", "/clash/", "ABC")
+	if !strings.Contains(firstURL, "first.example.com") {
+		t.Fatalf("first request URL = %q, want first.example.com", firstURL)
+	}
+	if !strings.Contains(secondURL, "second.example.com") {
+		t.Fatalf("second request URL = %q, want second.example.com", secondURL)
+	}
+}
+
+// A subscriber arriving via a reverse proxy (subURI configured with full
+// HTTPS URL) must see the same scheme+host in the JSON and Clash Copy
+// URLs as in the main subURL — not the raw sub-server port 2096.
+func TestBuildURLs_DerivesJsonFromConfiguredSubURI(t *testing.T) {
+	initSubDB(t)
+	s := &SubService{}
+	s.PrepareForRequest("sub.example.com")
+
+	// Simulate the admin having set subURI (reverse-proxy setup).
+	database.GetDB().Exec(
+		"INSERT INTO settings (key, value) VALUES (?, ?)",
+		"subURI", "https://example.com/sub-xxx/")
+
+	subURL, jsonURL, clashURL := s.BuildURLs("/sub-xxx/", "/json/", "/clash/", "ABC")
+
+	if subURL != "https://example.com/sub-xxx/ABC" {
+		t.Fatalf("subURL = %q", subURL)
+	}
+	if jsonURL != "https://example.com/json/ABC" {
+		t.Fatalf("jsonURL = %q (should derive scheme+host from subURI), want %q", jsonURL, "https://example.com/json/ABC")
+	}
+	if clashURL != "https://example.com/clash/ABC" {
+		t.Fatalf("clashURL = %q (should derive scheme+host from subURI), want %q", clashURL, "https://example.com/clash/ABC")
+	}
+}
+
+// A malformed subURI (no scheme/host) must not leak a broken base into the
+// JSON/Clash URLs; BuildURLs should fall back to the request-derived base.
+func TestBuildURLs_MalformedSubURIFallsBackToRequestBase(t *testing.T) {
+	initSubDB(t)
+	s := &SubService{}
+	s.PrepareForRequest("sub.example.com")
+
+	// A value with no scheme can't yield a usable scheme+host.
+	database.GetDB().Exec(
+		"INSERT INTO settings (key, value) VALUES (?, ?)",
+		"subURI", "example.com/sub-xxx/")
+
+	_, jsonURL, clashURL := s.BuildURLs("/sub-xxx/", "/json/", "/clash/", "ABC")
+
+	if jsonURL != "http://sub.example.com:2096/json/ABC" {
+		t.Fatalf("jsonURL = %q, want fallback to request base %q", jsonURL, "http://sub.example.com:2096/json/ABC")
+	}
+	if clashURL != "http://sub.example.com:2096/clash/ABC" {
+		t.Fatalf("clashURL = %q, want fallback to request base %q", clashURL, "http://sub.example.com:2096/clash/ABC")
+	}
+}

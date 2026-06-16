@@ -9,7 +9,7 @@ Environment="XRAY_VMESS_AEAD_FORCED=false"
 Type=simple
 WorkingDirectory=/usr/local/q-ui/
 ExecStart=/usr/local/q-ui/q-ui
-ExecReload=kill -USR1 $MAINPID
+ExecReload=/bin/kill -USR1 $MAINPID
 Restart=on-failure
 RestartSec=5s
 

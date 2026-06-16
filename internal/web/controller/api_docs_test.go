@@ -29,7 +29,7 @@ func buildDocSet(t *testing.T) map[string]bool {
 	if err != nil {
 		t.Fatalf("failed to get current dir: %v", err)
 	}
-	endpointsPath := filepath.Join(controllerDir, "..", "..", "frontend", "src", "pages", "api-docs", "endpoints.ts")
+	endpointsPath := filepath.Join(controllerDir, "..", "..", "..", "frontend", "src", "pages", "api-docs", "endpoints.ts")
 	data, err := os.ReadFile(endpointsPath)
 	if err != nil {
 		t.Fatalf("failed to read endpoints.ts at %s: %v", endpointsPath, err)
@@ -81,7 +81,7 @@ func TestAPIRoutesDocumented(t *testing.T) {
 		switch entry.Name() {
 		case "index.go":
 			basePath = ""
-		case "xui.go":
+		case "spa.go":
 			basePath = "/panel"
 		case "api.go":
 			basePath = "/panel/api"

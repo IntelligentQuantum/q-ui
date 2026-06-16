@@ -19,7 +19,6 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/netproxy"
-	"github.com/mhsanaei/3x-ui/v3/internal/util/netsafe"
 )
 
 const (
@@ -165,10 +164,6 @@ func localDatFileNeedsRepair(path string) bool {
 
 func CustomGeoLocalFileNeedsRepair(path string) bool {
 	return localDatFileNeedsRepair(path)
-}
-
-func isBlockedIP(ip net.IP) bool {
-	return netsafe.IsBlockedIP(ip)
 }
 
 // checkSSRFDefault validates that the given host does not resolve to a private/internal IP.

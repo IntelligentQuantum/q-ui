@@ -18,9 +18,9 @@ backup/
 bin/
 build/
 dist/
-!web/dist/
-web/dist/*
-!web/dist/.gitkeep
+!internal/web/dist/
+internal/web/dist/*
+!internal/web/dist/.gitkeep
 release/
 node_modules/
 
@@ -49,6 +49,7 @@ q-ui.db-wal
 x-ui.db
 x-ui.db-shm
 x-ui.db-wal
+system_metrics.gob
 *.dump
 
 # Ignore Docker specific files

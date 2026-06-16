@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"os"
 	"reflect"
 	"strconv"
 	"strings"
@@ -37,7 +38,7 @@ var defaultValueMap = map[string]string{
 	"webKeyFile":                    "",
 	"secret":                        random.Seq(32),
 	"apiToken":                      "",
-	"webBasePath":                   "/",
+	"webBasePath":                   normalizeBasePath(getEnv("XUI_INIT_WEB_BASE_PATH", "/")),
 	"panelTitle":                    "Q-UI",
 	"sessionMaxAge":                 "360",
 	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",
@@ -125,7 +126,7 @@ var defaultValueMap = map[string]string{
 	"externalTrafficInformURI":    "",
 	"restartXrayOnClientDisable":  "true",
 	"xrayOutboundTestUrl":         "https://www.google.com/generate_204",
-	"panelProxy":                  "",
+	"panelOutbound":               "",
 
 	// LDAP defaults
 	"ldapEnable":            "false",
@@ -148,6 +149,20 @@ var defaultValueMap = map[string]string{
 	"ldapDefaultTotalGB":    "0",
 	"ldapDefaultExpiryDays": "0",
 	"ldapDefaultLimitIP":    "0",
+
+	// Event bus — per-subscriber event filtering (empty = all disabled)
+	"tgEnabledEvents":   "login.attempt,cpu.high",
+	"smtpEnabledEvents": "login.attempt,cpu.high",
+	"smtpCpu":           "80",
+
+	// Email (SMTP) notifications
+	"smtpEnable":         "false",
+	"smtpHost":           "",
+	"smtpPort":           "587",
+	"smtpUsername":       "",
+	"smtpPassword":       "",
+	"smtpTo":             "",
+	"smtpEncryptionType": "starttls", // no, starttls, tls
 }
 
 // SettingService provides business logic for application settings management.
@@ -250,6 +265,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.HasWarpSecret = secretConfigured(mustString(s.GetWarp()))
 	view.HasNordSecret = secretConfigured(mustString(s.GetNord()))
 	view.HasPlisioSecretKey = secretConfigured(allSetting.PlisioSecretKey)
+	view.HasSmtpPassword = secretConfigured(allSetting.SmtpPassword)
 	var apiTokenCount int64
 	if err := database.GetDB().Model(model.ApiToken{}).Where("enabled = ?", true).Count(&apiTokenCount).Error; err == nil {
 		view.HasApiToken = apiTokenCount > 0
@@ -258,6 +274,7 @@ func (s *SettingService) GetAllSettingView() (*entity.AllSettingView, error) {
 	view.TwoFactorToken = ""
 	view.LdapPassword = ""
 	view.PlisioSecretKey = ""
+	view.SmtpPassword = ""
 	return view, nil
 }
 
@@ -267,6 +284,18 @@ func secretConfigured(value string) bool {
 
 func mustString(value string, _ error) string {
 	return value
+}
+
+func getEnv(key, fallback string) string {
+	val, ok := os.LookupEnv(key)
+	if !ok {
+		return fallback
+	}
+	val = strings.TrimSpace(val)
+	if val == "" {
+		return fallback
+	}
+	return val
 }
 
 func (s *SettingService) ResetSettings() error {
@@ -416,26 +445,72 @@ func (s *SettingService) SetTgBotProxy(token string) error {
 	return s.setString("tgBotProxy", token)
 }
 
-func (s *SettingService) GetPanelProxy() (string, error) {
-	return s.getString("panelProxy")
+// GetPanelOutbound returns the Xray outbound tag the panel's own outbound
+// requests (version checks, Telegram, subscription fetches) are routed through.
+func (s *SettingService) GetPanelOutbound() (string, error) {
+	return s.getString("panelOutbound")
 }
 
-func (s *SettingService) SetPanelProxy(proxyUrl string) error {
-	return s.setString("panelProxy", proxyUrl)
+func (s *SettingService) SetPanelOutbound(tag string) error {
+	return s.setString("panelOutbound", tag)
+}
+
+// PanelEgressProxyURL resolves the loopback SOCKS bridge that the generated
+// config exposes when a panel outbound is configured (see injectPanelEgress).
+// It returns "" — meaning a direct connection — when the feature is off or
+// the bridge is not present in the running core yet.
+func (s *SettingService) PanelEgressProxyURL() string {
+	tag, err := s.GetPanelOutbound()
+	if err != nil || tag == "" {
+		return ""
+	}
+	proc := XrayProcess()
+	if proc == nil || !proc.IsRunning() {
+		logger.Warning("panel outbound [", tag, "] is set but Xray is not running, using a direct connection")
+		return ""
+	}
+	cfg := proc.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == PanelEgressInboundTag {
+			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
+		}
+	}
+	logger.Warning("panel outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
+	return ""
+}
+
+func (s *SettingService) NodeEgressProxyURL(nodeID int) string {
+	tag := NodeEgressInboundTag(nodeID)
+	proc := XrayProcess()
+	if proc == nil || !proc.IsRunning() {
+		logger.Warning("node outbound [", tag, "] is set but Xray is not running, using a direct connection")
+		return ""
+	}
+	cfg := proc.GetConfig()
+	if cfg == nil {
+		return ""
+	}
+	for i := range cfg.InboundConfigs {
+		if cfg.InboundConfigs[i].Tag == tag {
+			return fmt.Sprintf("socks5://127.0.0.1:%d", cfg.InboundConfigs[i].Port)
+		}
+	}
+	logger.Warning("node outbound [", tag, "] is set but the egress bridge is not in the running config, using a direct connection")
+	return ""
 }
 
 // NewProxiedHTTPClient returns an HTTP client that routes the panel's own
-// outbound requests through the configured panelProxy setting. An invalid or
-// missing proxy falls back to a direct client so existing behavior is preserved.
+// outbound requests through the configured panel outbound (via the loopback
+// SOCKS bridge in the running Xray). When the feature is off or the bridge
+// is unavailable it falls back to a direct client.
 func (s *SettingService) NewProxiedHTTPClient(timeout time.Duration) *http.Client {
-	proxyUrl, err := s.GetPanelProxy()
-	if err != nil {
-		logger.Warning("Failed to read panel proxy setting:", err)
-		proxyUrl = ""
-	}
+	proxyUrl := s.PanelEgressProxyURL()
 	client, err := netproxy.NewHTTPClient(proxyUrl, timeout)
 	if err != nil {
-		logger.Warningf("Invalid panel proxy %q, using direct connection: %v", proxyUrl, err)
+		logger.Warningf("Invalid panel egress proxy %q, using direct connection: %v", proxyUrl, err)
 		return &http.Client{Timeout: timeout}
 	}
 	return client
@@ -475,10 +550,6 @@ func (s *SettingService) SetTgbotRuntime(time string) error {
 
 func (s *SettingService) GetTgBotBackup() (bool, error) {
 	return s.getBool("tgBotBackup")
-}
-
-func (s *SettingService) GetTgBotLoginNotify() (bool, error) {
-	return s.getBool("tgBotLoginNotify")
 }
 
 func (s *SettingService) GetTgCpu() (int, error) {
@@ -625,6 +696,10 @@ func (s *SettingService) SetPlisioEnable(value bool) error {
 // (verify_hash), so the same value backs the API client and webhook verifier.
 func (s *SettingService) GetPlisioSecretKey() (string, error) {
 	return s.getString("plisioSecretKey")
+}
+
+func (s *SettingService) GetPanelProxy() (string, error) {
+	return s.getString("panelProxy")
 }
 
 func (s *SettingService) SetPlisioSecretKey(value string) error {
@@ -803,13 +878,7 @@ func (s *SettingService) GetBasePath() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	if !strings.HasPrefix(basePath, "/") {
-		basePath = "/" + basePath
-	}
-	if !strings.HasSuffix(basePath, "/") {
-		basePath += "/"
-	}
-	return basePath, nil
+	return normalizeBasePath(basePath), nil
 }
 
 // GetPanelTitle returns the configurable brand/title shown on the login,
@@ -1024,7 +1093,18 @@ func (s *SettingService) SetRestartXrayOnClientDisable(value bool) error {
 	return s.setBool("restartXrayOnClientDisable", value)
 }
 
+// GetIpLimitEnable reports whether the IP-limit feature is available. Always
+// true since the panel enforces limits via the core's online-stats API; on an
+// older core the job falls back to access-log parsing and warns there when the
+// log is missing, so the UI no longer hides the field behind that condition.
 func (s *SettingService) GetIpLimitEnable() (bool, error) {
+	return true, nil
+}
+
+// GetAccessLogEnable reports whether an Xray access log is configured. Used by
+// the UI for features that genuinely read the log file (the xray log viewer) —
+// distinct from IP limiting, which works without it.
+func (s *SettingService) GetAccessLogEnable() (bool, error) {
 	accessLogPath, err := xray.GetAccessLogPath()
 	if err != nil {
 		return false, err
@@ -1113,6 +1193,90 @@ func (s *SettingService) GetLdapDefaultLimitIP() (int, error) {
 	return s.getInt("ldapDefaultLimitIP")
 }
 
+// Event bus — per-subscriber event filtering
+
+func (s *SettingService) GetTgEnabledEvents() (string, error) {
+	return s.getString("tgEnabledEvents")
+}
+
+func (s *SettingService) SetTgEnabledEvents(events string) error {
+	return s.setString("tgEnabledEvents", events)
+}
+
+func (s *SettingService) GetSmtpEnabledEvents() (string, error) {
+	return s.getString("smtpEnabledEvents")
+}
+
+func (s *SettingService) SetSmtpEnabledEvents(events string) error {
+	return s.setString("smtpEnabledEvents", events)
+}
+
+// Email (SMTP) settings
+
+func (s *SettingService) GetSmtpEnable() (bool, error) {
+	return s.getBool("smtpEnable")
+}
+
+func (s *SettingService) SetSmtpEnable(value bool) error {
+	return s.setBool("smtpEnable", value)
+}
+
+func (s *SettingService) GetSmtpHost() (string, error) {
+	return s.getString("smtpHost")
+}
+
+func (s *SettingService) SetSmtpHost(value string) error {
+	return s.setString("smtpHost", value)
+}
+
+func (s *SettingService) GetSmtpPort() (int, error) {
+	return s.getInt("smtpPort")
+}
+
+func (s *SettingService) SetSmtpPort(value int) error {
+	return s.setInt("smtpPort", value)
+}
+
+func (s *SettingService) GetSmtpUsername() (string, error) {
+	return s.getString("smtpUsername")
+}
+
+func (s *SettingService) SetSmtpUsername(value string) error {
+	return s.setString("smtpUsername", value)
+}
+
+func (s *SettingService) GetSmtpPassword() (string, error) {
+	return s.getString("smtpPassword")
+}
+
+func (s *SettingService) SetSmtpPassword(value string) error {
+	return s.setString("smtpPassword", value)
+}
+
+func (s *SettingService) GetSmtpTo() (string, error) {
+	return s.getString("smtpTo")
+}
+
+func (s *SettingService) SetSmtpTo(value string) error {
+	return s.setString("smtpTo", value)
+}
+
+func (s *SettingService) GetSmtpEncryptionType() (string, error) {
+	return s.getString("smtpEncryptionType")
+}
+
+func (s *SettingService) SetSmtpEncryptionType(value string) error {
+	return s.setString("smtpEncryptionType", value)
+}
+
+func (s *SettingService) GetSmtpCpu() (int, error) {
+	return s.getInt("smtpCpu")
+}
+
+func (s *SettingService) SetSmtpCpu(value int) error {
+	return s.setInt("smtpCpu", value)
+}
+
 func (s *SettingService) UpdateAllSetting(allSetting *entity.AllSetting) error {
 	if err := s.preserveRedactedSecrets(allSetting); err != nil {
 		return err
@@ -1170,6 +1334,13 @@ func (s *SettingService) preserveRedactedSecrets(allSetting *entity.AllSetting) 
 			return err
 		}
 		allSetting.PlisioSecretKey = value
+	}
+	if strings.TrimSpace(allSetting.SmtpPassword) == "" {
+		value, err := s.GetSmtpPassword()
+		if err != nil {
+			return err
+		}
+		allSetting.SmtpPassword = value
 	}
 	return nil
 }
@@ -1257,25 +1428,26 @@ func (s *SettingService) BuildSubURIBase(host string) string {
 func (s *SettingService) GetDefaultSettings(host string) (any, error) {
 	type settingFunc func() (any, error)
 	settings := map[string]settingFunc{
-		"expireDiff":     func() (any, error) { return s.GetExpireDiff() },
-		"trafficDiff":    func() (any, error) { return s.GetTrafficDiff() },
-		"pageSize":       func() (any, error) { return s.GetPageSize() },
-		"defaultCert":    func() (any, error) { return s.GetCertFile() },
-		"defaultKey":     func() (any, error) { return s.GetKeyFile() },
-		"tgBotEnable":    func() (any, error) { return s.GetTgbotEnabled() },
-		"subThemeDir":    func() (any, error) { return s.GetSubThemeDir() },
-		"subEnable":      func() (any, error) { return s.GetSubEnable() },
-		"subJsonEnable":  func() (any, error) { return s.GetSubJsonEnable() },
-		"subClashEnable": func() (any, error) { return s.GetSubClashEnable() },
-		"subTitle":       func() (any, error) { return s.GetSubTitle() },
-		"subURI":         func() (any, error) { return s.GetSubURI() },
-		"subJsonURI":     func() (any, error) { return s.GetSubJsonURI() },
-		"subClashURI":    func() (any, error) { return s.GetSubClashURI() },
-		"remarkModel":    func() (any, error) { return s.GetRemarkModel() },
-		"datepicker":     func() (any, error) { return s.GetDatepicker() },
-		"ipLimitEnable":  func() (any, error) { return s.GetIpLimitEnable() },
-		"webDomain":      func() (any, error) { return s.GetWebDomain() },
-		"subDomain":      func() (any, error) { return s.GetSubDomain() },
+		"expireDiff":      func() (any, error) { return s.GetExpireDiff() },
+		"trafficDiff":     func() (any, error) { return s.GetTrafficDiff() },
+		"pageSize":        func() (any, error) { return s.GetPageSize() },
+		"defaultCert":     func() (any, error) { return s.GetCertFile() },
+		"defaultKey":      func() (any, error) { return s.GetKeyFile() },
+		"tgBotEnable":     func() (any, error) { return s.GetTgbotEnabled() },
+		"subThemeDir":     func() (any, error) { return s.GetSubThemeDir() },
+		"subEnable":       func() (any, error) { return s.GetSubEnable() },
+		"subJsonEnable":   func() (any, error) { return s.GetSubJsonEnable() },
+		"subClashEnable":  func() (any, error) { return s.GetSubClashEnable() },
+		"subTitle":        func() (any, error) { return s.GetSubTitle() },
+		"subURI":          func() (any, error) { return s.GetSubURI() },
+		"subJsonURI":      func() (any, error) { return s.GetSubJsonURI() },
+		"subClashURI":     func() (any, error) { return s.GetSubClashURI() },
+		"remarkModel":     func() (any, error) { return s.GetRemarkModel() },
+		"datepicker":      func() (any, error) { return s.GetDatepicker() },
+		"ipLimitEnable":   func() (any, error) { return s.GetIpLimitEnable() },
+		"accessLogEnable": func() (any, error) { return s.GetAccessLogEnable() },
+		"webDomain":       func() (any, error) { return s.GetWebDomain() },
+		"subDomain":       func() (any, error) { return s.GetSubDomain() },
 	}
 
 	result := make(map[string]any)

@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/tls"
 	"embed"
+	"fmt"
 	"io"
 	"io/fs"
 	"net"
@@ -16,6 +17,7 @@ import (
 	"time"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/eventbus"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/mtproto"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/common"
@@ -26,7 +28,11 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/network"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/runtime"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/email"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/panel"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service/tgbot"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
+	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 
 	"github.com/gin-contrib/gzip"
 	"github.com/gin-contrib/sessions"
@@ -38,7 +44,7 @@ import (
 //go:embed translation/*
 var i18nFS embed.FS
 
-// distFS embeds the Vite-built frontend (web/dist/). Every user-facing
+// distFS embeds the Vite-built frontend (internal/web/dist/). Every user-facing
 // HTML route is served straight out of this FS — the legacy Go
 // templates and `web/assets/` tree are gone post-Phase 8.
 
@@ -106,11 +112,12 @@ type Server struct {
 
 	xrayService      service.XrayService
 	settingService   service.SettingService
-	tgbotService     service.Tgbot
 	customGeoService *service.CustomGeoService
+	tgbotService     tgbot.Tgbot
 
 	wsHub *websocket.Hub
 
+	bus  *eventbus.Bus
 	cron *cron.Cron
 
 	ctx    context.Context
@@ -151,6 +158,15 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	directHTTPS := s.isDirectHTTPSConfigured()
 	sendHSTS := directHTTPS && !config.IsSkipHSTS()
 	engine.Use(middleware.SecurityHeadersMiddleware(sendHSTS))
+
+	// Cap request bodies on state-changing requests so a stolen session/API
+	// token or a buggy client can't force large allocations or long DB
+	// transactions via bulk create/attach/import endpoints. GET/HEAD/OPTIONS
+	// carry no body and are left untouched. importDB restores a full SQLite
+	// backup that legitimately exceeds the cap, so it's exempt. Follow-up: make
+	// the limit a setting.
+	const maxRequestBodyBytes = 10 << 20 // 10 MiB
+	engine.Use(middleware.MaxBodyBytes(maxRequestBodyBytes, "/panel/api/server/importDB"))
 
 	webDomain, err := s.settingService.GetWebDomain()
 	if err != nil {
@@ -210,17 +226,14 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	// restarting the binary; in prod we serve the embedded dist FS
 	// rooted at `dist/assets/`.
 	if config.IsDebug() {
-		engine.StaticFS(basePath+"assets", http.FS(os.DirFS("web/dist/assets")))
+		engine.StaticFS(basePath+"assets", http.FS(os.DirFS("internal/web/dist/assets")))
 	} else {
 		engine.StaticFS(basePath+"assets", http.FS(&wrapDistFS{FS: distFS}))
 	}
 
-	// Apply the redirect middleware (`/xui` to `/panel`)
-	engine.Use(middleware.RedirectMiddleware(basePath))
-
 	// Hand the embedded `dist/` filesystem to the controller package
 	// before any HTML-serving controller is constructed. Phase 8
-	// cutover: every HTML route reads from web/dist/ instead of
+	// cutover: every HTML route reads from internal/web/dist/ instead of
 	// rendering a legacy template.
 	controller.SetDistFS(distFS)
 
@@ -239,7 +252,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 
 	// Initialize WebSocket controller — service owns per-connection pumps,
 	// controller is HTTP-layer only (auth + upgrade).
-	s.ws = controller.NewWebSocketController(service.NewWebSocketService(s.wsHub))
+	s.ws = controller.NewWebSocketController(panel.NewWebSocketService(s.wsHub))
 	// Register WebSocket route with basePath (g already has basePath prefix)
 	g.GET("/ws", s.ws.HandleWebSocket)
 
@@ -256,6 +269,27 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	return engine, nil
 }
 
+// Background-job cadences. Centralized here as the single tuning surface; the
+// values are unchanged from the historical hardcoded cron specs. Follow-up:
+// make these configurable via settings, add per-tick jitter to de-synchronize
+// fleet load, skip expensive jobs when no WebSocket clients are connected or
+// node/xray state is unchanged, and export per-job duration/skipped/error
+// counters.
+const (
+	cadenceXrayRunning   = "@every 1s"
+	cadenceXrayRestart   = "@every 30s"
+	cadenceXrayTraffic   = "@every 5s"
+	cadenceMtproto       = "@every 10s"
+	cadenceClientIPScan  = "@every 10s"
+	cadenceNodeHeartbeat = "@every 5s"
+	cadenceNodeTraffic   = "@every 5s"
+	cadenceOutboundSub   = "@every 5m"
+	cadenceCheckHash     = "@every 2m"
+	// cpu.Percent samples over a full minute (blocking), so a finer cadence just
+	// stacks overlapping samplers; subscribers rate-limit alerts to 1/min anyway.
+	cadenceCPUAlarm = "@every 1m"
+)
+
 // startTask schedules background jobs (Xray checks, traffic jobs, cron
 // jobs) which the panel relies on for periodic maintenance and monitoring.
 func (s *Server) startTask(restartXray bool) {
@@ -267,10 +301,10 @@ func (s *Server) startTask(restartXray bool) {
 		}
 	}
 	// Check whether xray is running every second
-	s.cron.AddJob("@every 1s", job.NewCheckXrayRunningJob())
+	s.cron.AddJob(cadenceXrayRunning, job.NewCheckXrayRunningJob())
 
 	// Check if xray needs to be restarted every 30 seconds
-	s.cron.AddFunc("@every 30s", func() {
+	s.cron.AddFunc(cadenceXrayRestart, func() {
 		if s.xrayService.IsNeedRestartAndSetFalse() {
 			err := s.xrayService.RestartXray(false)
 			if err != nil {
@@ -281,26 +315,26 @@ func (s *Server) startTask(restartXray bool) {
 
 	go func() {
 		time.Sleep(time.Second * 5)
-		s.cron.AddJob("@every 5s", job.NewXrayTrafficJob())
+		s.cron.AddJob(cadenceXrayTraffic, job.NewXrayTrafficJob())
 	}()
 
 	// Reconcile mtproto (mtg) sidecars and scrape their traffic
 	mtJob := job.NewMtprotoJob()
-	s.cron.AddJob("@every 10s", mtJob)
+	s.cron.AddJob(cadenceMtproto, mtJob)
 	go mtJob.Run()
 
 	// check client ips from log file every 10 sec
-	s.cron.AddJob("@every 10s", job.NewCheckClientIpJob())
+	s.cron.AddJob(cadenceClientIPScan, job.NewCheckClientIpJob())
 
-	s.cron.AddJob("@every 5s", job.NewNodeHeartbeatJob())
+	s.cron.AddJob(cadenceNodeHeartbeat, job.NewNodeHeartbeatJob())
 
-	s.cron.AddJob("@every 5s", job.NewNodeTrafficSyncJob())
+	s.cron.AddJob(cadenceNodeTraffic, job.NewNodeTrafficSyncJob())
 
 	// Reconcile product-sold configs to their product's current inbounds, repairing
 	// any client that drifted (missed an update / node outage / partial sync).
 	s.cron.AddJob("@every 10m", job.NewProductReconcileJob())
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
-	s.cron.AddJob("@every 5m", job.NewOutboundSubscriptionJob())
+	s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
 
 	// check client ips from log file every day
 	s.cron.AddJob("@daily", job.NewClearLogsJob())
@@ -327,8 +361,7 @@ func (s *Server) startTask(restartXray bool) {
 		s.cron.AddJob(runtime, j)
 	}
 
-	// Make a traffic condition every day, 8:30
-	var entry cron.EntryID
+	// Telegram-bot–dependent jobs: periodic stats report + callback-hash cleanup.
 	isTgbotenabled, err := s.settingService.GetTgbotEnabled()
 	if (err == nil) && (isTgbotenabled) {
 		runtime, err := s.settingService.GetTgbotRuntime()
@@ -340,23 +373,50 @@ func (s *Server) startTask(restartXray bool) {
 			runtime = "@daily"
 		}
 		logger.Infof("Tg notify enabled,run at %s", runtime)
-		_, err = s.cron.AddJob(runtime, job.NewStatsNotifyJob())
-		if err != nil {
+		if _, err = s.cron.AddJob(runtime, job.NewStatsNotifyJob()); err != nil {
 			logger.Warningf("Add NewStatsNotifyJob: failed to schedule runtime %q: %v", runtime, err)
-			return
 		}
 
 		// check for Telegram bot callback query hash storage reset
-		s.cron.AddJob("@every 2m", job.NewCheckHashStorageJob())
-
-		// Check CPU load and alarm to TgBot if threshold passes
-		cpuThreshold, err := s.settingService.GetTgCpu()
-		if (err == nil) && (cpuThreshold > 0) {
-			s.cron.AddJob("@every 10s", job.NewCheckCpuJob())
-		}
-	} else {
-		s.cron.Remove(entry)
+		s.cron.AddJob(cadenceCheckHash, job.NewCheckHashStorageJob())
 	}
+
+	// CPU monitor publishes cpu.high events; register it whenever any notifier
+	// (Telegram or Email) wants them, independent of the Telegram bot being on.
+	if s.cpuAlarmWanted() {
+		s.cron.AddJob(cadenceCPUAlarm, job.NewCheckCpuJob())
+	}
+}
+
+// cpuAlarmWanted reports whether any notifier is configured to receive cpu.high
+// alerts, so the minute-long blocking CPU sampler only runs when it's needed.
+func (s *Server) cpuAlarmWanted() bool {
+	wants := func(events string, threshold int) bool {
+		if threshold <= 0 {
+			return false
+		}
+		for _, e := range strings.Split(events, ",") {
+			if strings.TrimSpace(e) == string(eventbus.EventCPUHigh) {
+				return true
+			}
+		}
+		return false
+	}
+	if on, _ := s.settingService.GetTgbotEnabled(); on {
+		events, _ := s.settingService.GetTgEnabledEvents()
+		cpu, _ := s.settingService.GetTgCpu()
+		if wants(events, cpu) {
+			return true
+		}
+	}
+	if on, _ := s.settingService.GetSmtpEnable(); on {
+		events, _ := s.settingService.GetSmtpEnabledEvents()
+		cpu, _ := s.settingService.GetSmtpCpu()
+		if wants(events, cpu) {
+			return true
+		}
+	}
+	return false
 }
 
 // Start initializes and starts the web server with configured settings, routes, and background jobs.
@@ -393,6 +453,7 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		APIPort:        func() int { return s.xrayService.GetXrayAPIPort() },
 		SetNeedRestart: func() { s.xrayService.SetToNeedRestart() },
 	}))
+	runtime.GetManager().SetNodeEgressResolver(&s.settingService)
 
 	s.customGeoService = service.NewCustomGeoService()
 
@@ -416,6 +477,14 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	port, err := s.settingService.GetPort()
 	if err != nil {
 		return err
+	}
+	if envPort, configured, envErr := config.GetPortOverride(); configured {
+		if envErr != nil {
+			logger.Warning("Ignoring invalid XUI_PORT; using configured web port:", port, envErr)
+		} else {
+			port = envPort
+			logger.Info("Using XUI_PORT override for web panel port:", port)
+		}
 	}
 	listenAddr := net.JoinHostPort(listen, strconv.Itoa(port))
 	listener, err := net.Listen("tcp", listenAddr)
@@ -452,6 +521,42 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		s.httpServer.Serve(listener)
 	}()
 
+	// Create event bus before startTask so jobs can use it
+	s.bus = eventbus.New(eventbus.DefaultBufferSize)
+	service.SetEventBus(s.bus)
+	job.EventBus = s.bus
+	tgbot.EventBus = s.bus
+
+	// Wire xray crash callback BEFORE startTask so it's ready
+	xray.OnCrash = func(err error) {
+		if s.bus != nil {
+			s.bus.Publish(eventbus.Event{
+				Type: eventbus.EventXrayCrash,
+				Data: err.Error(),
+			})
+		}
+	}
+
+	// Register email subscriber (always — it checks smtpEnable at runtime)
+	emailService := email.NewEmailService(s.settingService)
+	emailSub := email.NewSubscriber(s.settingService, emailService)
+	s.bus.Subscribe("email-notifier", emailSub.HandleEvent)
+
+	// Wire email service to controller for test endpoint
+	controller.SetEmailService(emailService)
+
+	// Wire Telegram test function to controller
+	controller.SetTestTgFunc(func() error {
+		if !s.tgbotService.IsRunning() {
+			return fmt.Errorf("telegram bot is not running (check token and chat ID)")
+		}
+		if err := s.tgbotService.TestConnection(); err != nil {
+			return fmt.Errorf("telegram API test failed: %w", err)
+		}
+		s.tgbotService.SendMsgToTgbotAdmins("✅ Test message from 3x-ui")
+		return nil
+	})
+
 	s.startTask(restartXray)
 
 	if startTgBot {
@@ -459,6 +564,8 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 		if (err == nil) && (isTgbotenabled) {
 			tgBot := s.tgbotService.NewTgbot()
 			tgBot.Start(i18nFS)
+			// Subscribe Telegram notifications for event bus
+			s.bus.Subscribe("tg-notifier", s.tgbotService.HandleEvent)
 		}
 	}
 
@@ -482,6 +589,9 @@ func (s *Server) stop(stopXray bool, stopTgBot bool) error {
 	}
 	if s.cron != nil {
 		s.cron.Stop()
+	}
+	if s.bus != nil {
+		s.bus.Stop()
 	}
 	if err := service.PersistSystemMetrics(); err != nil {
 		logger.Warning("persist system metrics on shutdown failed:", err)
