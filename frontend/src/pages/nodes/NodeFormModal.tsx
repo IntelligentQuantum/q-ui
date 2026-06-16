@@ -17,6 +17,7 @@ import {
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 import type { Msg } from '@/utils';
 import { NodeFormSchema, type NodeFormValues, type ProbeResult } from '@/schemas/node';
+import { useOutboundTags } from '@/api/queries/useOutboundTags';
 
 type Mode = 'add' | 'edit';
 
@@ -44,7 +45,8 @@ function defaultValues(): NodeFormValues
         enable: true,
         allowPrivateAddress: false,
         tlsVerifyMode: 'verify',
-        pinnedCertSha256: ''
+        pinnedCertSha256: '',
+        outboundTag: ''
     };
 }
 
@@ -110,6 +112,7 @@ export default function NodeFormModal({
 
     const scheme = watch('scheme') ?? 'https';
     const tlsVerifyMode = watch('tlsVerifyMode') ?? 'verify';
+    const { data: outboundTags } = useOutboundTags();
 
     useEffect(() =>
     {
@@ -153,7 +156,8 @@ export default function NodeFormModal({
             enable: values.enable,
             allowPrivateAddress: values.allowPrivateAddress,
             tlsVerifyMode: values.tlsVerifyMode,
-            pinnedCertSha256: values.tlsVerifyMode === 'pin' ? values.pinnedCertSha256.trim() : ''
+            pinnedCertSha256: values.tlsVerifyMode === 'pin' ? values.pinnedCertSha256.trim() : '',
+            outboundTag: values.outboundTag || ''
         };
     }
 
@@ -424,6 +428,22 @@ export default function NodeFormModal({
               placeholder={t('pages.nodes.apiTokenPlaceholder')}
               aria-invalid={!!errors.apiToken}
               {...register('apiToken', { required: 'pages.nodes.toasts.fillRequired' })}
+            />
+          </Field>
+
+          <Field label={t('pages.nodes.outboundTag')} htmlFor="node-outbound" hint={t('pages.nodes.outboundTagHint')}>
+            <Controller
+              control={control}
+              name="outboundTag"
+              render={({ field }) => (
+                <Select
+                  id="node-outbound"
+                  value={field.value ?? ''}
+                  onChange={field.onChange}
+                  placeholder={t('pages.nodes.outboundTagPlaceholder')}
+                  options={[{ value: '', label: t('none') }, ...(outboundTags ?? []).map((tag) => ({ value: tag, label: tag }))]}
+                />
+              )}
             />
           </Field>
 

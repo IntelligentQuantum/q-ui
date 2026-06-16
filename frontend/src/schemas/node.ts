@@ -26,6 +26,7 @@ export const NodeRecordSchema = z.object({
     allowPrivateAddress: z.boolean().optional(),
     tlsVerifyMode: z.enum(['verify', 'skip', 'pin']).optional(),
     pinnedCertSha256: z.string().optional(),
+    outboundTag: z.string().optional(),
     // Multi-hop node tree (#4983): a node's stable GUID, its parent's GUID, and
     // whether it's a read-only transitive sub-node surfaced from a downstream node.
     guid: z.string().optional(),
@@ -54,7 +55,8 @@ export const NodeFormSchema = z.object({
     enable: z.boolean(),
     allowPrivateAddress: z.boolean(),
     tlsVerifyMode: z.enum(['verify', 'skip', 'pin']),
-    pinnedCertSha256: z.string().optional().default('')
+    pinnedCertSha256: z.string().optional().default(''),
+    outboundTag: z.string().optional()
 });
 
 export type NodeRecord = z.infer<typeof NodeRecordSchema>;
