@@ -270,7 +270,7 @@ export default function RegisterPage()
                     />
                   </Field>
 
-                  <Field label={t('email')} htmlFor="reg-email" error={errors.email?.message}>
+                  <Field label={t('emailAddress')} htmlFor="reg-email" error={errors.email?.message}>
                     <IconInput
                       id="reg-email"
                       icon={<Mail className="h-4 w-4" aria-hidden />}

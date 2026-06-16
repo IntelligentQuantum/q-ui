@@ -191,7 +191,7 @@ export default function ProfilePage()
                       />
                     </Field>
 
-                    <Field label={t('email')} htmlFor="pf-email">
+                    <Field label={t('emailAddress')} htmlFor="pf-email">
                       <Input
                         id="pf-email"
                         autoComplete="email"

@@ -433,7 +433,7 @@ export default function UsersPage()
         },
         {
             key: 'email',
-            header: t('email'),
+            header: t('emailAddress'),
             accessor: (row) => row.email || '',
             cell: (row) => <span className="text-muted-foreground">{row.email || '—'}</span>,
             className: 'hidden md:table-cell'
@@ -603,7 +603,7 @@ export default function UsersPage()
               <Input id="user-phone" autoComplete="off" {...registerUser('phone')} />
             </Field>
 
-            <Field label={t('email')} htmlFor="user-email">
+            <Field label={t('emailAddress')} htmlFor="user-email">
               <Input id="user-email" autoComplete="off" {...registerUser('email')} />
             </Field>
 

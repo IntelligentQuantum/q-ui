@@ -117,7 +117,7 @@ export default function RuleCardList({
                 <ArrowRight className="h-4 w-4 shrink-0 text-muted-foreground rtl:rotate-180" aria-hidden />
                 <div className="flex min-w-0 flex-1 flex-col items-end gap-1 text-end">
                   <span className="text-[10px] uppercase tracking-wide text-muted-foreground">
-                    {rule.balancerTag ? t('pages.xray.balancer') || 'Balancer' : t('pages.xray.Outbounds')}
+                    {rule.balancerTag ? t('pages.xray.balancerLabel') : t('pages.xray.Outbounds')}
                   </span>
                   {rule.outboundTag ? (
                     <Badge variant="success" className="max-w-full gap-1 truncate">
