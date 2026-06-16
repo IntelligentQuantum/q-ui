@@ -2,6 +2,8 @@ import { lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { SearchInput, StatCard } from '@/components/ui';
 import {
+    ArrowDown,
+    ArrowUp,
     Clock,
     Link as LinkIcon,
     Pencil,
@@ -21,7 +23,7 @@ import { z } from 'zod';
 import { useTheme } from '@/hooks/useTheme';
 import { usePageTitle } from '@/hooks/usePageTitle';
 import { useClients } from '@/hooks/useClients';
-import { HttpUtil } from '@/utils';
+import { HttpUtil, SizeFormatter } from '@/utils';
 import { setMessageInstance } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
 import { LazyMount } from '@/components/utility';
@@ -207,6 +209,14 @@ export default function GroupsPage()
     );
     const emptyGroups = useMemo(
         () => groups.filter((g) => (g.clientCount || 0) === 0).length,
+        [groups]
+    );
+    const totalUpload = useMemo(
+        () => groups.reduce((acc, g) => acc + (g.up || 0), 0),
+        [groups]
+    );
+    const totalDownload = useMemo(
+        () => groups.reduce((acc, g) => acc + (g.down || 0), 0),
         [groups]
     );
 
@@ -510,6 +520,22 @@ export default function GroupsPage()
             accessor: (row) => row.clientCount || 0,
             sortable: true,
             cell: (row) => <span className="tabular-nums">{row.clientCount || 0}</span>
+        },
+        {
+            key: 'up',
+            header: t('pages.groups.upload'),
+            width: 140,
+            accessor: (row) => row.up || 0,
+            sortable: true,
+            cell: (row) => <span>{SizeFormatter.sizeFormat(row.up || 0)}</span>
+        },
+        {
+            key: 'down',
+            header: t('pages.groups.download'),
+            width: 140,
+            accessor: (row) => row.down || 0,
+            sortable: true,
+            cell: (row) => <span>{SizeFormatter.sizeFormat(row.down || 0)}</span>
         }
     ];
 
@@ -542,10 +568,18 @@ export default function GroupsPage()
               </Card>
             ) : (
               <div className="flex flex-col gap-4">
-                <div className="grid grid-cols-3 gap-3 sm:gap-4">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
                   <StatCard title={t('pages.groups.totalGroups')} value={String(totalGroups)} icon={<Tags className="h-5 w-5" aria-hidden />} />
                   <StatCard title={t('pages.groups.totalGroupedClients')} value={String(totalClients)} icon={<Users className="h-5 w-5" aria-hidden />} />
                   <StatCard title={t('pages.groups.emptyGroups')} value={String(emptyGroups)} icon={<Tags className="h-5 w-5 opacity-60" aria-hidden />} />
+                  <div className="rounded-lg border border-border bg-card p-4 sm:p-5">
+                    <div className="text-sm font-medium text-muted-foreground">{t('pages.groups.totalTraffic')}</div>
+                    <div className="mt-2 text-2xl font-semibold tabular-nums">{SizeFormatter.sizeFormat(totalUpload + totalDownload)}</div>
+                    <div className="mt-2 flex gap-4 text-xs text-muted-foreground">
+                      <span className="flex items-center gap-1"><ArrowUp className="h-4 w-4" aria-hidden /> {SizeFormatter.sizeFormat(totalUpload)}</span>
+                      <span className="flex items-center gap-1"><ArrowDown className="h-4 w-4" aria-hidden /> {SizeFormatter.sizeFormat(totalDownload)}</span>
+                    </div>
+                  </div>
                 </div>
 
                 <Card className="p-4 sm:p-5">
