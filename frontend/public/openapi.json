@@ -1365,6 +1365,36 @@
         }
       }
     },
+    "/panel/api/inbounds/pushClientTraffics": {
+      "post": {
+        "tags": [
+          "Inbounds"
+        ],
+        "summary": "Node-to-master push of per-client traffic deltas (admin only). A child node calls this on its master panel to report the traffic its clients consumed since the last sync.",
+        "operationId": "post_panel_api_inbounds_pushClientTraffics",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/server/status": {
       "get": {
         "tags": [
@@ -4259,6 +4289,77 @@
         }
       }
     },
+    "/panel/api/clients/{email}/externalLinks": {
+      "post": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Replace the stored external subscription links for a client (admin only). Used by the clients page to attach extra subscription URLs surfaced alongside the generated ones.",
+        "operationId": "post_panel_api_clients_email_externalLinks",
+        "parameters": [
+          {
+            "name": "email",
+            "in": "path",
+            "required": true,
+            "description": "Client email.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/api/clients/clientIpsByGuid": {
+      "post": {
+        "tags": [
+          "Clients"
+        ],
+        "summary": "Per-node IP attribution for a client, grouped by the hosting node's panelGuid (admin only). Pairs with the per-node client-IP feature so the clients page can show which node each live IP was seen on.",
+        "operationId": "post_panel_api_clients_clientIpsByGuid",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/clients/traffic/{email}": {
       "get": {
         "tags": [
@@ -5037,6 +5138,36 @@
         }
       }
     },
+    "/panel/api/nodes/inbounds": {
+      "post": {
+        "tags": [
+          "Nodes"
+        ],
+        "summary": "List the inbounds available on a remote node (admin only) so the multi-panel UI can map/attach them when wiring a node into the panel.",
+        "operationId": "post_panel_api_nodes_inbounds",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/panel/api/custom-geo/list": {
       "get": {
         "tags": [
@@ -5783,6 +5914,66 @@
                 },
                 "example": {
                   "success": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/setting/testSmtp": {
+      "post": {
+        "tags": [
+          "API Tokens"
+        ],
+        "summary": "Send a test email using the submitted SMTP settings to verify the mail configuration before saving (admin only).",
+        "operationId": "post_panel_setting_testSmtp",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/setting/testTgBot": {
+      "post": {
+        "tags": [
+          "API Tokens"
+        ],
+        "summary": "Send a test message via the configured Telegram bot to verify the token/chat settings (admin only).",
+        "operationId": "post_panel_setting_testTgBot",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
                 }
               }
             }
@@ -6835,6 +7026,126 @@
         ],
         "summary": "Parse a subscription URL or body into outbound entries without persisting them.",
         "operationId": "post_panel_xray_outbound_subs_parse",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/testOutbounds": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Probe the configured outbounds (e.g. latency/connectivity) and return per-outbound results (admin only).",
+        "operationId": "post_panel_xray_testOutbounds",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/balancerStatus": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Report the current health/selection state of Xray routing balancers (admin only).",
+        "operationId": "post_panel_xray_balancerStatus",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/balancerOverride": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Force a balancer to a specific outbound (manual override) until cleared (admin only).",
+        "operationId": "post_panel_xray_balancerOverride",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/panel/xray/routeTest": {
+      "post": {
+        "tags": [
+          "Outbound Subscriptions & Sync Additions"
+        ],
+        "summary": "Evaluate the routing rules against a sample request to show which outbound/balancer it would select (admin only).",
+        "operationId": "post_panel_xray_routeTest",
         "responses": {
           "200": {
             "description": "Successful response",
