@@ -8,11 +8,12 @@ package model
 type Notification struct {
 	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId    int    `json:"userId" gorm:"index;not null;column:user_id"`
-	Title     string `json:"title"`                                   // i18n key
-	Body      string `json:"body"`                                    // i18n key
-	Params    string `json:"params" gorm:"default:''"`                // JSON object of interpolation values
-	Level     string `json:"level" gorm:"default:'info'"`             // info | success | warning | error
-	Link      string `json:"link" gorm:"default:''"`                  // optional SPA path
+	TenantId  int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
+	Title     string `json:"title"`                                            // i18n key
+	Body      string `json:"body"`                                             // i18n key
+	Params    string `json:"params" gorm:"default:''"`                         // JSON object of interpolation values
+	Level     string `json:"level" gorm:"default:'info'"`                      // info | success | warning | error
+	Link      string `json:"link" gorm:"default:''"`                           // optional SPA path
 	Read      bool   `json:"read" gorm:"default:false;index:idx_notif_user_read"`
 	CreatedAt int64  `json:"createdAt" gorm:"autoCreateTime:milli;index"`
 }

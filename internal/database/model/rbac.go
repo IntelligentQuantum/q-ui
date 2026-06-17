@@ -14,14 +14,14 @@ const (
 	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
 	PermStatsViewAll  Permission = "stats.view_all"
 	PermTxnViewAll    Permission = "transaction.view_all"
-	PermDepositManage Permission = "deposit.manage"  // review/approve/reject manual deposits + manage payment cards
+	PermDepositManage Permission = "deposit.manage"   // review/approve/reject manual deposits + manage payment cards
 	PermFinanceView   Permission = "finance.view_all" // finance control center: dashboards, analytics, ledger, exports
 
 	// Support ticketing (helpdesk).
-	PermTicketCreate  Permission = "ticket.create"  // open + reply to own tickets
+	PermTicketCreate  Permission = "ticket.create"   // open + reply to own tickets
 	PermTicketViewOwn Permission = "ticket.view_own" // view own tickets
-	PermTicketManage  Permission = "ticket.manage"  // staff: view all, reply, assign, transfer, status, notes
-	PermTicketAdmin   Permission = "ticket.admin"   // categories, SLA config, audit log, merge
+	PermTicketManage  Permission = "ticket.manage"   // staff: view all, reply, assign, transfer, status, notes
+	PermTicketAdmin   Permission = "ticket.admin"    // categories, SLA config, audit log, merge
 
 	// Product catalog.
 	PermProductManage   Permission = "product.manage"   // create/edit/delete/activate products
@@ -36,12 +36,44 @@ const (
 	PermOrderViewAll   Permission = "order.view_all" // see every order
 	PermOrderViewOwn   Permission = "order.view_own" // see own orders/services
 	PermBalanceViewOwn Permission = "balance.view_own"
+
+	// Multi-tenancy. Manager-scoped capabilities (the tenant middleware confines
+	// each to the manager's own workspace), plus the admin-only oversight perm.
+	PermTenantSettings Permission = "tenant.settings" // edit own workspace branding/register/domain/subscription
+	PermTenantPayments Permission = "tenant.payments" // edit own gateways + bank cards
+	PermTenantUsers    Permission = "tenant.users"    // manage member/reseller within own tenant (never manager/admin)
+	PermManagerAdmin   Permission = "manager.admin"   // admin only: list/suspend/delete/impersonate managers, allocate bandwidth, rotate keys
 )
 
 // rolePermissions is the canonical role -> permission matrix. Admin is handled
 // specially in Can() (it has every permission and bypasses ownership), so it is
 // intentionally not enumerated here.
 var rolePermissions = map[string]map[Permission]bool{
+	// Manager: runs a full workspace, but EVERY permission below is confined to
+	// the manager's own tenant by the tenant middleware + TenantScope. Manager is
+	// intentionally NOT granted infra.manage, user.manage (system role mgmt),
+	// stats.view_all, transaction.view_all, or manager.admin — and the
+	// tenant.users guard prevents creating/promoting manager/admin accounts.
+	RoleManager: {
+		PermProductManage:   true,
+		PermProductView:     true,
+		PermProductPurchase: true,
+		PermClientManage:    true,
+		PermCustomerView:    true,
+		PermOrderViewAll:    true,
+		PermOrderViewOwn:    true,
+		PermBalanceViewOwn:  true,
+		PermBalanceManage:   true, // adjust own tenant users' balances
+		PermDepositManage:   true, // own tenant deposits + bank cards
+		PermFinanceView:     true, // own tenant finance reports
+		PermTicketCreate:    true,
+		PermTicketViewOwn:   true,
+		PermTicketManage:    true,
+		PermTicketAdmin:     true, // own tenant ticket categories/SLA
+		PermTenantSettings:  true,
+		PermTenantPayments:  true,
+		PermTenantUsers:     true,
+	},
 	RoleModerator: {
 		PermProductManage:  true,
 		PermProductView:    true,
@@ -120,13 +152,14 @@ var allPermissions = []Permission{
 	PermTicketCreate, PermTicketViewOwn, PermTicketManage, PermTicketAdmin,
 	PermProductManage, PermProductView, PermProductPurchase,
 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
+	PermTenantSettings, PermTenantPayments, PermTenantUsers, PermManagerAdmin,
 }
 
-// IsValidRole reports whether s is one of the four canonical roles (the legacy
+// IsValidRole reports whether s is one of the five canonical roles (the legacy
 // "user" alias is accepted too, since NormalizeRole folds it into reseller).
 func IsValidRole(s string) bool {
 	switch s {
-	case RoleAdmin, RoleModerator, RoleReseller, RoleMember, RoleUser:
+	case RoleAdmin, RoleManager, RoleModerator, RoleReseller, RoleMember, RoleUser:
 		return true
 	default:
 		return false

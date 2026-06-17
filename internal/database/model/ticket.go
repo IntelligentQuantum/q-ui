@@ -17,6 +17,7 @@ package model
 // TicketCategory is an admin-managed bucket a ticket is filed under.
 type TicketCategory struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	TenantId     int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
 	Name         string `json:"name" gorm:"not null"`
 	Description  string `json:"description" gorm:"default:''"`
 	DisplayOrder int    `json:"displayOrder" gorm:"column:display_order;default:0;index"`
@@ -34,7 +35,9 @@ type Ticket struct {
 	Id     int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	Number string `json:"number" gorm:"uniqueIndex;not null"` // TCK-YYYY-NNNNNN
 	// UserId owns the ticket; ownership scoping for members/resellers keys off it.
-	UserId     int    `json:"userId" gorm:"index;not null;column:user_id"`
+	UserId int `json:"userId" gorm:"index;not null;column:user_id"`
+	// TenantId scopes the ticket to a Manager's workspace (0 = global/admin).
+	TenantId   int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
 	CategoryId int    `json:"categoryId" gorm:"index;column:category_id"`
 	Subject    string `json:"subject" gorm:"not null"`
 	Priority   string `json:"priority" gorm:"index;default:'normal'"` // low|normal|high|urgent
@@ -43,7 +46,7 @@ type Ticket struct {
 	AssignedTo      int   `json:"assignedTo" gorm:"index;column:assigned_to;default:0"`
 	AssignedBy      int   `json:"assignedBy" gorm:"column:assigned_by;default:0"`
 	AssignedAt      int64 `json:"assignedAt" gorm:"column:assigned_at;default:0"`
-	SLADueAt        int64 `json:"slaDueAt" gorm:"column:sla_due_at;index;default:0"`    // first-response deadline (ms)
+	SLADueAt        int64 `json:"slaDueAt" gorm:"column:sla_due_at;index;default:0"`         // first-response deadline (ms)
 	FirstResponseAt int64 `json:"firstResponseAt" gorm:"column:first_response_at;default:0"` // first staff reply (ms); 0 = none
 	LastReplyAt     int64 `json:"lastReplyAt" gorm:"column:last_reply_at;index;default:0"`
 	LastReplyBy     int   `json:"lastReplyBy" gorm:"column:last_reply_by;default:0"`
@@ -63,7 +66,7 @@ type TicketMessage struct {
 	UserId   int    `json:"userId" gorm:"index;column:user_id"`
 	Body     string `json:"body" gorm:"type:text"` // sanitized HTML
 	// IsInternal marks a staff-only note that owners (members/resellers) never see.
-	IsInternal bool  `json:"isInternal" gorm:"column:is_internal;index;default:false"`
+	IsInternal bool `json:"isInternal" gorm:"column:is_internal;index;default:false"`
 	// IsSystem marks an auto-generated event line (e.g. "status changed to solved").
 	IsSystem  bool  `json:"isSystem" gorm:"column:is_system;default:false"`
 	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli;index:idx_tmsg_ticket_created,priority:2"`
@@ -165,16 +168,16 @@ const (
 
 // Audit actions.
 const (
-	TicketActionCreated   = "created"
-	TicketActionReply     = "reply"
-	TicketActionNote      = "note"
-	TicketActionAssign    = "assign"
-	TicketActionTransfer  = "transfer"
-	TicketActionStatus    = "status"
-	TicketActionPriority  = "priority"
-	TicketActionEscalate  = "escalate"
-	TicketActionFile      = "file"
-	TicketActionClose     = "close"
-	TicketActionReopen    = "reopen"
-	TicketActionMerge     = "merge"
+	TicketActionCreated  = "created"
+	TicketActionReply    = "reply"
+	TicketActionNote     = "note"
+	TicketActionAssign   = "assign"
+	TicketActionTransfer = "transfer"
+	TicketActionStatus   = "status"
+	TicketActionPriority = "priority"
+	TicketActionEscalate = "escalate"
+	TicketActionFile     = "file"
+	TicketActionClose    = "close"
+	TicketActionReopen   = "reopen"
+	TicketActionMerge    = "merge"
 )

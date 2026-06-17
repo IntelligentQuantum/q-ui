@@ -36,13 +36,17 @@ const (
 
 // User represents a user account in the 3x-ui panel.
 type User struct {
-	Id                int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	Username          string `json:"username"`
-	Password          string `json:"-"`
-	FullName          string `json:"fullName" gorm:"default:''"`
-	Phone             string `json:"phone" gorm:"default:''"`
-	Email             string `json:"email" gorm:"default:''"`
-	Role              string `json:"role" gorm:"default:'user';index"`
+	Id       int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	Username string `json:"username"`
+	Password string `json:"-"`
+	FullName string `json:"fullName" gorm:"default:''"`
+	Phone    string `json:"phone" gorm:"default:''"`
+	Email    string `json:"email" gorm:"default:''"`
+	Role     string `json:"role" gorm:"default:'user';index"`
+	// TenantId is the workspace this user belongs to. 0 = the global/admin scope
+	// (the original single-tenant world); a Manager and all their sub-users carry
+	// their tenant's id. See model.Tenant.
+	TenantId          int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
 	Balance           int64  `json:"balance" gorm:"default:0"`
 	CostPerGBOverride int    `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
 	ReferralCode      string `json:"referralCode" gorm:"column:referral_code;default:'';index"`
@@ -54,9 +58,13 @@ type User struct {
 	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli"`
 }
 
-// Role constants for the RBAC system. Four roles, in descending privilege:
+// Role constants for the RBAC system. Five roles:
 //
-//	admin     - full, unrestricted control; bypasses all ownership checks.
+//	admin     - full, unrestricted control; bypasses all ownership checks and
+//	            runs in the global tenant scope (sees every tenant).
+//	manager   - owns an isolated Tenant (workspace); every capability is scoped
+//	            to that one tenant. Cannot touch infrastructure, other tenants,
+//	            system roles, or create another manager/admin.
 //	moderator - sales/product/support/marketing; NO infrastructure access.
 //	reseller  - business partner; owns and resells to their own clients/customers.
 //	member    - end customer; buys products and manages their own services.
@@ -66,6 +74,7 @@ type User struct {
 // RoleReseller everywhere. It is kept only for backward compatibility.
 const (
 	RoleAdmin     = "admin"
+	RoleManager   = "manager"
 	RoleModerator = "moderator"
 	RoleReseller  = "reseller"
 	RoleMember    = "member"
@@ -80,6 +89,8 @@ func NormalizeRole(role string) string {
 	switch strings.ToLower(strings.TrimSpace(role)) {
 	case RoleAdmin:
 		return RoleAdmin
+	case RoleManager:
+		return RoleManager
 	case RoleModerator:
 		return RoleModerator
 	case RoleReseller, RoleUser:
@@ -106,6 +117,7 @@ func (u *User) CanonicalRole() string {
 // granted full admin rights to moderator/reseller/member the instant those
 // roles were introduced. Do not loosen this.
 func (u *User) IsAdmin() bool     { return u.CanonicalRole() == RoleAdmin }
+func (u *User) IsManager() bool   { return u.CanonicalRole() == RoleManager }
 func (u *User) IsModerator() bool { return u.CanonicalRole() == RoleModerator }
 func (u *User) IsReseller() bool  { return u.CanonicalRole() == RoleReseller }
 func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
@@ -115,8 +127,9 @@ func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
 type Transaction struct {
 	Id            int    `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId        int    `json:"userId" gorm:"index;not null;column:user_id"`
-	Amount        int64  `json:"amount" gorm:"not null"` // always positive; Type carries the sign
-	Type          string `json:"type" gorm:"not null"`   // "credit" | "debit"
+	TenantId      int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
+	Amount        int64  `json:"amount" gorm:"not null"`                           // always positive; Type carries the sign
+	Type          string `json:"type" gorm:"not null"`                             // "credit" | "debit"
 	Description   string `json:"description"`
 	BalanceBefore int64  `json:"balanceBefore" gorm:"column:balance_before"`
 	BalanceAfter  int64  `json:"balanceAfter" gorm:"column:balance_after"`
@@ -158,8 +171,11 @@ const (
 // created pending at request time and flipped to paid/failed at callback,
 // which is what guarantees a balance is credited at most once per payment.
 type Payment struct {
-	Id        int    `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserId    int    `json:"userId" gorm:"index;not null;column:user_id"`
+	Id     int `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId int `json:"userId" gorm:"index;not null;column:user_id"`
+	// TenantId scopes the payment to a workspace (0 = global/admin). Persisted so
+	// the unauthenticated gateway callback can resolve the tenant without a session.
+	TenantId  int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
 	Gateway   string `json:"gateway" gorm:"default:zarinpal"`
 	Authority string `json:"authority" gorm:"uniqueIndex"`
 	Amount    int64  `json:"amount"`
@@ -753,7 +769,9 @@ type ClientRecord struct {
 	// (pre-RBAC rows and admin-created clients without an explicit owner);
 	// admins see every client regardless, while non-admin users only ever see
 	// and mutate rows whose OwnerId equals their own id.
-	OwnerId    int    `json:"ownerId" gorm:"column:owner_id;index;default:0"`
+	OwnerId int `json:"ownerId" gorm:"column:owner_id;index;default:0"`
+	// TenantId scopes the client to a Manager's workspace (0 = global/admin).
+	TenantId   int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
 	SubID      string `json:"subId" gorm:"index;column:sub_id"`
 	UUID       string `json:"uuid" gorm:"column:uuid"`
 	Password   string `json:"password"`

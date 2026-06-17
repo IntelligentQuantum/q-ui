@@ -58,6 +58,7 @@ func (l *IntList) Scan(src any) error {
 // catalog; resellers and members purchase from it.
 type Product struct {
 	Id           int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	TenantId     int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
 	Name         string `json:"name" gorm:"not null"`
 	Description  string `json:"description" gorm:"default:''"`                      // optional marketing/notes text shown in the store
 	TrafficLimit int64  `json:"trafficLimit" gorm:"column:traffic_limit;default:0"` // bytes; 0 = unlimited
@@ -100,6 +101,7 @@ const (
 type Order struct {
 	Id        int `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId    int `json:"userId" gorm:"index;not null;column:user_id"`
+	TenantId  int `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
 	ProductId int `json:"productId" gorm:"index;not null;column:product_id"`
 	// ProductName is the product's name captured at purchase time so order
 	// history stays readable even if the product is later renamed or deleted.

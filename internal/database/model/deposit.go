@@ -18,12 +18,13 @@ package model
 // the full set and control display ordering.
 type PaymentCard struct {
 	Id             int    `json:"id" gorm:"primaryKey;autoIncrement"`
+	TenantId       int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`         // workspace scope (0 = global/admin)
 	Title          string `json:"title" gorm:"default:''"`                                  // human label, e.g. "Main account"
 	CardHolderName string `json:"cardHolderName" gorm:"column:card_holder_name;not null"`   // name printed on the card
-	CardNumber     string `json:"cardNumber" gorm:"column:card_number;not null"`           // 16-digit PAN (stored as given)
-	BankName       string `json:"bankName" gorm:"column:bank_name;default:''"`             // e.g. "Mellat"
+	CardNumber     string `json:"cardNumber" gorm:"column:card_number;not null"`            // 16-digit PAN (stored as given)
+	BankName       string `json:"bankName" gorm:"column:bank_name;default:''"`              // e.g. "Mellat"
 	Iban           string `json:"iban" gorm:"column:iban;default:''"`                       // optional IBAN (Sheba)
-	AccountNumber  string `json:"accountNumber" gorm:"column:account_number;default:''"`   // optional account number
+	AccountNumber  string `json:"accountNumber" gorm:"column:account_number;default:''"`    // optional account number
 	Status         string `json:"status" gorm:"index;default:'active'"`                     // active | inactive
 	DisplayOrder   int    `json:"displayOrder" gorm:"column:display_order;default:0;index"` // lower = shown first
 	CreatedAt      int64  `json:"createdAt" gorm:"autoCreateTime:milli"`
@@ -44,9 +45,10 @@ const (
 // credit). ApprovedBy/ApprovedAt are set on either terminal transition so the
 // row is self-auditing.
 type ManualDepositRequest struct {
-	Id     int   `json:"id" gorm:"primaryKey;autoIncrement"`
-	UserId int   `json:"userId" gorm:"index;not null;column:user_id"`
-	Amount int64 `json:"amount" gorm:"not null"` // credits requested (always positive)
+	Id       int   `json:"id" gorm:"primaryKey;autoIncrement"`
+	UserId   int   `json:"userId" gorm:"index;not null;column:user_id"`
+	TenantId int   `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
+	Amount   int64 `json:"amount" gorm:"not null"`                           // credits requested (always positive)
 	// TrackingNumber is the bank's transfer reference the buyer reports. It is
 	// uniquely indexed so the same receipt can't be submitted twice (duplicate
 	// detection); a blank value is allowed and not deduplicated.
