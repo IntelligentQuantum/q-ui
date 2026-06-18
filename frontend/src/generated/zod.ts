@@ -327,6 +327,7 @@ export const ClientRecordSchema = z.object({
   reverse: z.unknown(),
   security: z.string(),
   subId: z.string(),
+  tenantId: z.number().int(),
   tgId: z.number().int(),
   totalGB: z.number().int(),
   updatedAt: z.number().int(),
@@ -516,6 +517,7 @@ export const UserSchema = z.object({
   referralEnabled: z.boolean(),
   referredByUserId: z.number().int(),
   role: z.string(),
+  tenantId: z.number().int(),
   username: z.string(),
 });
 export type User = z.infer<typeof UserSchema>;

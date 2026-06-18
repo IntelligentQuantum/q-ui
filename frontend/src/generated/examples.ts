@@ -297,6 +297,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "reverse": null,
     "security": "",
     "subId": "",
+    "tenantId": 0,
     "tgId": 0,
     "totalGB": 0,
     "updatedAt": 0,
@@ -475,6 +476,7 @@ export const EXAMPLES: Record<string, unknown> = {
     "referralEnabled": false,
     "referredByUserId": 0,
     "role": "",
+    "tenantId": 0,
     "username": ""
   }
 };

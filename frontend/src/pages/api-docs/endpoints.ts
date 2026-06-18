@@ -102,6 +102,12 @@ export const sections: readonly Section[] = [
             },
             {
                 method: 'POST',
+                path: '/getWorkspaceInfo',
+                summary: 'Returns a Manager workspace\'s public branding + registration flag for a given slug — used by the login/register pages to brand and gate per workspace.',
+                response: '{\n  "success": true,\n  "obj": {\n    "title": "Acme",\n    "logo": "",\n    "registrationEnable": true,\n    "tenant": true\n  }\n}'
+            },
+            {
+                method: 'POST',
                 path: '/getPanelTitle',
                 summary: 'Returns the configurable panel brand/title (defaults to "Q-UI") — used by the pre-auth login and registration pages to render the brand.',
                 response: '{\n  "success": true,\n  "obj": "Q-UI"\n}'

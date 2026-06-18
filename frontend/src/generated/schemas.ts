@@ -1458,6 +1458,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "subId": {
         "type": "string"
       },
+      "tenantId": {
+        "description": "TenantId scopes the client to a Manager's workspace (0 = global/admin).",
+        "type": "integer"
+      },
       "tgId": {
         "type": "integer"
       },
@@ -1488,6 +1492,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "reverse",
       "security",
       "subId",
+      "tenantId",
       "tgId",
       "totalGB",
       "updatedAt",
@@ -2222,6 +2227,10 @@ export const SCHEMAS: Record<string, unknown> = {
       "role": {
         "type": "string"
       },
+      "tenantId": {
+        "description": "TenantId is the workspace this user belongs to. 0 = the global/admin scope\n(the original single-tenant world); a Manager and all their sub-users carry\ntheir tenant's id. See model.Tenant.",
+        "type": "integer"
+      },
       "username": {
         "type": "string"
       }
@@ -2238,6 +2247,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "referralEnabled",
       "referredByUserId",
       "role",
+      "tenantId",
       "username"
     ],
     "type": "object"

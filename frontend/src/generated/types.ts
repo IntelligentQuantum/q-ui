@@ -309,6 +309,7 @@ export interface ClientRecord {
   reverse: unknown;
   security: string;
   subId: string;
+  tenantId: number;
   tgId: number;
   totalGB: number;
   updatedAt: number;
@@ -484,6 +485,7 @@ export interface User {
   referralEnabled: boolean;
   referredByUserId: number;
   role: string;
+  tenantId: number;
   username: string;
 }
 

@@ -149,6 +149,11 @@ func TestAPIRoutesDocumented(t *testing.T) {
 			"GET /panel/tickets/*any":    true,
 			"GET /panel/support":         true,
 			"GET /panel/finance":         true,
+			// Manager multi-tenancy SPA shell routes.
+			"GET /panel/managers":           true,
+			"GET /panel/workspace-settings": true,
+			"GET /panel/tenant-users":       true,
+			"GET /panel/workspace-payments": true,
 		}
 		if spaPages[key] {
 			continue

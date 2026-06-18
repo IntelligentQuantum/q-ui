@@ -318,6 +318,45 @@
         }
       }
     },
+    "/getWorkspaceInfo": {
+      "post": {
+        "tags": [
+          "Authentication"
+        ],
+        "summary": "Returns a Manager workspace's public branding + registration flag for a given slug — used by the login/register pages to brand and gate per workspace.",
+        "operationId": "post_getWorkspaceInfo",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    },
+                    "msg": {
+                      "type": "string"
+                    },
+                    "obj": {}
+                  }
+                },
+                "example": {
+                  "success": true,
+                  "obj": {
+                    "title": "Acme",
+                    "logo": "",
+                    "registrationEnable": true,
+                    "tenant": true
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/getPanelTitle": {
       "post": {
         "tags": [
