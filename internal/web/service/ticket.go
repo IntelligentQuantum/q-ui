@@ -96,8 +96,8 @@ type TicketCategoryInput struct {
 	DisplayOrder int    `json:"displayOrder"`
 }
 
-func (s *TicketService) ListCategories(activeOnly bool) ([]model.TicketCategory, error) {
-	q := database.GetDB().Model(&model.TicketCategory{}).Order("display_order asc, id asc")
+func (s *TicketService) ListCategories(activeOnly bool, scope model.Scope) ([]model.TicketCategory, error) {
+	q := scope.Apply(database.GetDB().Model(&model.TicketCategory{})).Order("display_order asc, id asc")
 	if activeOnly {
 		q = q.Where("status = ?", model.TicketCategoryActive)
 	}
@@ -106,9 +106,9 @@ func (s *TicketService) ListCategories(activeOnly bool) ([]model.TicketCategory,
 	return rows, err
 }
 
-func (s *TicketService) GetCategory(id int) (*model.TicketCategory, error) {
+func (s *TicketService) GetCategory(id int, scope model.Scope) (*model.TicketCategory, error) {
 	var c model.TicketCategory
-	if err := database.GetDB().Where("id = ?", id).First(&c).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&c).Error; err != nil {
 		if database.IsNotFound(err) {
 			return nil, ErrTicketCategory
 		}
@@ -117,12 +117,13 @@ func (s *TicketService) GetCategory(id int) (*model.TicketCategory, error) {
 	return &c, nil
 }
 
-func (s *TicketService) CreateCategory(in TicketCategoryInput) (*model.TicketCategory, error) {
+func (s *TicketService) CreateCategory(in TicketCategoryInput, scope model.Scope) (*model.TicketCategory, error) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return nil, ErrTicketInvalid
 	}
 	c := &model.TicketCategory{
+		TenantId:     scope.OwnerTenantID(),
 		Name:         name,
 		Description:  strings.TrimSpace(in.Description),
 		DisplayOrder: in.DisplayOrder,
@@ -134,15 +135,15 @@ func (s *TicketService) CreateCategory(in TicketCategoryInput) (*model.TicketCat
 	return c, nil
 }
 
-func (s *TicketService) UpdateCategory(id int, in TicketCategoryInput) (*model.TicketCategory, error) {
+func (s *TicketService) UpdateCategory(id int, in TicketCategoryInput, scope model.Scope) (*model.TicketCategory, error) {
 	name := strings.TrimSpace(in.Name)
 	if name == "" {
 		return nil, ErrTicketInvalid
 	}
-	if _, err := s.GetCategory(id); err != nil {
+	if _, err := s.GetCategory(id, scope); err != nil {
 		return nil, err
 	}
-	if err := database.GetDB().Model(&model.TicketCategory{}).Where("id = ?", id).
+	if err := scope.Apply(database.GetDB().Model(&model.TicketCategory{})).Where("id = ?", id).
 		Updates(map[string]any{
 			"name":          name,
 			"description":   strings.TrimSpace(in.Description),
@@ -150,15 +151,15 @@ func (s *TicketService) UpdateCategory(id int, in TicketCategoryInput) (*model.T
 		}).Error; err != nil {
 		return nil, err
 	}
-	return s.GetCategory(id)
+	return s.GetCategory(id, scope)
 }
 
-func (s *TicketService) SetCategoryStatus(id int, active bool) error {
+func (s *TicketService) SetCategoryStatus(id int, active bool, scope model.Scope) error {
 	status := model.TicketCategoryInactive
 	if active {
 		status = model.TicketCategoryActive
 	}
-	res := database.GetDB().Model(&model.TicketCategory{}).Where("id = ?", id).Update("status", status)
+	res := scope.Apply(database.GetDB().Model(&model.TicketCategory{})).Where("id = ?", id).Update("status", status)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -168,15 +169,19 @@ func (s *TicketService) SetCategoryStatus(id int, active bool) error {
 	return nil
 }
 
-func (s *TicketService) DeleteCategory(id int) error {
+func (s *TicketService) DeleteCategory(id int, scope model.Scope) error {
+	// Confirm the category belongs to the caller's tenant before touching it.
+	if _, err := s.GetCategory(id, scope); err != nil {
+		return err
+	}
 	var count int64
-	if err := database.GetDB().Model(&model.Ticket{}).Where("category_id = ?", id).Count(&count).Error; err != nil {
+	if err := scope.Apply(database.GetDB().Model(&model.Ticket{})).Where("category_id = ?", id).Count(&count).Error; err != nil {
 		return err
 	}
 	if count > 0 {
 		return ErrTicketCategoryInUse
 	}
-	res := database.GetDB().Where("id = ?", id).Delete(&model.TicketCategory{})
+	res := scope.Apply(database.GetDB()).Where("id = ?", id).Delete(&model.TicketCategory{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -186,11 +191,12 @@ func (s *TicketService) DeleteCategory(id int) error {
 	return nil
 }
 
-// ReorderCategories applies a new display order from an ordered list of ids.
-func (s *TicketService) ReorderCategories(ids []int) error {
+// ReorderCategories applies a new display order from an ordered list of ids
+// (within the caller's tenant — a foreign id simply matches no row).
+func (s *TicketService) ReorderCategories(ids []int, scope model.Scope) error {
 	return database.GetDB().Transaction(func(tx *gorm.DB) error {
 		for order, id := range ids {
-			if err := tx.Model(&model.TicketCategory{}).Where("id = ?", id).
+			if err := scope.Apply(tx.Model(&model.TicketCategory{})).Where("id = ?", id).
 				Update("display_order", order).Error; err != nil {
 				return err
 			}
@@ -228,19 +234,24 @@ func (s *TicketService) audit(tx *gorm.DB, ticketId, actorId int, actorName, act
 	}
 }
 
-// TicketStaff is an assignable support agent (admin/moderator) for the staff UI.
+// TicketStaff is an assignable support agent for the staff UI.
 type TicketStaff struct {
 	Id       int    `json:"id"`
 	Username string `json:"username"`
 	Role     string `json:"role"`
 }
 
-// ListStaff returns the assignable support agents (admins + moderators).
-func (s *TicketService) ListStaff() ([]TicketStaff, error) {
+// ticketStaffRoles are the roles that handle tickets: the admin (tenant 0) and a
+// workspace's manager. Scoped to a tenant this yields exactly that workspace's
+// support staff (admins for tenant 0, the manager for a workspace).
+var ticketStaffRoles = []string{model.RoleAdmin, model.RoleManager}
+
+// ListStaff returns the assignable support agents within the caller's workspace.
+func (s *TicketService) ListStaff(scope model.Scope) ([]TicketStaff, error) {
 	var rows []TicketStaff
-	err := database.GetDB().Model(&model.User{}).
+	err := scope.Apply(database.GetDB().Model(&model.User{})).
 		Select("id, username, role").
-		Where("role IN ?", []string{model.RoleAdmin, model.RoleModerator}).
+		Where("role IN ?", ticketStaffRoles).
 		Order("username asc").Scan(&rows).Error
 	for i := range rows {
 		rows[i].Role = model.NormalizeRole(rows[i].Role)
@@ -248,10 +259,13 @@ func (s *TicketService) ListStaff() ([]TicketStaff, error) {
 	return rows, err
 }
 
-func (s *TicketService) staffUserIds() []int {
+// staffUserIds returns the support staff to notify for a ticket in `tenantID`
+// (the workspace's manager, or the admins for tenant 0), so ticket alerts never
+// cross workspaces.
+func (s *TicketService) staffUserIds(tenantID int) []int {
 	var ids []int
 	database.GetDB().Model(&model.User{}).
-		Where("role IN ?", []string{model.RoleAdmin, model.RoleModerator}).Pluck("id", &ids)
+		Where("role IN ? AND tenant_id = ?", ticketStaffRoles, tenantID).Pluck("id", &ids)
 	return ids
 }
 
@@ -314,7 +328,7 @@ type CreateTicketInput struct {
 // CreateTicket opens a new ticket: validates input, generates the TCK number,
 // computes the SLA deadline, writes the opening message, records the audit row
 // and notifies support staff — all in one transaction.
-func (s *TicketService) CreateTicket(userId int, username string, in CreateTicketInput) (*model.Ticket, *model.TicketMessage, error) {
+func (s *TicketService) CreateTicket(userId int, username string, in CreateTicketInput, scope model.Scope) (*model.Ticket, *model.TicketMessage, error) {
 	subject := strings.TrimSpace(in.Subject)
 	body := strings.TrimSpace(in.Body)
 	if userId <= 0 || subject == "" || body == "" {
@@ -330,8 +344,8 @@ func (s *TicketService) CreateTicket(userId int, username string, in CreateTicke
 	if !model.IsValidTicketPriority(priority) {
 		priority = model.TicketPriorityNormal
 	}
-	// Category must exist and be active.
-	cat, err := s.GetCategory(in.CategoryId)
+	// Category must exist (within the caller's tenant) and be active.
+	cat, err := s.GetCategory(in.CategoryId, scope)
 	if err != nil || cat.Status != model.TicketCategoryActive {
 		return nil, nil, ErrTicketCategory
 	}
@@ -342,6 +356,7 @@ func (s *TicketService) CreateTicket(userId int, username string, in CreateTicke
 		now := nowMilli()
 		ticket = model.Ticket{
 			UserId:       userId,
+			TenantId:     scope.OwnerTenantID(),
 			CategoryId:   in.CategoryId,
 			Subject:      subject,
 			Priority:     priority,
@@ -370,8 +385,8 @@ func (s *TicketService) CreateTicket(userId int, username string, in CreateTicke
 		return nil, nil, err
 	}
 
-	// Notify all staff that a new ticket awaits (best-effort).
-	_ = s.notificationService.NotifyUsers(s.staffUserIds(),
+	// Notify the workspace's staff that a new ticket awaits (best-effort).
+	_ = s.notificationService.NotifyUsers(s.staffUserIds(ticket.TenantId),
 		"notifications.ticketCreated.title", "notifications.ticketCreated.body",
 		model.NotificationInfo, "/tickets/"+itoa(ticket.Id),
 		map[string]any{"number": ticket.Number, "subject": subject})
@@ -384,9 +399,9 @@ func (s *TicketService) CreateTicket(userId int, username string, in CreateTicke
 // Read / list
 // ---------------------------------------------------------------------------
 
-func (s *TicketService) Get(id int) (*model.Ticket, error) {
+func (s *TicketService) Get(id int, scope model.Scope) (*model.Ticket, error) {
 	var t model.Ticket
-	if err := database.GetDB().Where("id = ?", id).First(&t).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&t).Error; err != nil {
 		if database.IsNotFound(err) {
 			return nil, ErrTicketNotFound
 		}
@@ -425,18 +440,18 @@ type TicketListParams struct {
 	Offset     int
 }
 
-func (s *TicketService) ListTickets(p TicketListParams) (*TicketListResult, error) {
+func (s *TicketService) ListTickets(p TicketListParams, scope model.Scope) (*TicketListResult, error) {
 	if p.Limit <= 0 || p.Limit > 100 {
 		p.Limit = 15
 	}
 	if p.Offset < 0 {
 		p.Offset = 0
 	}
-	base := database.GetDB().
+	base := scope.ApplyCol(database.GetDB().
 		Table("tickets AS t").
 		Joins("LEFT JOIN users u ON u.id = t.user_id").
 		Joins("LEFT JOIN users a ON a.id = t.assigned_to").
-		Joins("LEFT JOIN ticket_categories c ON c.id = t.category_id")
+		Joins("LEFT JOIN ticket_categories c ON c.id = t.category_id"), "t.tenant_id")
 
 	// Ownership: non-staff only ever see their own tickets.
 	if !p.CanViewAll {
@@ -512,13 +527,13 @@ func startOfDayMilli(daysAgo int) int64 {
 // Detail returns the enriched ticket (requester/assignee/category resolved, SLA
 // overdue computed) plus its thread. includeInternal controls whether staff-only
 // notes are present (staff view) — the caller passes the viewer's staff status.
-func (s *TicketService) Detail(id int, includeInternal bool) (*TicketListItem, []TicketMessageView, error) {
+func (s *TicketService) Detail(id int, includeInternal bool, scope model.Scope) (*TicketListItem, []TicketMessageView, error) {
 	var item TicketListItem
-	err := database.GetDB().
+	err := scope.ApplyCol(database.GetDB().
 		Table("tickets AS t").
 		Joins("LEFT JOIN users u ON u.id = t.user_id").
 		Joins("LEFT JOIN users a ON a.id = t.assigned_to").
-		Joins("LEFT JOIN ticket_categories c ON c.id = t.category_id").
+		Joins("LEFT JOIN ticket_categories c ON c.id = t.category_id"), "t.tenant_id").
 		Select("t.*, u.username AS username, a.username AS assignee_name, c.name AS category_name").
 		Where("t.id = ?", id).Limit(1).Scan(&item).Error
 	if err != nil {
@@ -592,12 +607,12 @@ func (s *TicketService) Thread(ticketId int, includeInternal bool) ([]TicketMess
 
 // AddMessage appends a reply (or staff internal note) and applies the automatic
 // status transition + first-response stamp. Returns the created message.
-func (s *TicketService) AddMessage(ticketId, authorId int, authorName, body string, isInternal, authorIsStaff bool) (*model.TicketMessage, error) {
+func (s *TicketService) AddMessage(ticketId, authorId int, authorName, body string, isInternal, authorIsStaff bool, scope model.Scope) (*model.TicketMessage, error) {
 	body = strings.TrimSpace(body)
 	if body == "" || len(body) > ticketMaxBodyLen {
 		return nil, ErrTicketInvalid
 	}
-	ticket, err := s.Get(ticketId)
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -652,7 +667,7 @@ func (s *TicketService) AddMessage(ticketId, authorId int, authorName, body stri
 			// Notify the assignee, or all staff if unassigned.
 			targets := []int{ticket.AssignedTo}
 			if ticket.AssignedTo == 0 {
-				targets = s.staffUserIds()
+				targets = s.staffUserIds(ticket.TenantId)
 			}
 			_ = s.notificationService.NotifyUsers(targets,
 				"notifications.ticketReplied.title", "notifications.ticketUserReplied.body",
@@ -668,8 +683,8 @@ func (s *TicketService) AddMessage(ticketId, authorId int, authorName, body stri
 // Staff actions
 // ---------------------------------------------------------------------------
 
-func (s *TicketService) Assign(ticketId, assigneeId, actorId int, actorName string) error {
-	ticket, err := s.Get(ticketId)
+func (s *TicketService) Assign(ticketId, assigneeId, actorId int, actorName string, scope model.Scope) error {
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return err
 	}
@@ -689,14 +704,14 @@ func (s *TicketService) Assign(ticketId, assigneeId, actorId int, actorName stri
 }
 
 // Transfer moves a ticket to another category and/or assignee.
-func (s *TicketService) Transfer(ticketId, newCategoryId, newAssignee, actorId int, actorName string) error {
-	ticket, err := s.Get(ticketId)
+func (s *TicketService) Transfer(ticketId, newCategoryId, newAssignee, actorId int, actorName string, scope model.Scope) error {
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return err
 	}
 	updates := map[string]any{}
 	if newCategoryId > 0 && newCategoryId != ticket.CategoryId {
-		if _, e := s.GetCategory(newCategoryId); e != nil {
+		if _, e := s.GetCategory(newCategoryId, scope); e != nil {
 			return ErrTicketCategory
 		}
 		updates["category_id"] = newCategoryId
@@ -714,11 +729,11 @@ func (s *TicketService) Transfer(ticketId, newCategoryId, newAssignee, actorId i
 	return database.GetDB().Model(&model.Ticket{}).Where("id = ?", ticketId).Updates(updates).Error
 }
 
-func (s *TicketService) SetStatus(ticketId int, status string, actorId int, actorName string) error {
+func (s *TicketService) SetStatus(ticketId int, status string, actorId int, actorName string, scope model.Scope) error {
 	if !model.IsValidTicketStatus(status) {
 		return ErrTicketInvalid
 	}
-	ticket, err := s.Get(ticketId)
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return err
 	}
@@ -745,11 +760,11 @@ func (s *TicketService) SetStatus(ticketId int, status string, actorId int, acto
 	return nil
 }
 
-func (s *TicketService) SetPriority(ticketId int, priority string, actorId int, actorName string) error {
+func (s *TicketService) SetPriority(ticketId int, priority string, actorId int, actorName string, scope model.Scope) error {
 	if !model.IsValidTicketPriority(priority) {
 		return ErrTicketInvalid
 	}
-	ticket, err := s.Get(ticketId)
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return err
 	}
@@ -768,8 +783,8 @@ func (s *TicketService) SetPriority(ticketId int, priority string, actorId int, 
 
 // Reopen lets the owner (or staff) reopen a solved/closed ticket within the
 // configured window. Staff are not bound by the window.
-func (s *TicketService) Reopen(ticketId, actorId int, actorName string, actorIsStaff bool) error {
-	ticket, err := s.Get(ticketId)
+func (s *TicketService) Reopen(ticketId, actorId int, actorName string, actorIsStaff bool, scope model.Scope) error {
+	ticket, err := s.Get(ticketId, scope)
 	if err != nil {
 		return err
 	}
@@ -799,7 +814,7 @@ func (s *TicketService) Reopen(ticketId, actorId int, actorName string, actorIsS
 	} else {
 		targets := []int{ticket.AssignedTo}
 		if ticket.AssignedTo == 0 {
-			targets = s.staffUserIds()
+			targets = s.staffUserIds(ticket.TenantId)
 		}
 		_ = s.notificationService.NotifyUsers(targets,
 			"notifications.ticketReopened.title", "notifications.ticketReopened.body",
@@ -898,12 +913,12 @@ func sanitizeFileName(name string) string {
 
 // GetAttachment returns the attachment row and its ticket so the controller can
 // run the ownership/RBAC check before streaming the bytes.
-func (s *TicketService) GetAttachment(id int) (*model.TicketAttachment, *model.Ticket, error) {
+func (s *TicketService) GetAttachment(id int, scope model.Scope) (*model.TicketAttachment, *model.Ticket, error) {
 	var att model.TicketAttachment
 	if err := database.GetDB().Where("id = ?", id).First(&att).Error; err != nil {
 		return nil, nil, ErrTicketNotFound
 	}
-	ticket, err := s.Get(att.TicketId)
+	ticket, err := s.Get(att.TicketId, scope)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -940,8 +955,8 @@ type TicketDashboard struct {
 	AvgResponseMs   int64 `json:"avgResponseMs"`
 }
 
-func (s *TicketService) Dashboard() (*TicketDashboard, error) {
-	db := database.GetDB()
+func (s *TicketService) Dashboard(scope model.Scope) (*TicketDashboard, error) {
+	db := scope.Apply(database.GetDB())
 	d := &TicketDashboard{}
 	closed := []string{model.TicketStatusSolved, model.TicketStatusClosed}
 	count := func(q *gorm.DB) int64 {

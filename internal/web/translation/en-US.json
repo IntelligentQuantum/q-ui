@@ -194,7 +194,13 @@
     "link": "Manage",
     "donate": "Donate",
     "reports": "Reports",
-    "operate": "Operations"
+    "operate": "Operations",
+    "managers": "Managers",
+    "workspaceSettings": "Workspace",
+    "tenantUsers": "Customers",
+    "workspacePayments": "Payments",
+    "myWorkspace": "My workspace",
+    "originalPanel": "Original panel"
   },
   "notifications": {
     "title": "Notifications",
@@ -481,10 +487,11 @@
       "trackingPlaceholder": "Bank transfer reference / tracking code",
       "depositDate": "Deposit Date",
       "depositTime": "Deposit Time",
+      "depositedAt": "Deposit date & time",
       "descriptionLabel": "Description",
-      "descriptionPlaceholder": "Optional note for the reviewer",
+      "descriptionPlaceholder": "Note for the reviewer",
       "receipt": "Receipt Image",
-      "receiptHint": "JPG, PNG or WEBP — up to 5 MB. Optional.",
+      "receiptHint": "JPG, PNG or WEBP — up to 5 MB. Required.",
       "chooseFile": "Choose file",
       "removeFile": "Remove",
       "submit": "Submit Request",
@@ -501,6 +508,7 @@
       "toasts": {
         "submitted": "Your deposit request was submitted and is awaiting review.",
         "invalidAmount": "Please enter a valid amount.",
+        "fieldsRequired": "Please fill in all fields and attach the receipt.",
         "duplicate": "A deposit request with this tracking number already exists.",
         "receiptTooLarge": "The receipt image is too large (max 5 MB).",
         "receiptType": "Unsupported receipt type. Use JPG, PNG or WEBP.",
@@ -611,6 +619,7 @@
     },
     "orders": {
       "product": "Product",
+      "customer": "Customer",
       "config": "Config",
       "amount": "Amount",
       "status": "Status",
@@ -1477,7 +1486,8 @@
         "bulkAdjustedMixed": "{ok} adjusted, {skipped} skipped",
         "delDepleted": "{count} depleted clients deleted",
         "insufficientBalance": "Insufficient balance",
-        "forbidden": "You do not have permission to access this resource."
+        "forbidden": "You do not have permission to access this resource.",
+        "bandwidthExhausted": "Workspace bandwidth quota exhausted — ask the admin to recharge"
       },
       "costPreview": "This client costs {cost}. Balance after purchase: {after}.",
       "costInsufficient": "Your balance is not enough to create this client. Please top up first."
@@ -1535,7 +1545,8 @@
       "totalUsers": "Total Users",
       "admins": "Admins",
       "resellers": "Resellers",
-      "totalBalance": "Total Balance"
+      "totalBalance": "Total Balance",
+      "role_manager": "Manager"
     },
     "profile": {
       "accountTitle": "Account",
@@ -2012,7 +2023,8 @@
         "apiTokenCreatedTitle": "Token created",
         "apiTokenCreatedNotice": "Copy this token now. For security it is not stored in readable form and will not be shown again.",
         "referralCommission": "Referral commission (%)",
-        "referralCommissionDesc": "Percentage of a referred user's store purchase credited back to the referring reseller's wallet as commission (0 disables payouts)."
+        "referralCommissionDesc": "Percentage of a referred user's store purchase credited back to the referring reseller's wallet as commission (0 disables payouts).",
+        "roleManager": "Manager"
       },
       "toasts": {
         "modifySettings": "The parameters have been changed.",
@@ -2087,7 +2099,8 @@
       "smtpErrorEof": "Connection closed by server",
       "smtpErrorUnknown": "SMTP error: {{ .Error }}",
       "panelProxy": "Panel proxy",
-      "panelProxyDesc": "Optional outbound proxy the panel uses for its own outgoing requests (self-update, GitHub release checks, etc.)."
+      "panelProxyDesc": "Optional outbound proxy the panel uses for its own outgoing requests (self-update, GitHub release checks, etc.).",
+      "managerSettings": "Manager Settings"
     },
     "xray": {
       "title": "Xray Configs",
@@ -2504,6 +2517,111 @@
       "topResellersTitle": "Top Resellers",
       "noActivity": "No income or spend recorded in the last 30 days.",
       "noResellers": "No reseller spend yet."
+    },
+    "managers": {
+      "title": "Manager Workspaces",
+      "addManager": "Add Workspace",
+      "slug": "Slug",
+      "slugHint": "Lowercase letters, digits and hyphens. Used in the URL: /panel/<slug>.",
+      "name": "Name",
+      "manager": "Manager",
+      "status": "Status",
+      "status_active": "Active",
+      "status_suspended": "Suspended",
+      "users": "Users",
+      "bandwidth": "Bandwidth (used / quota)",
+      "unlimited": "Unlimited",
+      "allocateBandwidth": "Allocate bandwidth",
+      "suspend": "Suspend",
+      "activate": "Activate",
+      "rotateKey": "Rotate API key",
+      "totalWorkspaces": "Workspaces",
+      "activeWorkspaces": "Active",
+      "totalTenantUsers": "Tenant users",
+      "quotaGb": "Quota (GB)",
+      "quotaHint": "Set 0 for unlimited bandwidth.",
+      "bandwidthTitle": "Allocate bandwidth — {name}",
+      "apiKeyTitle": "API Key",
+      "apiKeyHint": "Copy this key now — it is shown only once and cannot be retrieved later.",
+      "rotateConfirmTitle": "Rotate API key for {name}?",
+      "rotateConfirmContent": "The current key stops working immediately. A new key will be shown once.",
+      "deleteConfirmTitle": "Delete workspace {name}?",
+      "deleteConfirmContent": "The manager account is removed. Workspace data is retained and stays visible to the admin.",
+      "toasts": {
+        "created": "Workspace created",
+        "slugInvalid": "Invalid slug (reserved or wrong format)",
+        "slugTaken": "That slug is already in use",
+        "notFound": "Workspace not found",
+        "bandwidthUpdated": "Bandwidth updated",
+        "statusUpdated": "Status updated",
+        "deleted": "Workspace deleted",
+        "domainUpdated": "Domain updated",
+        "domainInvalid": "Invalid domain",
+        "domainTaken": "That domain is already in use",
+        "balanceUpdated": "Workspace balance updated"
+      },
+      "setDomain": "Set domain",
+      "domain": "Custom domain",
+      "domainHint": "Point this domain/subdomain at the panel; leave blank to remove.",
+      "domainTitle": "Custom domain — {name}",
+      "openWorkspace": "Open workspace",
+      "impersonating": "Viewing workspace {name} as admin",
+      "exitImpersonation": "Exit",
+      "viewDetails": "View details",
+      "detailsTitle": "Workspace — {name}",
+      "customers": "Customers",
+      "revenue": "Revenue",
+      "managerBalance": "Manager balance",
+      "pendingDeposits": "Pending deposits",
+      "openTickets": "Open tickets",
+      "workspaceBalance": "Workspace balance",
+      "chargeBalance": "Charge balance",
+      "chargeTitle": "Charge workspace balance — {name}",
+      "currentBalance": "Current balance"
+    },
+    "tenantUsers": {
+      "toasts": {
+        "forbidden": "That user is outside your workspace",
+        "roleForbidden": "You can only manage member and reseller accounts"
+      }
+    },
+    "workspaceSettings": {
+      "title": "Workspace Settings",
+      "branding": "Branding",
+      "brandTitle": "Brand title",
+      "brandLogo": "Logo URL",
+      "brandFavicon": "Favicon URL",
+      "urlHint": "A publicly reachable URL.",
+      "theme": "Theme",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark",
+      "access": "Access",
+      "registrationEnable": "Allow registration",
+      "registrationHint": "Let new customers sign up to your workspace.",
+      "subscription": "Subscription",
+      "ticketCategories": "Ticket categories",
+      "subTitle": "Subscription title",
+      "subTitleHint": "Shown on your customers’ subscription page.",
+      "toasts": {
+        "saved": "Workspace settings saved"
+      },
+      "workspaceUrl": "Workspace URL",
+      "slug": "Slug",
+      "slugHint": "Your panel lives at /panel/manager/<slug>. Lowercase letters, digits and hyphens."
+    },
+    "workspacePayments": {
+      "title": "Payment Gateways",
+      "zarinpal": "ZarinPal",
+      "enable": "Enable",
+      "zarinpalMerchant": "Merchant ID",
+      "zarinpalCurrency": "Currency",
+      "sandbox": "Sandbox mode",
+      "plisio": "Plisio (crypto)",
+      "plisioSecret": "Secret key",
+      "toasts": {
+        "saved": "Payment settings saved"
+      }
     }
   },
   "tgbot": {

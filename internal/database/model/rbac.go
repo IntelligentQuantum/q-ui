@@ -74,19 +74,6 @@ var rolePermissions = map[string]map[Permission]bool{
 		PermTenantPayments:  true,
 		PermTenantUsers:     true,
 	},
-	RoleModerator: {
-		PermProductManage:  true,
-		PermProductView:    true,
-		PermClientManage:   true, // manages clients (Clients page) — UUID/reverse/group hidden, enforced server-side
-		PermCustomerView:   true,
-		PermOrderViewAll:   true,
-		PermOrderViewOwn:   true,
-		PermBalanceViewOwn: true,
-		PermTicketCreate:   true,
-		PermTicketViewOwn:  true,
-		PermTicketManage:   true, // support staff
-		PermFinanceView:    true, // read-only finance reports
-	},
 	RoleReseller: {
 		PermProductView:     true,
 		PermProductPurchase: true,
@@ -155,11 +142,12 @@ var allPermissions = []Permission{
 	PermTenantSettings, PermTenantPayments, PermTenantUsers, PermManagerAdmin,
 }
 
-// IsValidRole reports whether s is one of the five canonical roles (the legacy
-// "user" alias is accepted too, since NormalizeRole folds it into reseller).
+// IsValidRole reports whether s is one of the four canonical roles. The legacy
+// "user" and "moderator" aliases are accepted too, since NormalizeRole folds
+// both into reseller.
 func IsValidRole(s string) bool {
 	switch s {
-	case RoleAdmin, RoleManager, RoleModerator, RoleReseller, RoleMember, RoleUser:
+	case RoleAdmin, RoleManager, RoleReseller, RoleMember, RoleUser, RoleModerator:
 		return true
 	default:
 		return false

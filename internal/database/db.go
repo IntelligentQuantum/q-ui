@@ -220,7 +220,7 @@ func runSeeders(isUsersEmpty bool) error {
 	}
 
 	if empty && isUsersEmpty {
-		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "ApiTokensHash", "RoleBalanceBackfill", "LegacyProxySettingsCleanup"}
+		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "ApiTokensHash", "RoleBalanceBackfill", "LegacyProxySettingsCleanup", "LegacyUserToReseller", "ModeratorToReseller"}
 		for _, name := range seeders {
 			if err := db.Create(&model.HistoryOfSeeders{SeederName: name}).Error; err != nil {
 				return err
@@ -324,7 +324,28 @@ func runSeeders(isUsersEmpty bool) error {
 			return err
 		}
 	}
+
+	if !slices.Contains(seedersHistory, "ModeratorToReseller") {
+		if err := migrateModeratorRole(); err != nil {
+			return err
+		}
+	}
 	return nil
+}
+
+// migrateModeratorRole rewrites stored "moderator" accounts to "reseller". The
+// moderator role was removed; NormalizeRole already folds it, and this one-time
+// seeder makes the stored value match so the role never resurfaces in the UI or
+// role filters.
+func migrateModeratorRole() error {
+	return db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.User{}).
+			Where("role = ?", model.RoleModerator).
+			Update("role", model.RoleReseller).Error; err != nil {
+			return err
+		}
+		return tx.Create(&model.HistoryOfSeeders{SeederName: "ModeratorToReseller"}).Error
+	})
 }
 
 // migrateLegacyUserRole canonicalizes pre-redesign "user" rows to the new

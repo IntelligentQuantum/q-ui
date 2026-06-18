@@ -237,7 +237,8 @@ export function DropdownMenu({ items, trigger, align = 'end', label = 'Open menu
                 visibility: coords ? 'visible' : 'hidden'
             }}
             className={cn(
-                'z-[var(--z-dropdown)] flex min-w-[12rem] flex-col gap-0.5 rounded-lg border border-border',
+                // popover level so a menu opened inside a Modal layers above it
+                'z-[var(--z-popover)] flex min-w-[12rem] flex-col gap-0.5 rounded-lg border border-border',
                 'bg-surface-raised p-1.5 shadow-lg outline-none motion-safe:animate-[fade-in_120ms_ease-out]'
             )}
           >

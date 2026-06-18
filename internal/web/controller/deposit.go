@@ -5,12 +5,14 @@ import (
 	"io"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -64,9 +66,12 @@ func (a *DepositController) initRouter(g *gin.RouterGroup) {
 // Buyer endpoints
 // ---------------------------------------------------------------------------
 
-// listActiveCards returns the active payment cards a buyer can transfer to.
+// listActiveCards returns the active payment cards a buyer can transfer to. These
+// follow the STOREFRONT being viewed (the /panel/manager/<slug> URL): on a
+// manager's store you see that manager's cards, on /panel/ the admin's — exactly
+// like the product catalog. ViewScope is always a concrete tenant, never see-all.
 func (a *DepositController) listActiveCards(c *gin.Context) {
-	cards, err := a.depositService.ListCards(true)
+	cards, err := a.depositService.ListCards(true, tenant.ViewScope(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -109,7 +114,17 @@ func (a *DepositController) submit(c *gin.Context) {
 		return
 	}
 
-	// Optional receipt image: validate by byte signature, then persist.
+	// All deposit fields are mandatory: the tracking ref, the reported transfer
+	// date/time, and a note. The receipt image is required too (checked below).
+	trackingNumber := strings.TrimSpace(c.PostForm("trackingNumber"))
+	depositedAt := strings.TrimSpace(c.PostForm("depositedAt"))
+	description := strings.TrimSpace(c.PostForm("description"))
+	if trackingNumber == "" || depositedAt == "" || description == "" {
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.manualDeposit.toasts.fieldsRequired"))
+		return
+	}
+
+	// Receipt image: required proof — validate by byte signature, then persist.
 	var receiptName string
 	if file, _, err := c.Request.FormFile("receipt"); err == nil {
 		defer file.Close()
@@ -129,17 +144,23 @@ func (a *DepositController) submit(c *gin.Context) {
 			return
 		}
 		receiptName = name
-	} else if !errors.Is(err, http.ErrMissingFile) {
+	} else if errors.Is(err, http.ErrMissingFile) {
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.manualDeposit.toasts.fieldsRequired"))
+		return
+	} else {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
 
 	req, err := a.depositService.CreateRequest(user.Id, service.DepositInput{
 		Amount:         amount,
-		TrackingNumber: c.PostForm("trackingNumber"),
-		Description:    c.PostForm("description"),
+		TrackingNumber: trackingNumber,
+		DepositedAt:    depositedAt,
+		Description:    description,
 		ReceiptImage:   receiptName,
-	})
+		// Submit against the storefront whose card the buyer just paid (the URL),
+		// so the request lands in that workspace's review queue.
+	}, tenant.ViewScope(c))
 	if err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)
@@ -165,12 +186,14 @@ func (a *DepositController) receipt(c *gin.Context) {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	req, err := a.depositService.Get(id)
+	req, err := a.depositService.Get(id, tenant.HomeScopeStrict(c))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
 	}
-	if !user.IsAdmin() && user.Id != req.UserId {
+	// Owner, or staff with deposit.manage (the scoped Get already confined the
+	// row to the caller's tenant, so a manager can only see their own tenant's).
+	if !user.Can(model.PermDepositManage) && user.Id != req.UserId {
 		c.AbortWithStatus(http.StatusForbidden)
 		return
 	}
@@ -192,7 +215,7 @@ func (a *DepositController) receipt(c *gin.Context) {
 // ---------------------------------------------------------------------------
 
 func (a *DepositController) listAllCards(c *gin.Context) {
-	cards, err := a.depositService.ListCards(false)
+	cards, err := a.depositService.ListCards(false, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -206,7 +229,7 @@ func (a *DepositController) createCard(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	card, err := a.depositService.CreateCard(in)
+	card, err := a.depositService.CreateCard(in, tenant.HomeScopeStrict(c))
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidCard) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.adminDeposits.toasts.invalidCard"))
@@ -229,7 +252,7 @@ func (a *DepositController) updateCard(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	card, err := a.depositService.UpdateCard(id, in)
+	card, err := a.depositService.UpdateCard(id, in, tenant.HomeScopeStrict(c))
 	if err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)
@@ -247,7 +270,7 @@ func (a *DepositController) deleteCard(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.depositService.DeleteCard(id); err != nil {
+	if err := a.depositService.DeleteCard(id, tenant.HomeScopeStrict(c)); err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)
 			return
@@ -273,7 +296,7 @@ func (a *DepositController) setCardStatus(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.depositService.SetCardStatus(id, form.Active); err != nil {
+	if err := a.depositService.SetCardStatus(id, form.Active, tenant.HomeScopeStrict(c)); err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)
 			return
@@ -291,7 +314,7 @@ func (a *DepositController) setCardStatus(c *gin.Context) {
 func (a *DepositController) listAll(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
-	rows, err := a.depositService.ListAll(c.Query("status"), c.Query("search"), limit, offset)
+	rows, err := a.depositService.ListAll(c.Query("status"), c.Query("search"), limit, offset, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -310,7 +333,7 @@ func (a *DepositController) approve(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	req, err := a.depositService.Approve(admin.Id, id)
+	req, err := a.depositService.Approve(admin.Id, id, tenant.HomeScopeStrict(c))
 	if err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)
@@ -344,7 +367,7 @@ func (a *DepositController) reject(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	req, err := a.depositService.Reject(admin.Id, id, form.Reason)
+	req, err := a.depositService.Reject(admin.Id, id, form.Reason, tenant.HomeScopeStrict(c))
 	if err != nil {
 		if msg := depositErrorMessage(c, err); msg != "" {
 			pureJsonMsg(c, http.StatusOK, false, msg)

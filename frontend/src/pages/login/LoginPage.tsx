@@ -90,6 +90,7 @@ export default function LoginPage()
     const [twoFactorEnable, setTwoFactorEnable] = useState(false);
     const [registrationEnable, setRegistrationEnable] = useState(false);
     const [brandTitle, setBrandTitle] = useState<string>(() => BrandManager.getTitle());
+    const [brandLogo, setBrandLogo] = useState<string>('');
     const [headlineIndex, setHeadlineIndex] = useState(0);
     const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
 
@@ -106,6 +107,14 @@ export default function LoginPage()
         [t]
     );
 
+    // Keep the workspace slug on the "create account" link so signup lands in the
+    // same manager's tenant.
+    const registerHref = useMemo(() =>
+    {
+        const ws = new URLSearchParams(window.location.search).get('ws');
+        return (basePath || '/') + 'register' + (ws ? `?ws=${ encodeURIComponent(ws) }` : '');
+    }, []);
+
     useEffect(() =>
     {
         const timer = window.setInterval(() =>
@@ -120,10 +129,14 @@ export default function LoginPage()
         let cancelled = false;
         (async () =>
         {
-            const [twoFactor, registration, panelTitle] = await Promise.all([
+            // The Manager workspace whose brand + registration flag apply on this
+            // login screen: ?ws=<slug> (carried from /panel/manager/<slug>), or the
+            // workspace this custom domain belongs to (window.Q_UI_WORKSPACE).
+            const ws = new URLSearchParams(window.location.search).get('ws')
+                || window.Q_UI_WORKSPACE || '';
+            const [twoFactor, workspace] = await Promise.all([
                 HttpUtil.post('/getTwoFactorEnable', undefined, { silent: true }),
-                HttpUtil.post('/getRegistrationEnable', undefined, { silent: true }),
-                HttpUtil.post('/getPanelTitle', undefined, { silent: true })
+                HttpUtil.post('/getWorkspaceInfo', { slug: ws }, { silent: true })
             ]);
             if (cancelled)
             {
@@ -133,13 +146,15 @@ export default function LoginPage()
             {
                 setTwoFactorEnable(!!twoFactor.obj);
             }
-            if (registration.success)
+            if (workspace.success && workspace.obj)
             {
-                setRegistrationEnable(!!registration.obj);
-            }
-            if (panelTitle.success)
-            {
-                setBrandTitle(BrandManager.setTitle(panelTitle.obj as string));
+                const info = workspace.obj as { title?: string; logo?: string; registrationEnable?: boolean };
+                setRegistrationEnable(!!info.registrationEnable);
+                if (info.title)
+                {
+                    setBrandTitle(BrandManager.setTitle(info.title));
+                }
+                setBrandLogo(info.logo || '');
             }
             setFetched(true);
         })();
@@ -228,7 +243,11 @@ export default function LoginPage()
               <Card className="w-full max-w-md shadow-lg">
                 <CardContent className="flex flex-col p-6 pt-6 sm:p-8">
                   <div className="flex flex-col items-center gap-2.5">
-                    <span className="text-2xl font-bold tracking-wide text-foreground">{brandTitle}</span>
+                    {brandLogo ? (
+                      <img src={brandLogo} alt={brandTitle} className="h-12 max-w-[220px] object-contain" />
+                    ) : (
+                      <span className="text-2xl font-bold tracking-wide text-foreground">{brandTitle}</span>
+                    )}
                     <span aria-hidden="true" className="h-[3px] w-10 rounded-full bg-accent" />
                   </div>
 
@@ -283,7 +302,7 @@ export default function LoginPage()
                   {registrationEnable ? (
                     <div className="mt-4 text-center text-sm text-muted-foreground">
                       <span>{t('pages.login.noAccount')}</span>{' '}
-                      <a href={(basePath || '/') + 'register'} className="font-medium text-accent hover:underline">
+                      <a href={registerHref} className="font-medium text-accent hover:underline">
                         {t('pages.login.createAccount')}
                       </a>
                     </div>

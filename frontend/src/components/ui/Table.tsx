@@ -74,7 +74,7 @@ export function Table<T>({
     data,
     rowKey,
     loading = false,
-    pageSize = 15,
+    pageSize = 10,
     empty,
     onRowClick,
     rowSelection,

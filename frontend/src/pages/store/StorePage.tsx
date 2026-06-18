@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import {
     LayoutGrid,
@@ -48,6 +49,10 @@ export default function StorePage()
     const { t } = useTranslation();
     const qc = useQueryClient();
     const { balance } = useMe();
+    // The catalog is storefront-specific (the /manager/<slug> URL, empty = admin
+    // store). Key the query on it so SPA navigation between stores refetches
+    // instead of showing the previous store's products until a hard refresh.
+    const { tenantSlug } = useParams();
     const { format, formatNumber, unit } = useCurrency();
     const [buying, setBuying] = useState<Product | null>(null);
     const [name, setName] = useState('');
@@ -58,7 +63,7 @@ export default function StorePage()
     const [successProduct, setSuccessProduct] = useState<Product | null>(null);
 
     const { data: products, isLoading, isError, refetch } = useQuery({
-        queryKey: ['products', 'store'],
+        queryKey: ['products', 'store', tenantSlug ?? ''],
         queryFn: async () =>
         {
             const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });

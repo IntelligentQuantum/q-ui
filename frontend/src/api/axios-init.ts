@@ -2,6 +2,8 @@ import axios from 'axios';
 import type { AxiosError, AxiosResponse, InternalAxiosRequestConfig } from 'axios';
 import qs from 'qs';
 
+import { getImpersonation } from '@/utils/impersonation';
+
 const SAFE_METHODS = new Set(['GET', 'HEAD', 'OPTIONS', 'TRACE']);
 const CSRF_TOKEN_PATH = '/csrf-token';
 
@@ -97,6 +99,21 @@ export function setupAxios(): void
                     config.headers.set('X-CSRF-Token', token);
                 }
             }
+            // Admin "view as workspace": scope tenant-aware data to the impersonated
+            // workspace. Honored server-side for admins only.
+            const imp = getImpersonation();
+            if (imp)
+            {
+                config.headers.set('X-Tenant', String(imp.tenantId));
+            }
+            // Storefront context: which workspace's catalog this page is browsing.
+            // From the /panel/manager/<slug> URL, or — when served on a workspace's
+            // own custom domain — the injected window.Q_UI_WORKSPACE (no slug in the
+            // URL then). Empty = the admin store at /panel/. Backend uses it for
+            // product/ticket browsing + purchases only.
+            const wsMatch = window.location.pathname.match(/\/panel\/manager\/([^/]+)/);
+            const ws = wsMatch ? decodeURIComponent(wsMatch[1]) : (window.Q_UI_WORKSPACE || '');
+            config.headers.set('X-Workspace', ws);
             if (config.data instanceof FormData)
             {
                 config.headers.set('Content-Type', 'multipart/form-data');
@@ -132,7 +149,11 @@ export function setupAxios(): void
                 {
                     sessionExpired = true;
                     const basePath = window.Q_UI_BASE_PATH || '/';
-                    window.location.replace(basePath);
+                    // Preserve the Manager workspace context (/panel/manager/<slug>)
+                    // across the login bounce, so the login page shows that
+                    // workspace's branding and a signup lands in its tenant.
+                    const ws = window.location.pathname.match(/\/panel\/manager\/([^/]+)/);
+                    window.location.replace(ws ? `${ basePath }?ws=${ encodeURIComponent(ws[1]) }` : basePath);
                 }
                 return new Promise(() =>
                 {});

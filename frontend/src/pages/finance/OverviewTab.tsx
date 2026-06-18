@@ -25,7 +25,7 @@ interface DayPoint { date: string; revenue: number; deposits: number; orders: nu
 interface Segments {
   totalUsers: number; registeredNeverDeposited: number; depositedNeverPurchased: number;
   purchasedOnce: number; repeatBuyers: number; highValue: number; inactive90d: number;
-  resellers: number; members: number; moderators: number; admins: number;
+  resellers: number; members: number; managers: number; admins: number;
 }
 interface Consistency {
   sumUserBalances: number; ledgerNet: number; difference: number; balanced: boolean;

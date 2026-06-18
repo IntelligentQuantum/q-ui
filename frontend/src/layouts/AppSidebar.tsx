@@ -5,6 +5,7 @@ import { useTranslation } from 'react-i18next';
 import {
     ArrowLeftRight,
     Banknote,
+    Building2,
     ChevronDown,
     ChevronsLeft,
     ChevronsRight,
@@ -13,6 +14,7 @@ import {
     Code,
     CreditCard,
     Database,
+    Home,
     IdCard,
     Import,
     Landmark,
@@ -24,6 +26,7 @@ import {
     type LucideIcon,
     MessageSquare,
     Network,
+    Palette,
     Plug,
     Server,
     Settings,
@@ -43,6 +46,7 @@ import {
 } from 'lucide-react';
 
 import { BrandManager, HttpUtil } from '@/utils';
+import { getImpersonation } from '@/utils/impersonation';
 import { useAllSettings } from '@/api/queries/useAllSettings';
 import { useMe, type Permission } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
@@ -50,12 +54,31 @@ import { cn } from '@/components/ui';
 
 const SIDEBAR_COLLAPSED_KEY = 'isSidebarCollapsed';
 const LOGOUT_KEY = '__logout__';
+// Sentinel key for the "jump back to my own workspace" link shown while a user
+// with a workspace is browsing a different storefront (e.g. a manager on /panel/).
+const MY_WORKSPACE_KEY = '__my_workspace__';
+// Sentinel key for a manager's "switch to the original panel" link, shown while
+// the manager is on their own workspace (lets them resell the admin store).
+const ADMIN_STORE_KEY = '__admin_store__';
+
+// The manager role's permission set (mirrors RoleManager in model/rbac.go). When
+// an admin VIEWS a workspace as admin (impersonation), the sidebar is gated by
+// this instead of the admin's all-permissions, so it shows the workspace owner's
+// nav (Products, Customers, Workspace settings/payments, Finance, Support…) and
+// NOT admin-only tools (Managers, Users, Inbounds, Settings).
+const MANAGER_PERMS: ReadonlySet<string> = new Set([
+    'product.manage', 'product.view', 'product.purchase',
+    'client.manage', 'customer.view', 'order.view_all', 'order.view_own',
+    'balance.view_own', 'balance.manage', 'deposit.manage', 'finance.view_all',
+    'ticket.create', 'ticket.view_own', 'ticket.manage', 'ticket.admin',
+    'tenant.settings', 'tenant.payments', 'tenant.users'
+]);
 
 type IconName =
   | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
   | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits'
-  | 'tickets' | 'support' | 'finance';
+  | 'tickets' | 'support' | 'finance' | 'managers' | 'workspace' | 'home';
 
 const iconByName: Record<IconName, LucideIcon> = {
     dashboard: LayoutDashboard,
@@ -80,7 +103,10 @@ const iconByName: Record<IconName, LucideIcon> = {
     manualDeposits: ClipboardCheck,
     tickets: Ticket,
     support: LifeBuoy,
-    finance: Landmark
+    finance: Landmark,
+    managers: Building2,
+    workspace: Palette,
+    home: Home
 };
 
 interface NavTab {
@@ -125,6 +151,25 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
     const showBilling = !!me?.zarinpalEnable;
     const showSubFormats = !!(allSetting.subJsonEnable || allSetting.subClashEnable);
 
+    // Storefront context (mirrors PanelLayout). The URL decides which store we're
+    // viewing: /panel/ is the admin store, /manager/<slug> is that manager's
+    // store. Management nav (catalog, customers, workspace settings/payments,
+    // finance, admin tools) only appears on the caller's OWN store; on any other
+    // storefront only the browse-&-buy subset shows. An admin impersonating a
+    // workspace operates under that workspace's prefix (so it counts as "own").
+    const imp = me?.isAdmin ? getImpersonation() : null;
+    const urlSlug = pathname.match(/^\/manager\/([^/]+)/)?.[1] ?? '';
+    const homeSlug = imp ? imp.slug : (me && !me.isAdmin ? (me.tenantSlug || '') : '');
+    const onOwnStore = homeSlug ? (urlSlug === homeSlug) : !urlSlug;
+    // The real admin on the global panel (NOT impersonating a workspace). They
+    // MANAGE the catalog/clients, so the personal buyer items (Store, Services,
+    // own top-up/manual deposit) are redundant noise and are hidden for them.
+    // While impersonating, the admin sees the workspace exactly as its owner would.
+    const realAdmin = !!me?.isAdmin && !imp;
+    const impersonating = !!imp;
+    // Navigation stays inside whichever storefront the URL is on.
+    const navPrefix = urlSlug ? `/manager/${ urlSlug }` : '';
+
     // Configurable brand/title. Prefer the freshly-loaded value from /me; fall
     // back to the cached one (so it renders before /me resolves). Cache it so the
     // pre-auth login/register screens show the same brand on next visit.
@@ -144,7 +189,20 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
     // The menu is built from the caller's permission set (mirrors the backend
     // matrix in database/model/rbac.go). The backend independently enforces the
     // same gating on every route/API — this only decides what to render.
-        const has = (p: Permission): boolean => !!me && (me.isAdmin || me.permissions.includes(p));
+        // While impersonating, render the workspace owner's (manager's) menu, not
+        // the admin's — the admin is viewing the panel AS that manager.
+        const has = (p: Permission): boolean =>
+        {
+            if (!me)
+            {
+                return false;
+            }
+            if (impersonating)
+            {
+                return MANAGER_PERMS.has(p);
+            }
+            return me.isAdmin || me.permissions.includes(p);
+        };
         const items: NavTab[] = [];
         const push = (cond: boolean, key: string, icon: IconName, titleKey: string) =>
         {
@@ -159,43 +217,61 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         // visible item: admin -> Overview, moderator -> Products, reseller ->
         // Clients, member -> Store.
 
+        // Management items only appear on the caller's OWN storefront — browsing
+        // another store (a manager on /panel/, a customer on a foreign store) hides
+        // them, leaving only the browse-&-buy subset below.
+        const mng = (p: Permission): boolean => has(p) && onOwnStore;
+
+        // 0) Cross-store shortcuts (top of the menu, mutually exclusive):
+        //   - browsing a different store -> jump back to your own workspace;
+        //   - a manager on their own workspace -> switch to the original panel
+        //     (to resell the admin store's products with their own balance).
+        push(!!homeSlug && !onOwnStore, MY_WORKSPACE_KEY, 'workspace', 'menu.myWorkspace');
+        push(!!me?.isManager && onOwnStore, ADMIN_STORE_KEY, 'home', 'menu.originalPanel');
+
         // 1) Overview (admin).
-        push(has('stats.view_all'), '/', 'dashboard', 'menu.dashboard');
+        push(mng('stats.view_all'), '/', 'dashboard', 'menu.dashboard');
 
         // 2) Infrastructure (admin): inbounds, clients, groups, nodes.
-        push(has('infra.manage'), '/inbounds', 'inbound', 'menu.inbounds');
-        push(has('client.manage'), '/clients', 'team', 'menu.clients'); // admin + moderator
-        push(has('infra.manage'), '/groups', 'groups', 'menu.groups');
-        push(has('infra.manage'), '/nodes', 'cluster', 'menu.nodes');
+        push(mng('infra.manage'), '/inbounds', 'inbound', 'menu.inbounds');
+        push(mng('client.manage'), '/clients', 'team', 'menu.clients'); // admin + moderator
+        push(mng('infra.manage'), '/groups', 'groups', 'menu.groups');
+        push(mng('infra.manage'), '/nodes', 'cluster', 'menu.nodes');
 
         // 3) Commerce: catalog -> store -> my services -> orders -> customers.
-        push(has('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator
-        push(has('product.purchase'), '/store', 'store', 'menu.store');           // admin, reseller, member
-        push(has('product.purchase'), '/services', 'services', 'menu.services');  // own configs — admin, reseller, member
-        push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // anyone with order visibility
+        push(mng('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator — own catalog
+        // Personal buyer items: useful to resellers/members/managers, redundant for
+        // the real admin (who manages the catalog + clients directly).
+        push(has('product.purchase') && !realAdmin, '/store', 'store', 'menu.store');
+        push(has('product.purchase') && !realAdmin, '/services', 'services', 'menu.services');
+        push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // own orders / oversight
         // Referral dashboard: resellers (own link/stats) and admins (manage).
-        push(Boolean(me?.isReseller || me?.isAdmin), '/referral', 'referral', 'menu.referral');
+        push(Boolean(me?.isReseller || me?.isAdmin || me?.isManager) && onOwnStore, '/referral', 'referral', 'menu.referral');
         // Manual card-to-card deposit review queue (admin).
-        push(has('deposit.manage'), '/manual-deposits', 'manualDeposits', 'menu.manualDeposits');
+        push(mng('deposit.manage'), '/manual-deposits', 'manualDeposits', 'menu.manualDeposits');
 
         // 4) Administration (admin): users, reports, settings, xray, API docs.
-        push(has('user.manage'), '/users', 'users', 'menu.users');
-        push(has('finance.view_all'), '/finance', 'finance', 'menu.finance'); // admin + moderator
-        push(has('infra.manage'), '/settings', 'setting', 'menu.settings');
-        push(has('infra.manage'), '/xray', 'tool', 'menu.xray');
-        push(has('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
+        push(mng('user.manage'), '/users', 'users', 'menu.users');
+        push(mng('manager.admin'), '/managers', 'managers', 'menu.managers'); // admin — manager workspaces
+        push(mng('tenant.users'), '/tenant-users', 'users', 'menu.tenantUsers'); // manager — own customers
+        push(mng('tenant.settings'), '/workspace-settings', 'workspace', 'menu.workspaceSettings'); // manager — own workspace
+        push(mng('tenant.payments'), '/workspace-payments', 'billing', 'menu.workspacePayments'); // manager — own gateways
+        push(mng('finance.view_all'), '/finance', 'finance', 'menu.finance'); // admin + moderator
+        push(mng('infra.manage'), '/settings', 'setting', 'menu.settings');
+        push(mng('infra.manage'), '/xray', 'tool', 'menu.xray');
+        push(mng('infra.manage'), '/api-docs', 'apidocs', 'menu.apiDocs');
 
         // 5) Account: top-up (when a gateway is on and the caller can purchase),
         // manual deposit (any buyer), profile, logout — always at the bottom.
-        push(showBilling && has('product.purchase'), '/billing', 'billing', 'menu.billing');
-        push(has('product.purchase'), '/manual-deposit', 'manualDeposit', 'menu.manualDeposit');
+        push(showBilling && has('product.purchase') && !realAdmin, '/billing', 'billing', 'menu.billing');
+        push(has('product.purchase') && !realAdmin, '/manual-deposit', 'manualDeposit', 'menu.manualDeposit');
         // Support / helpdesk: the staff dashboard, then tickets (every role).
-        push(has('ticket.manage'), '/support', 'support', 'menu.support');
+        push(mng('ticket.manage'), '/support', 'support', 'menu.support');
         push(has('ticket.view_own'), '/tickets', 'tickets', 'menu.tickets');
         items.push({ key: '/profile', icon: 'profile', title: t('menu.profile') });
         items.push({ key: LOGOUT_KEY, icon: 'logout', title: t('logout') });
         return items;
-    }, [t, me, showBilling]);
+    }, [t, me, showBilling, onOwnStore, homeSlug, realAdmin, impersonating]);
 
     const navItems = useMemo(() => tabs.filter((tab) => tab.icon !== 'logout'), [tabs]);
     const utilItems = useMemo(() => tabs.filter((tab) => tab.icon === 'logout'), [tabs]);
@@ -205,7 +281,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         const children: SubItem[] = [
             { key: '/settings#general', icon: Settings, label: t('pages.settings.panelSettings') },
             { key: '/settings#security', icon: ShieldCheck, label: t('pages.settings.securitySettings') },
-            { key: '/settings#reseller', icon: Wallet, label: t('pages.settings.resellerSettings') },
+            { key: '/settings#manager', icon: Wallet, label: t('pages.settings.managerSettings') },
             { key: '/settings#payments', icon: CreditCard, label: t('pages.settings.paymentsSettings') },
             { key: '/settings#manual-deposit', icon: Banknote, label: t('pages.settings.manualDepositSettings') },
             { key: '/settings#ticket-categories', icon: Ticket, label: t('pages.settings.ticketCategoriesSettings') },
@@ -229,13 +305,20 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         { key: '/xray#advanced', icon: Code, label: t('pages.xray.advancedTemplate') }
     ], [t]);
 
-    const settingsActive = pathname === '/settings';
-    const xrayActive = pathname === '/xray';
+    // The nav item keys are logical (/products, …) while the URL may carry a
+    // /manager/<slug> prefix; strip it so active-state matching works (navPrefix
+    // is computed above from the current storefront URL).
+    const logicalPath = navPrefix && pathname.startsWith(navPrefix)
+        ? (pathname.slice(navPrefix.length) || '/')
+        : pathname;
+
+    const settingsActive = logicalPath === '/settings';
+    const xrayActive = logicalPath === '/xray';
     const selectedKey = settingsActive
         ? `/settings${ hash || '#general' }`
         : xrayActive
             ? `/xray${ hash || '#basic' }`
-            : (pathname === '' ? '/' : pathname);
+            : (logicalPath === '' ? '/' : logicalPath);
 
     const openSubmenu = settingsActive ? '/settings' : xrayActive ? '/xray' : null;
     const [openKeys, setOpenKeys] = useState<string[]>(() => (openSubmenu ? [openSubmenu] : []));
@@ -260,8 +343,23 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
             window.location.href = window.Q_UI_BASE_PATH || '/';
             return;
         }
-        navigate(key);
-    }, [navigate]);
+        if (key === MY_WORKSPACE_KEY)
+        {
+            // Jump out of the current store back into the user's own workspace;
+            // PanelLayout then lands them on their workspace home page.
+            navigate(`/manager/${ homeSlug }`);
+            return;
+        }
+        if (key === ADMIN_STORE_KEY)
+        {
+            // Leave the workspace prefix entirely: the bare panel root is the
+            // original admin store; PanelLayout lands the manager on /panel/store.
+            navigate('/');
+            return;
+        }
+        // Keep navigation inside the current storefront's /<slug> context.
+        navigate(`${ navPrefix }${ key }`);
+    }, [navigate, navPrefix, homeSlug]);
 
     const toggleCollapsed = useCallback(() =>
     {
@@ -314,7 +412,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
     {
         const Icon = iconByName[tab.icon];
         const children = expandable ? childOf(tab.key) : null;
-        const isActive = selectedKey === tab.key || (children ? pathname === tab.key : false);
+        const isActive = selectedKey === tab.key || (children ? logicalPath === tab.key : false);
         const isOpen = openKeys.includes(tab.key);
 
         const rowClasses = cn(
@@ -385,7 +483,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         )}
       </li>
         );
-    }), [childOf, selectedKey, pathname, openKeys, toggleSubmenu, openLink]);
+    }), [childOf, selectedKey, logicalPath, openKeys, toggleSubmenu, openLink]);
 
     // Buyers (admin/reseller/member) can top up; for them the balance chip is a
     // button that jumps straight to the deposit page — the primary money action,
@@ -450,9 +548,17 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         )}
       >
         <div className={cn('flex h-14 items-center border-b border-border', collapsed ? 'justify-center px-2' : 'ps-4 pe-2')}>
-          <span className="select-none text-lg font-semibold tracking-wide text-foreground">
-            {collapsed ? (brandTitle.slice(0, 1) || 'Q') : brandTitle}
-          </span>
+          {me?.brandLogo ? (
+            <img
+              src={me.brandLogo}
+              alt={brandTitle}
+              className={cn('object-contain', collapsed ? 'h-8 w-8' : 'h-8 max-w-[150px]')}
+            />
+          ) : (
+            <span className="select-none text-lg font-semibold tracking-wide text-foreground">
+              {collapsed ? (brandTitle.slice(0, 1) || 'Q') : brandTitle}
+            </span>
+          )}
         </div>
 
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
@@ -497,7 +603,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
           <div
             role="dialog"
             aria-modal="true"
-            className="absolute inset-y-0 left-0 flex w-[min(82vw,320px)] flex-col border-r border-border bg-surface shadow-lg motion-safe:animate-[drawer-in_220ms_var(--ease-out)]"
+            className="absolute inset-y-0 start-0 flex w-[min(82vw,320px)] flex-col border-e border-border bg-surface shadow-lg motion-safe:animate-[drawer-in_220ms_var(--ease-out)]"
           >
             <div className="flex h-14 items-center justify-between border-b border-border ps-4 pe-2">
               <span className="select-none text-lg font-semibold tracking-wide text-foreground">{brandTitle}</span>

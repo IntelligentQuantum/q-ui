@@ -11,6 +11,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -94,7 +95,10 @@ func (a *TicketController) canAccessTicket(c *gin.Context, t *model.Ticket) bool
 // ---------------------------------------------------------------------------
 
 func (a *TicketController) listCategories(c *gin.Context) {
-	cats, err := a.ticketService.ListCategories(true)
+	// Buyer dropdown: categories of the STOREFRONT being viewed (the
+	// /panel/manager/<slug> URL), so a customer on a manager's site sees that
+	// manager's categories — like the product catalog. Always concrete.
+	cats, err := a.ticketService.ListCategories(true, tenant.ViewScope(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -103,7 +107,7 @@ func (a *TicketController) listCategories(c *gin.Context) {
 }
 
 func (a *TicketController) listAllCategories(c *gin.Context) {
-	cats, err := a.ticketService.ListCategories(false)
+	cats, err := a.ticketService.ListCategories(false, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -117,7 +121,7 @@ func (a *TicketController) createCategory(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	cat, err := a.ticketService.CreateCategory(in)
+	cat, err := a.ticketService.CreateCategory(in, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
@@ -132,7 +136,7 @@ func (a *TicketController) updateCategory(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	cat, err := a.ticketService.UpdateCategory(id, in)
+	cat, err := a.ticketService.UpdateCategory(id, in, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
@@ -142,7 +146,7 @@ func (a *TicketController) updateCategory(c *gin.Context) {
 
 func (a *TicketController) deleteCategory(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	if err := a.ticketService.DeleteCategory(id); err != nil {
+	if err := a.ticketService.DeleteCategory(id, tenant.HomeScopeStrict(c)); err != nil {
 		if errors.Is(err, service.ErrTicketCategoryInUse) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.ticketAdmin.toasts.categoryInUse"))
 			return
@@ -162,7 +166,7 @@ func (a *TicketController) setCategoryStatus(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.SetCategoryStatus(id, form.Active); err != nil {
+	if err := a.ticketService.SetCategoryStatus(id, form.Active, tenant.HomeScopeStrict(c)); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -177,7 +181,7 @@ func (a *TicketController) reorderCategories(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.ReorderCategories(form.Ids); err != nil {
+	if err := a.ticketService.ReorderCategories(form.Ids, tenant.HomeScopeStrict(c)); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -207,7 +211,7 @@ func (a *TicketController) list(c *gin.Context) {
 		Search:     c.Query("search"),
 		Limit:      limit,
 		Offset:     offset,
-	})
+	}, tenant.ViewScope(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -217,7 +221,8 @@ func (a *TicketController) list(c *gin.Context) {
 
 func (a *TicketController) get(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	ticket, err := a.ticketService.Get(id)
+	scope := tenant.ViewScope(c)
+	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -227,7 +232,7 @@ func (a *TicketController) get(c *gin.Context) {
 		return
 	}
 	staff := canManageTickets(c)
-	item, messages, err := a.ticketService.Detail(id, staff)
+	item, messages, err := a.ticketService.Detail(id, staff, scope)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -241,6 +246,12 @@ func (a *TicketController) audit(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
+	// Confine to the caller's tenant: a scoped Get 404s a cross-tenant ticket so
+	// its audit trail can't be read from another workspace.
+	if _, err := a.ticketService.Get(id, tenant.HomeScopeStrict(c)); err != nil {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
 	rows, err := a.ticketService.AuditLog(id)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
@@ -250,7 +261,7 @@ func (a *TicketController) audit(c *gin.Context) {
 }
 
 func (a *TicketController) staffList(c *gin.Context) {
-	rows, err := a.ticketService.ListStaff()
+	rows, err := a.ticketService.ListStaff(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -259,7 +270,7 @@ func (a *TicketController) staffList(c *gin.Context) {
 }
 
 func (a *TicketController) dashboard(c *gin.Context) {
-	d, err := a.ticketService.Dashboard()
+	d, err := a.ticketService.Dashboard(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -312,7 +323,7 @@ func (a *TicketController) create(c *gin.Context) {
 		CategoryId: categoryId,
 		Priority:   c.PostForm("priority"),
 		Body:       c.PostForm("body"),
-	})
+	}, tenant.ViewScope(c))
 	if err != nil {
 		if m := ticketError(c, err); m != "" {
 			pureJsonMsg(c, http.StatusOK, false, m)
@@ -334,7 +345,8 @@ func (a *TicketController) reply(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	ticket, err := a.ticketService.Get(id)
+	scope := tenant.ViewScope(c)
+	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -353,7 +365,7 @@ func (a *TicketController) reply(c *gin.Context) {
 	c.Request.Body = http.MaxBytesReader(c.Writer, c.Request.Body, service.MaxTicketUploadBytes)
 	internal := staff && c.PostForm("internal") == "true"
 
-	msg, err := a.ticketService.AddMessage(id, user.Id, user.Username, c.PostForm("body"), internal, staff)
+	msg, err := a.ticketService.AddMessage(id, user.Id, user.Username, c.PostForm("body"), internal, staff, scope)
 	if err != nil {
 		if m := ticketError(c, err); m != "" {
 			pureJsonMsg(c, http.StatusOK, false, m)
@@ -375,7 +387,8 @@ func (a *TicketController) reopen(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	ticket, err := a.ticketService.Get(id)
+	scope := tenant.ViewScope(c)
+	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -385,7 +398,7 @@ func (a *TicketController) reopen(c *gin.Context) {
 		return
 	}
 	staff := user.Can(model.PermTicketManage)
-	if err := a.ticketService.Reopen(id, user.Id, user.Username, staff); err != nil {
+	if err := a.ticketService.Reopen(id, user.Id, user.Username, staff, scope); err != nil {
 		if errors.Is(err, service.ErrReopenWindow) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.tickets.toasts.reopenWindow"))
 			return
@@ -407,7 +420,7 @@ func (a *TicketController) reopen(c *gin.Context) {
 func (a *TicketController) attachment(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	aid, _ := strconv.Atoi(c.Param("aid"))
-	att, ticket, err := a.ticketService.GetAttachment(aid)
+	att, ticket, err := a.ticketService.GetAttachment(aid, tenant.ViewScope(c))
 	if err != nil || att.TicketId != id {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -453,7 +466,7 @@ func (a *TicketController) assign(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.Assign(id, form.AssignedTo, actor.Id, actor.Username); err != nil {
+	if err := a.ticketService.Assign(id, form.AssignedTo, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -471,7 +484,7 @@ func (a *TicketController) transfer(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.Transfer(id, form.CategoryId, form.AssignedTo, actor.Id, actor.Username); err != nil {
+	if err := a.ticketService.Transfer(id, form.CategoryId, form.AssignedTo, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
 		if m := ticketError(c, err); m != "" {
 			pureJsonMsg(c, http.StatusOK, false, m)
 			return
@@ -492,7 +505,7 @@ func (a *TicketController) setStatus(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.SetStatus(id, form.Status, actor.Id, actor.Username); err != nil {
+	if err := a.ticketService.SetStatus(id, form.Status, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
 		if m := ticketError(c, err); m != "" {
 			pureJsonMsg(c, http.StatusOK, false, m)
 			return
@@ -513,7 +526,7 @@ func (a *TicketController) setPriority(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.ticketService.SetPriority(id, form.Priority, actor.Id, actor.Username); err != nil {
+	if err := a.ticketService.SetPriority(id, form.Priority, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
 		if m := ticketError(c, err); m != "" {
 			pureJsonMsg(c, http.StatusOK, false, m)
 			return
@@ -527,7 +540,7 @@ func (a *TicketController) setPriority(c *gin.Context) {
 func (a *TicketController) escalate(c *gin.Context) {
 	actor := session.GetLoginUser(c)
 	id, _ := strconv.Atoi(c.Param("id"))
-	if err := a.ticketService.SetStatus(id, model.TicketStatusEscalated, actor.Id, actor.Username); err != nil {
+	if err := a.ticketService.SetStatus(id, model.TicketStatusEscalated, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}

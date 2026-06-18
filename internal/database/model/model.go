@@ -58,28 +58,28 @@ type User struct {
 	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli"`
 }
 
-// Role constants for the RBAC system. Five roles:
+// Role constants for the RBAC system. Four roles:
 //
-//	admin     - full, unrestricted control; bypasses all ownership checks and
-//	            runs in the global tenant scope (sees every tenant).
-//	manager   - owns an isolated Tenant (workspace); every capability is scoped
-//	            to that one tenant. Cannot touch infrastructure, other tenants,
-//	            system roles, or create another manager/admin.
-//	moderator - sales/product/support/marketing; NO infrastructure access.
-//	reseller  - business partner; owns and resells to their own clients/customers.
-//	member    - end customer; buys products and manages their own services.
+//	admin    - full, unrestricted control; bypasses all ownership checks and
+//	           runs in the global tenant scope (sees every tenant).
+//	manager  - owns an isolated Tenant (workspace); every capability is scoped
+//	           to that one tenant. Cannot touch infrastructure, other tenants,
+//	           system roles, or create another manager/admin.
+//	reseller - business partner; owns and resells to their own clients/customers.
+//	member   - end customer; buys products and manages their own services.
 //
-// RoleUser is the pre-redesign role name. The old "user" already owned clients
-// and held a balance (i.e. reseller semantics), so it is normalized to
-// RoleReseller everywhere. It is kept only for backward compatibility.
+// RoleUser ("user") and RoleModerator ("moderator") are LEGACY aliases that are
+// normalized to RoleReseller everywhere — the moderator role was removed; any
+// stored moderator account folds to reseller (a one-time seeder also rewrites the
+// stored value). They are kept only so existing data normalizes correctly.
 const (
-	RoleAdmin     = "admin"
-	RoleManager   = "manager"
-	RoleModerator = "moderator"
-	RoleReseller  = "reseller"
-	RoleMember    = "member"
+	RoleAdmin    = "admin"
+	RoleManager  = "manager"
+	RoleReseller = "reseller"
+	RoleMember   = "member"
 
-	RoleUser = "user" // legacy alias -> reseller
+	RoleUser      = "user"      // legacy alias -> reseller
+	RoleModerator = "moderator" // legacy alias -> reseller (role removed)
 )
 
 // NormalizeRole maps any stored or user-supplied role string to a canonical
@@ -91,9 +91,7 @@ func NormalizeRole(role string) string {
 		return RoleAdmin
 	case RoleManager:
 		return RoleManager
-	case RoleModerator:
-		return RoleModerator
-	case RoleReseller, RoleUser:
+	case RoleReseller, RoleUser, RoleModerator:
 		return RoleReseller
 	case RoleMember:
 		return RoleMember
@@ -116,9 +114,12 @@ func (u *User) CanonicalRole() string {
 // (Role != "user") treated every non-"user" role as admin, which would have
 // granted full admin rights to moderator/reseller/member the instant those
 // roles were introduced. Do not loosen this.
-func (u *User) IsAdmin() bool     { return u.CanonicalRole() == RoleAdmin }
-func (u *User) IsManager() bool   { return u.CanonicalRole() == RoleManager }
-func (u *User) IsModerator() bool { return u.CanonicalRole() == RoleModerator }
+func (u *User) IsAdmin() bool   { return u.CanonicalRole() == RoleAdmin }
+func (u *User) IsManager() bool { return u.CanonicalRole() == RoleManager }
+
+// IsModerator always returns false: the moderator role was removed and folds to
+// reseller. Kept so any remaining caller compiles and never sees a moderator.
+func (u *User) IsModerator() bool { return false }
 func (u *User) IsReseller() bool  { return u.CanonicalRole() == RoleReseller }
 func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
 

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/xray"
 )
 
@@ -85,7 +86,7 @@ type ClientsSummary struct {
 }
 
 const (
-	clientPageDefaultSize = 25
+	clientPageDefaultSize = 10
 	clientPageMaxSize     = 200
 )
 
@@ -95,10 +96,22 @@ const (
 // query itself is unchanged from List(); the win is that the response
 // only carries 25-ish slim rows over the wire instead of all 2000 full
 // records, which on real panels was the dominant cost.
-func (s *ClientService) ListPaged(inboundSvc *InboundService, settingSvc *SettingService, params ClientPageParams, ownerFilter *int) (*ClientPageResponse, error) {
+func (s *ClientService) ListPaged(inboundSvc *InboundService, settingSvc *SettingService, params ClientPageParams, ownerFilter *int, scope model.Scope) (*ClientPageResponse, error) {
 	all, err := s.List()
 	if err != nil {
 		return nil, err
+	}
+	// Tenant scoping: a manager (tenant scope) only ever sees clients in their
+	// own workspace. Applied first, before any owner filter, so totals/summary
+	// never leak another tenant's clients. No-op for the global (admin) scope.
+	if !scope.Global {
+		scopedT := make([]ClientWithAttachments, 0, len(all))
+		for _, c := range all {
+			if c.TenantId == scope.TenantID {
+				scopedT = append(scopedT, c)
+			}
+		}
+		all = scopedT
 	}
 	// Ownership scoping: a non-admin caller only ever sees clients they own.
 	// This is enforced server-side (the controller passes the session user's id

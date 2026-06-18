@@ -34,6 +34,14 @@ type PlisioService struct {
 	settingService SettingService
 }
 
+// PlisioConfig is the per-call Plisio gateway configuration, resolved per tenant
+// by the caller (global settings for tenant 0; a workspace's own secret
+// otherwise — never a shared fallback).
+type PlisioConfig struct {
+	Enabled bool
+	Secret  string
+}
+
 // plisioInvoiceResponse models the invoices/new response (non white-label).
 // Error responses reuse the same envelope with name/message/code in data.
 type plisioInvoiceResponse struct {
@@ -53,13 +61,12 @@ type plisioInvoiceResponse struct {
 // back on every callback — it is stable across the user switching cryptocurrency
 // mid-payment, unlike txn_id. Returns the Plisio txn id and the hosted invoice
 // URL the browser should be sent to.
-func (p *PlisioService) CreateInvoice(orderNumber, orderName, description, callbackURL, successURL, failURL, email, sourceCurrency string, sourceAmount float64) (txnID, invoiceURL string, err error) {
-	enabled, _ := p.settingService.GetPlisioEnable()
-	if !enabled {
+func (p *PlisioService) CreateInvoice(cfg PlisioConfig, orderNumber, orderName, description, callbackURL, successURL, failURL, email, sourceCurrency string, sourceAmount float64) (txnID, invoiceURL string, err error) {
+	if !cfg.Enabled {
 		return "", "", ErrPlisioDisabled
 	}
-	secret, _ := p.settingService.GetPlisioSecretKey()
-	if strings.TrimSpace(secret) == "" {
+	secret := strings.TrimSpace(cfg.Secret)
+	if secret == "" {
 		return "", "", errors.New("plisio secret key is not configured")
 	}
 

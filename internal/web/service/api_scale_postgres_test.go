@@ -102,11 +102,11 @@ func TestAllAPIsPostgresScale(t *testing.T) {
 			run("GetInboundDetail", func() error { _, err := inboundSvc.GetInboundDetail(ib.Id); return err })
 			run("GetInboundOptions", func() error { _, err := inboundSvc.GetInboundOptions(userId); return err })
 			run("ListPaged", func() error {
-				_, err := svc.ListPaged(inboundSvc, settingSvc, ClientPageParams{Page: 1, PageSize: 25}, nil)
+				_, err := svc.ListPaged(inboundSvc, settingSvc, ClientPageParams{Page: 1, PageSize: 25}, nil, model.GlobalScope)
 				return err
 			})
 			run("ListPaged+search", func() error {
-				_, err := svc.ListPaged(inboundSvc, settingSvc, ClientPageParams{Page: 1, PageSize: 25, Search: "user-0012345"}, nil)
+				_, err := svc.ListPaged(inboundSvc, settingSvc, ClientPageParams{Page: 1, PageSize: 25, Search: "user-0012345"}, nil, model.GlobalScope)
 				return err
 			})
 			run("GetClientsLastOnline", func() error { _, err := inboundSvc.GetClientsLastOnline(); return err })

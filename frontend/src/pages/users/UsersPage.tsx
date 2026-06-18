@@ -87,7 +87,7 @@ interface BalanceFormValues {
 
 const ROLE_BADGE: Record<string, BadgeVariant> = {
     admin: 'warning',
-    moderator: 'primary',
+    manager: 'primary',
     reseller: 'neutral',
     member: 'success'
 };
@@ -97,7 +97,12 @@ const ROLE_BADGE: Record<string, BadgeVariant> = {
 function normalizeRole(role: string): string
 {
     const raw = (role || '').toLowerCase();
-    return raw === 'user' ? 'reseller' : raw || 'member';
+    // Legacy "user" and the removed "moderator" role both fold to reseller.
+    if (raw === 'user' || raw === 'moderator')
+    {
+        return 'reseller';
+    }
+    return raw || 'member';
 }
 
 async function fetchUsers(): Promise<PanelUser[]>
@@ -369,9 +374,11 @@ export default function UsersPage()
         enabled: !!historyTarget
     });
 
+    // Setting a user to "manager" here auto-provisions their workspace (tenant +
+    // slug) server-side; the admin then mints an API key from the Managers page.
     const roleOptions = [
         { value: 'admin', label: t('pages.users.role_admin') },
-        { value: 'moderator', label: t('pages.users.role_moderator') },
+        { value: 'manager', label: t('pages.users.role_manager') },
         { value: 'reseller', label: t('pages.users.role_reseller') },
         { value: 'member', label: t('pages.users.role_member') }
     ];
@@ -711,7 +718,7 @@ export default function UsersPage()
             data={txQuery.data ?? []}
             rowKey={(row) => String(row.id)}
             loading={txQuery.isFetching}
-            pageSize={15}
+            pageSize={10}
             empty={<div className="py-6 text-center text-muted-foreground">{t('noData')}</div>}
           />
         </Modal>

@@ -64,7 +64,7 @@ export interface ClientQueryParams {
   group?: string;
 }
 
-const DEFAULT_QUERY: ClientQueryParams = { page: 1, pageSize: 25 };
+const DEFAULT_QUERY: ClientQueryParams = { page: 1, pageSize: 10 };
 const DEFAULT_SUMMARY: ClientsSummary = {
     total: 0, active: 0, online: [], depleted: [], expiring: [], deactive: []
 };

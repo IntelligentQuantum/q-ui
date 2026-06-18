@@ -73,6 +73,7 @@ func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType,
 	}
 	rec := &model.Transaction{
 		UserId:        userId,
+		TenantId:      u.TenantId, // ledger entry belongs to the user's workspace
 		Amount:        amount,
 		Type:          txType,
 		Description:   desc,
@@ -86,6 +87,74 @@ func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType,
 		return nil, err
 	}
 	return rec, nil
+}
+
+// tenantManagerID returns the manager of `sellerTenantID` whose balance ALSO
+// funds a purchase from that storefront, unless the buyer IS that manager (or the
+// storefront is the global/admin store). 0 = no second charge. This models the
+// manager's balance as the workspace's prepaid resource pool — every sale on a
+// manager's storefront draws down both the buyer and that manager.
+func (s *WalletService) tenantManagerID(sellerTenantID, buyerID int) int {
+	if sellerTenantID == model.GlobalTenantId {
+		return 0
+	}
+	var t model.Tenant
+	if err := database.GetDB().Select("manager_user_id").Where("id = ?", sellerTenantID).First(&t).Error; err != nil {
+		return 0
+	}
+	if t.ManagerUserId == buyerID {
+		return 0
+	}
+	return t.ManagerUserId
+}
+
+// DebitWorkspacePurchase debits the buyer for `amount` and, when buying from a
+// Manager storefront (sellerTenantID), debits that manager for the same amount in
+// the SAME transaction — so a purchase needs BOTH the buyer and the storefront's
+// pool to have enough balance, and either being short aborts the whole purchase
+// (ErrInsufficientBalance). Returns the manager id charged (0 if none) so the
+// caller can refund symmetrically if a later step (e.g. provisioning) fails.
+func (s *WalletService) DebitWorkspacePurchase(buyer *model.User, sellerTenantID int, amount int64, desc string, meta TxMeta) (int, error) {
+	if amount <= 0 {
+		return 0, ErrInvalidAmount
+	}
+	managerID := s.tenantManagerID(sellerTenantID, buyer.Id)
+	err := s.withRetry(func(tx *gorm.DB) error {
+		if _, e := s.applyDelta(tx, buyer.Id, -amount, model.TxDebit, desc, meta); e != nil {
+			return e
+		}
+		if managerID != 0 {
+			mMeta := TxMeta{Source: meta.Source, RefId: meta.RefId, Actor: buyer.Username}
+			if _, e := s.applyDelta(tx, managerID, -amount, model.TxDebit, desc+" — workspace pool", mMeta); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		return 0, err
+	}
+	return managerID, nil
+}
+
+// RefundWorkspacePurchase reverses DebitWorkspacePurchase: credits the buyer and,
+// when managerID != 0, the workspace manager. Best-effort (used on the
+// failure/rollback path); failures are surfaced to the caller's logger.
+func (s *WalletService) RefundWorkspacePurchase(buyerID, managerID int, amount int64, desc string, meta TxMeta) error {
+	if amount <= 0 {
+		return nil
+	}
+	return s.withRetry(func(tx *gorm.DB) error {
+		if _, e := s.applyDelta(tx, buyerID, amount, model.TxCredit, desc, meta); e != nil {
+			return e
+		}
+		if managerID != 0 {
+			if _, e := s.applyDelta(tx, managerID, amount, model.TxCredit, desc+" — workspace pool", meta); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
 }
 
 // withRetry runs fn inside a fresh DB transaction, retrying a bounded number of

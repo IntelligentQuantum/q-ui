@@ -27,6 +27,9 @@ interface Window {
   Q_UI_BASE_PATH?: string;
   Q_UI_CUR_VER?: string;
   Q_UI_DB_TYPE?: string;
+  // Set when the panel is served on a workspace's own custom domain: the slug of
+  // that workspace, so the SPA scopes the storefront + branding to it.
+  Q_UI_WORKSPACE?: string;
   __SUB_PAGE_DATA__?: SubPageData;
 }
 

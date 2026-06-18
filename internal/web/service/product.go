@@ -77,9 +77,9 @@ func validateProductInput(in ProductInput) error {
 // (the management view for admin/moderator). When audience is non-empty the
 // result is restricted to products offered to "all" or to that audience role,
 // so a reseller/member only sees products targeted at them.
-func (s *ProductService) List(activeOnly bool, audience string) ([]model.Product, error) {
+func (s *ProductService) List(activeOnly bool, audience string, scope model.Scope) ([]model.Product, error) {
 	var products []model.Product
-	q := database.GetDB().Model(&model.Product{}).Order("id DESC")
+	q := scope.Apply(database.GetDB().Model(&model.Product{})).Order("id DESC")
 	if activeOnly {
 		q = q.Where("status = ?", model.ProductActive)
 	}
@@ -92,21 +92,24 @@ func (s *ProductService) List(activeOnly bool, audience string) ([]model.Product
 	return products, nil
 }
 
-// Get loads a single product by id.
-func (s *ProductService) Get(id int) (*model.Product, error) {
+// Get loads a single product by id within the caller's tenant scope (so a
+// manager can never read another workspace's product, even by guessing its id).
+func (s *ProductService) Get(id int, scope model.Scope) (*model.Product, error) {
 	var p model.Product
-	if err := database.GetDB().Where("id = ?", id).First(&p).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&p).Error; err != nil {
 		return nil, ErrProductNotFound
 	}
 	return &p, nil
 }
 
-// Create validates and persists a new product, stamping the creator id.
-func (s *ProductService) Create(in ProductInput, createdBy int) (*model.Product, error) {
+// Create validates and persists a new product, stamping the creator id and the
+// caller's tenant so the product belongs to that workspace.
+func (s *ProductService) Create(in ProductInput, createdBy int, scope model.Scope) (*model.Product, error) {
 	if err := validateProductInput(in); err != nil {
 		return nil, err
 	}
 	p := &model.Product{
+		TenantId:     scope.OwnerTenantID(),
 		Name:         strings.TrimSpace(in.Name),
 		Description:  strings.TrimSpace(in.Description),
 		TrafficLimit: in.TrafficLimit,
@@ -123,12 +126,12 @@ func (s *ProductService) Create(in ProductInput, createdBy int) (*model.Product,
 	return p, nil
 }
 
-// Update replaces a product's mutable fields.
-func (s *ProductService) Update(id int, in ProductInput) (*model.Product, error) {
+// Update replaces a product's mutable fields (within the caller's tenant scope).
+func (s *ProductService) Update(id int, in ProductInput, scope model.Scope) (*model.Product, error) {
 	if err := validateProductInput(in); err != nil {
 		return nil, err
 	}
-	p, err := s.Get(id)
+	p, err := s.Get(id, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -142,19 +145,19 @@ func (s *ProductService) Update(id int, in ProductInput) (*model.Product, error)
 		"inbound_ids":   model.IntList(in.InboundIds),
 		"status":        normalizeProductStatus(in.Status),
 	}
-	if err := database.GetDB().Model(&model.Product{}).Where("id = ?", p.Id).Updates(updates).Error; err != nil {
+	if err := scope.Apply(database.GetDB().Model(&model.Product{})).Where("id = ?", p.Id).Updates(updates).Error; err != nil {
 		return nil, err
 	}
-	return s.Get(id)
+	return s.Get(id, scope)
 }
 
 // SetStatus activates or deactivates a product without touching other fields.
-func (s *ProductService) SetStatus(id int, active bool) error {
+func (s *ProductService) SetStatus(id int, active bool, scope model.Scope) error {
 	status := model.ProductInactive
 	if active {
 		status = model.ProductActive
 	}
-	res := database.GetDB().Model(&model.Product{}).Where("id = ?", id).Update("status", status)
+	res := scope.Apply(database.GetDB().Model(&model.Product{})).Where("id = ?", id).Update("status", status)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -164,10 +167,11 @@ func (s *ProductService) SetStatus(id int, active bool) error {
 	return nil
 }
 
-// Delete removes a product from the catalog. Existing orders keep their
-// captured amount/snapshot, so deleting a product never rewrites order history.
-func (s *ProductService) Delete(id int) error {
-	res := database.GetDB().Where("id = ?", id).Delete(&model.Product{})
+// Delete removes a product from the catalog (within the caller's tenant scope).
+// Existing orders keep their captured amount/snapshot, so deleting a product
+// never rewrites order history.
+func (s *ProductService) Delete(id int, scope model.Scope) error {
+	res := scope.Apply(database.GetDB()).Where("id = ?", id).Delete(&model.Product{})
 	if res.Error != nil {
 		return res.Error
 	}

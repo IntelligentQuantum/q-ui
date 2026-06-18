@@ -20,7 +20,7 @@ import {
 } from '@/components/ui';
 import GeneralTab from './GeneralTab';
 import SecurityTab from './SecurityTab';
-import ResellerTab from './ResellerTab';
+import ManagerTab from './ManagerTab';
 import PaymentsTab from './PaymentsTab';
 import ManualDepositTab from './ManualDepositTab';
 import TicketCategoriesTab from './TicketCategoriesTab';
@@ -33,7 +33,7 @@ interface ApiMsg {
   success?: boolean;
 }
 
-const tabSlugs = ['general', 'security', 'reseller', 'payments', 'manual-deposit', 'ticket-categories', 'telegram', 'email', 'subscription', 'subscription-formats'];
+const tabSlugs = ['general', 'security', 'manager', 'payments', 'manual-deposit', 'ticket-categories', 'telegram', 'email', 'subscription', 'subscription-formats'];
 
 function isIp(h: string): boolean
 {
@@ -268,7 +268,7 @@ export default function SettingsPage()
         switch (activeSlug)
         {
             case 'security': return <SecurityTab allSetting={allSetting} updateSetting={updateSetting} />;
-            case 'reseller': return <ResellerTab allSetting={allSetting} updateSetting={updateSetting} />;
+            case 'manager': return <ManagerTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'payments': return <PaymentsTab allSetting={allSetting} updateSetting={updateSetting} />;
             case 'manual-deposit': return <ManualDepositTab />;
             case 'ticket-categories': return <TicketCategoriesTab />;

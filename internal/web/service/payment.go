@@ -12,9 +12,10 @@ import (
 type PaymentService struct{}
 
 // CreatePending records a new pending payment for a user/authority.
-func (s *PaymentService) CreatePending(userId int, gateway, authority string, amount int64) (*model.Payment, error) {
+func (s *PaymentService) CreatePending(userId, tenantId int, gateway, authority string, amount int64) (*model.Payment, error) {
 	p := &model.Payment{
 		UserId:    userId,
+		TenantId:  tenantId,
 		Gateway:   gateway,
 		Authority: authority,
 		Amount:    amount,
@@ -29,9 +30,10 @@ func (s *PaymentService) CreatePending(userId int, gateway, authority string, am
 // CreateCryptoPending records a new pending crypto top-up, capturing the source
 // (fiat) currency the invoice is priced in. The authority is the merchant order
 // reference we send to the gateway and match callbacks against.
-func (s *PaymentService) CreateCryptoPending(userId int, gateway, authority, currency string, amount int64) (*model.Payment, error) {
+func (s *PaymentService) CreateCryptoPending(userId, tenantId int, gateway, authority, currency string, amount int64) (*model.Payment, error) {
 	p := &model.Payment{
 		UserId:    userId,
+		TenantId:  tenantId,
 		Gateway:   gateway,
 		Authority: authority,
 		Amount:    amount,

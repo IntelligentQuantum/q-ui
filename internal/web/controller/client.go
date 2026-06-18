@@ -16,6 +16,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/websocket"
 
 	"github.com/gin-gonic/gin"
@@ -47,6 +48,7 @@ type ClientController struct {
 	settingService service.SettingService
 	walletService  service.WalletService
 	orderService   service.OrderService
+	tenantService  service.TenantService
 }
 
 func NewClientController(g *gin.RouterGroup) *ClientController {
@@ -119,13 +121,19 @@ func (a *ClientController) requireOwnership(c *gin.Context, email string) bool {
 	if user.IsAdmin() {
 		return true
 	}
-	owner, err := a.clientService.GetOwnerByEmail(email)
+	owner, tenantId, err := a.clientService.GetClientScopeByEmail(email)
 	if err != nil {
 		// Don't reveal whether the email exists to a non-owner.
 		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "pages.clients.toasts.forbidden"))
 		return false
 	}
-	if owner != user.Id {
+	// A manager owns their whole workspace: they may act on any client in their
+	// tenant. Everyone else (reseller/member) is restricted to clients they own.
+	allowed := owner == user.Id
+	if user.IsManager() {
+		allowed = tenantId == user.TenantId
+	}
+	if !allowed {
 		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "pages.clients.toasts.forbidden"))
 		return false
 	}
@@ -169,14 +177,19 @@ func (a *ClientController) listPaged(c *gin.Context) {
 	// the caller explicitly asks for their own configs via ?owner=self (the
 	// "My Services" page), which scopes to the logged-in user for every role so
 	// an admin sees their own purchased services rather than the whole panel.
+	// A manager sees every client in their workspace (tenant scope handles the
+	// confinement, so no owner filter). admin sees everything. reseller/member are
+	// confined to clients they own. Any caller may opt into "my services only"
+	// via ?owner=self.
 	var ownerFilter *int
 	if user := session.GetLoginUser(c); user != nil {
-		if !user.IsAdmin() || c.Query("owner") == "self" {
+		ownsWholeScope := user.IsAdmin() || user.IsManager()
+		if !ownsWholeScope || c.Query("owner") == "self" {
 			id := user.Id
 			ownerFilter = &id
 		}
 	}
-	resp, err := a.clientService.ListPaged(&a.inboundService, &a.settingService, params, ownerFilter)
+	resp, err := a.clientService.ListPaged(&a.inboundService, &a.settingService, params, ownerFilter, tenant.ScopeFrom(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return
@@ -231,9 +244,17 @@ func (a *ClientController) create(c *gin.Context) {
 		pureJsonMsg(c, http.StatusUnauthorized, false, I18nWeb(c, "pages.login.loginAgain"))
 		return
 	}
+	// Bandwidth business model: a Manager workspace that has consumed its
+	// admin-allocated quota cannot provision new services until recharged.
+	if user.TenantId != model.GlobalTenantId && a.tenantService.OverBandwidthQuota(user.TenantId) {
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.bandwidthExhausted"))
+		return
+	}
 	// Every client gets an owner: the creating user. (json:"-" on OwnerId means
-	// a caller cannot spoof this — it is only ever set here, server-side.)
+	// a caller cannot spoof this — it is only ever set here, server-side.) The
+	// tenant is the creator's workspace (0 = global/admin), confining the client.
 	payload.OwnerId = user.Id
+	payload.TenantId = user.TenantId
 
 	// Advanced fields (subscription id, protocol secrets, comment, auto-renew
 	// period) are admin-only. For everyone else the server owns them: secrets are
@@ -259,6 +280,7 @@ func (a *ClientController) create(c *gin.Context) {
 	// failed creation never leaves the user out of pocket and an unpaid client
 	// is never created.
 	var charged int64
+	var chargedManager int
 	if !user.IsAdmin() {
 		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
 		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
@@ -269,23 +291,29 @@ func (a *ClientController) create(c *gin.Context) {
 		}
 		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
 		if cost > 0 {
-			if _, err := a.walletService.Debit(user.Id, cost, "client create: "+payload.Client.Email); err != nil {
-				if errors.Is(err, service.ErrInsufficientBalance) {
+			// Workspace pool: a customer's client costs draw down both the customer
+			// and their manager; both must have enough balance.
+			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "client create: "+payload.Client.Email,
+				service.TxMeta{Source: model.TxSourcePurchase})
+			if derr != nil {
+				if errors.Is(derr, service.ErrInsufficientBalance) {
 					pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
 					return
 				}
-				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
 				return
 			}
 			charged = cost
+			chargedManager = mid
 		}
 	}
 
 	needRestart, err := a.clientService.Create(&a.inboundService, &payload)
 	if err != nil {
 		if charged > 0 {
-			// Refund the reservation; creation never happened.
-			if _, refundErr := a.walletService.Credit(user.Id, charged, "refund (create failed): "+payload.Client.Email); refundErr != nil {
+			// Refund the reservation (buyer + manager pool); creation never happened.
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedManager, charged, "refund (create failed): "+payload.Client.Email,
+				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund client-create charge:", refundErr)
 			}
 		}
@@ -587,6 +615,7 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	// creation). Sequenced as debit -> reset -> refund-on-failure so a failed
 	// reset never leaves the owner out of pocket. Admins reset for free.
 	var charged int64
+	var chargedManager int
 	if user != nil && !user.IsAdmin() {
 		base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
 		perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
@@ -596,22 +625,27 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 		}
 		cost := service.ComputeClientCost(base, perGB, quota)
 		if cost > 0 {
-			if _, err := a.walletService.Debit(user.Id, cost, "reset traffic: "+email); err != nil {
-				if errors.Is(err, service.ErrInsufficientBalance) {
+			// Workspace pool: a customer's reset also draws their manager's balance.
+			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "reset traffic: "+email,
+				service.TxMeta{Source: model.TxSourcePurchase})
+			if derr != nil {
+				if errors.Is(derr, service.ErrInsufficientBalance) {
 					pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
 					return
 				}
-				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
 				return
 			}
 			charged = cost
+			chargedManager = mid
 		}
 	}
 
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
 	if err != nil {
 		if charged > 0 {
-			if _, refundErr := a.walletService.Credit(user.Id, charged, "refund (reset failed): "+email); refundErr != nil {
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedManager, charged, "refund (reset failed): "+email,
+				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund reset-traffic charge:", refundErr)
 			}
 		}

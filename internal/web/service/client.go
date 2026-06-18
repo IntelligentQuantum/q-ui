@@ -73,6 +73,9 @@ type ClientCreatePayload struct {
 	// OwnerId is set server-side from the session (json:"-" so a caller can
 	// never spoof ownership). 0 leaves the client unowned.
 	OwnerId int `json:"-"`
+	// TenantId confines the client to a Manager's workspace (0 = global/admin).
+	// Set server-side from the creator's tenant; never from client input.
+	TenantId int `json:"-"`
 }
 
 const sqlInChunk = 400

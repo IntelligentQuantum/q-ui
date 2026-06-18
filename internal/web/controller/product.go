@@ -10,13 +10,14 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
 
 // ProductController exposes the product catalog. Browsing requires product.view
-// (every role); mutating requires product.manage (admin + moderator). All
-// gating is enforced here on the backend regardless of what the SPA shows.
+// (every role); mutating requires product.manage (admin + manager, on their own
+// storefront). All gating is enforced here on the backend regardless of the SPA.
 type ProductController struct {
 	BaseController
 	productService service.ProductService
@@ -50,12 +51,16 @@ func (a *ProductController) initRouter(g *gin.RouterGroup) {
 // role (audience "all" or their own role) — the store view.
 func (a *ProductController) list(c *gin.Context) {
 	user := session.GetLoginUser(c)
-	manager := user != nil && user.Can(model.PermProductManage)
+	// The catalog shown is the STOREFRONT being browsed (the /panel/manager/<slug>
+	// URL, or the admin store at /panel/). The full management view (incl. inactive
+	// products) only applies on the caller's OWN storefront; on someone else's
+	// store they're a buyer (active products, audience-filtered).
+	manage := user != nil && user.Can(model.PermProductManage) && tenant.IsOwnStorefront(c)
 	audience := ""
-	if !manager && user != nil {
+	if !manage && user != nil {
 		audience = user.CanonicalRole() // reseller | member -> only "all" + their role
 	}
-	products, err := a.productService.List(!manager, audience)
+	products, err := a.productService.List(!manage, audience, tenant.ViewScope(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -69,13 +74,16 @@ func (a *ProductController) get(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	p, err := a.productService.Get(id)
+	p, err := a.productService.Get(id, tenant.ViewScope(c))
 	if err != nil {
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
 		return
 	}
-	// Buyers may only fetch active products targeted at their role; managers any.
-	if user := session.GetLoginUser(c); user == nil || !user.Can(model.PermProductManage) {
+	// On the caller's own storefront a manager/admin may fetch any product;
+	// otherwise (browsing a store) only active products targeted at their role.
+	user := session.GetLoginUser(c)
+	canManageHere := user != nil && user.Can(model.PermProductManage) && tenant.IsOwnStorefront(c)
+	if !canManageHere {
 		if p.Status != model.ProductActive || !service.ProductAudienceAllows(p.Audience, roleOf(user)) {
 			pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
 			return
@@ -102,7 +110,7 @@ func (a *ProductController) create(c *gin.Context) {
 	if user := session.GetLoginUser(c); user != nil {
 		createdBy = user.Id
 	}
-	p, err := a.productService.Create(in, createdBy)
+	p, err := a.productService.Create(in, createdBy, tenant.ScopeFrom(c))
 	if err != nil {
 		if errors.Is(err, service.ErrInvalidProduct) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "somethingWentWrong"))
@@ -128,10 +136,10 @@ func (a *ProductController) update(c *gin.Context) {
 	// Capture the product's previous inbound set so we can re-sync existing
 	// purchased configs to any inbounds added/removed by this edit.
 	var oldInbounds []int
-	if old, oerr := a.productService.Get(id); oerr == nil {
+	if old, oerr := a.productService.Get(id, tenant.ScopeFrom(c)); oerr == nil {
 		oldInbounds = []int(old.InboundIds)
 	}
-	p, err := a.productService.Update(id, in)
+	p, err := a.productService.Update(id, in, tenant.ScopeFrom(c))
 	if err != nil {
 		if errors.Is(err, service.ErrProductNotFound) || errors.Is(err, service.ErrInvalidProduct) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "somethingWentWrong"))
@@ -163,7 +171,7 @@ func (a *ProductController) delete(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.productService.Delete(id); err != nil {
+	if err := a.productService.Delete(id, tenant.ScopeFrom(c)); err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
 			return
@@ -189,7 +197,7 @@ func (a *ProductController) setStatus(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	if err := a.productService.SetStatus(id, form.Active); err != nil {
+	if err := a.productService.SetStatus(id, form.Active, tenant.ScopeFrom(c)); err != nil {
 		if errors.Is(err, service.ErrProductNotFound) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
 			return

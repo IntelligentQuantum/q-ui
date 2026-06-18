@@ -91,6 +91,16 @@ func (s *ReferralService) Attribute(referredUserID int, code string) error {
 	}
 
 	db := database.GetDB()
+	// Referrals never cross workspaces: a code only attributes a user who
+	// registered in the SAME workspace as the reseller. (A reseller in workspace A
+	// cannot earn commission on a signup in workspace B — they are unrelated.)
+	var referred model.User
+	if err := db.Select("tenant_id").Where("id = ?", referredUserID).First(&referred).Error; err != nil {
+		return err
+	}
+	if referred.TenantId != reseller.TenantId {
+		return nil
+	}
 	return db.Transaction(func(tx *gorm.DB) error {
 		// Immutability: never overwrite an existing attribution.
 		var existing int64
@@ -104,6 +114,7 @@ func (s *ReferralService) Attribute(referredUserID int, code string) error {
 		}
 		ref := &model.Referral{
 			ResellerId:     reseller.Id,
+			TenantId:       reseller.TenantId, // attribution belongs to the reseller's workspace
 			ReferredUserId: referredUserID,
 			ReferralCode:   s.NormalizeCode(code),
 		}

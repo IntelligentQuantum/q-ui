@@ -174,7 +174,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	if webDomain != "" {
-		engine.Use(middleware.DomainValidatorMiddleware(webDomain))
+		engine.Use(middleware.DomainValidatorMiddleware(webDomain, &service.TenantService{}))
 	}
 
 	secret, err := s.settingService.GetSecret()
@@ -261,8 +261,23 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 		c.JSON(http.StatusOK, gin.H{})
 	})
 
-	// Add a catch-all route to handle undefined paths and return 404
+	// SPA fallback + 404. Multi-tenancy: a Manager's panel lives at /panel/<slug>
+	// (and /panel/<slug>/<page>), where <slug> is dynamic and has no dedicated
+	// route — Gin can't mount a catch-all next to the static /panel/<page> routes,
+	// so we serve the SPA shell here for any unmatched GET HTML navigation under
+	// /panel/. API/setting/xray routes are matched before this and never reach it;
+	// we still exclude the /panel/api prefix defensively so an unknown API path
+	// 404s as JSON-less 404 rather than returning HTML. Everything else 404s.
+	panelPrefix := basePath + "panel/"
+	apiPrefix := basePath + "panel/api"
 	engine.NoRoute(func(c *gin.Context) {
+		p := c.Request.URL.Path
+		if c.Request.Method == http.MethodGet &&
+			strings.HasPrefix(p, panelPrefix) &&
+			!strings.HasPrefix(p, apiPrefix) {
+			controller.ServePanelSPA(c)
+			return
+		}
 		c.AbortWithStatus(http.StatusNotFound)
 	})
 
@@ -333,6 +348,10 @@ func (s *Server) startTask(restartXray bool) {
 	// Reconcile product-sold configs to their product's current inbounds, repairing
 	// any client that drifted (missed an update / node outage / partial sync).
 	s.cron.AddJob("@every 10m", job.NewProductReconcileJob())
+
+	// Roll Manager-workspace client traffic up into per-tenant bandwidth usage
+	// (admin allocation view + provisioning quota guard).
+	s.cron.AddJob("@every 10m", job.NewTenantBandwidthJob())
 	// Outbound subscription auto-refresh (respects per-sub updateInterval)
 	s.cron.AddJob(cadenceOutboundSub, job.NewOutboundSubscriptionJob())
 

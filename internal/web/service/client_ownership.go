@@ -21,6 +21,17 @@ func (s *ClientService) GetOwnerByEmail(email string) (int, error) {
 	return rec.OwnerId, nil
 }
 
+// GetClientScopeByEmail returns the owner_id and tenant_id of the client with
+// the given email. Used by the controller to authorize a mutation: a manager may
+// act on any client in their tenant; a reseller/member only on clients they own.
+func (s *ClientService) GetClientScopeByEmail(email string) (ownerId, tenantId int, err error) {
+	var rec model.ClientRecord
+	if e := database.GetDB().Select("owner_id, tenant_id").Where("email = ?", email).First(&rec).Error; e != nil {
+		return 0, 0, e
+	}
+	return rec.OwnerId, rec.TenantId, nil
+}
+
 // GetOwnerBySubID returns the owner_id of the client owning the given subId.
 func (s *ClientService) GetOwnerBySubID(subID string) (int, error) {
 	var rec model.ClientRecord

@@ -77,11 +77,14 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
 // from request input, so a caller cannot purchase as someone else). name is the
 // buyer-chosen config name (the client "email"); blank falls back to an
 // auto-generated name.
-func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (*model.Order, error) {
+func (s *OrderService) Purchase(buyer *model.User, productId int, name string, view model.Scope) (*model.Order, error) {
 	if buyer == nil {
 		return nil, ErrBuyerRequired
 	}
-	product, err := s.productService.Get(productId)
+	// The product is bought from the STOREFRONT being browsed (view scope), so a
+	// customer on /panel/manager/<slug> buys that manager's product; the sale is
+	// attributed to that workspace and draws its pool.
+	product, err := s.productService.Get(productId, view)
 	if err != nil || product.Status != model.ProductActive {
 		return nil, ErrProductUnavailable
 	}
@@ -92,32 +95,38 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
 	}
 
 	var charged int64
+	var chargedManager int
 	if product.Price > 0 {
-		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
+		// Workspace pool: buying from a manager's storefront also draws down that
+		// manager's balance, so the storefront's pool must be funded too.
+		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id),
-			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
-			return nil, err // ErrInsufficientBalance bubbles up to the controller
+			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username})
+		if derr != nil {
+			return nil, derr // ErrInsufficientBalance bubbles up to the controller
 		}
 		charged = product.Price
+		chargedManager = mid
 	}
 
 	order := &model.Order{
 		UserId:      buyer.Id,
+		TenantId:    view.TenantID, // the storefront the sale belongs to
 		ProductId:   product.Id,
 		ProductName: product.Name,
 		Amount:      product.Price,
 		Status:      model.OrderPending,
 	}
 	if err := database.GetDB().Create(order).Error; err != nil {
-		s.refund(buyer.Id, charged, product)
+		s.refund(buyer.Id, chargedManager, charged, product)
 		return nil, err
 	}
 
 	// Provision a real Xray config when the product targets one or more inbounds.
 	if len(product.InboundIds) > 0 {
-		email, provErr := s.provision(buyer, product, order.Id, name)
+		email, provErr := s.provision(buyer, product, order.Id, name, view.TenantID)
 		if provErr != nil {
-			s.refund(buyer.Id, charged, product)
+			s.refund(buyer.Id, chargedManager, charged, product)
 			_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 				Update("status", model.OrderCancelled).Error
 			return nil, provErr
@@ -142,11 +151,11 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string) (
 // "change plan" (a different product). Refunds and cancels on failure.
 //
 // Ownership: the buyer must own the target service (admins may act on any).
-func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*model.Order, error) {
+func (s *OrderService) Renew(buyer *model.User, productId int, email string, view model.Scope) (*model.Order, error) {
 	if buyer == nil {
 		return nil, ErrBuyerRequired
 	}
-	product, err := s.productService.Get(productId)
+	product, err := s.productService.Get(productId, view)
 	if err != nil || product.Status != model.ProductActive {
 		return nil, ErrProductUnavailable
 	}
@@ -164,17 +173,21 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 	}
 
 	var charged int64
+	var chargedManager int
 	if product.Price > 0 {
-		if _, err := s.walletService.DebitWithMeta(buyer.Id, product.Price,
+		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id),
-			TxMeta{Source: model.TxSourceRenewal, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username}); err != nil {
-			return nil, err
+			TxMeta{Source: model.TxSourceRenewal, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username})
+		if derr != nil {
+			return nil, derr
 		}
 		charged = product.Price
+		chargedManager = mid
 	}
 
 	order := &model.Order{
 		UserId:      buyer.Id,
+		TenantId:    view.TenantID,
 		ProductId:   product.Id,
 		ProductName: product.Name,
 		Amount:      product.Price,
@@ -182,12 +195,12 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string) (*m
 		ClientEmail: email,
 	}
 	if err := database.GetDB().Create(order).Error; err != nil {
-		s.refund(buyer.Id, charged, product)
+		s.refund(buyer.Id, chargedManager, charged, product)
 		return nil, err
 	}
 
 	if err := s.applyPlan(email, product); err != nil {
-		s.refund(buyer.Id, charged, product)
+		s.refund(buyer.Id, chargedManager, charged, product)
 		_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 			Update("status", model.OrderCancelled).Error
 		return nil, err
@@ -309,21 +322,23 @@ func (s *OrderService) subURIBase(host string) string {
 	return base + subPath
 }
 
-func (s *OrderService) refund(userId int, amount int64, product *model.Product) {
+func (s *OrderService) refund(userId, managerId int, amount int64, product *model.Product) {
 	if amount <= 0 {
 		return
 	}
-	if _, err := s.walletService.CreditWithMeta(userId, amount,
+	// Symmetric to DebitWorkspacePurchase: refund the buyer AND the workspace
+	// manager (when one was charged), so a failed order never leaves either short.
+	if err := s.walletService.RefundWorkspacePurchase(userId, managerId, amount,
 		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id),
 		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
-		logger.Errorf("order: refund of %d to user %d failed (manual reconciliation needed): %v", amount, userId, err)
+		logger.Errorf("order: refund of %d to user %d (manager %d) failed (manual reconciliation needed): %v", amount, userId, managerId, err)
 	}
 }
 
 // provision creates a buyer-owned Xray client on the product's inbound(s), sized
 // by the product's traffic limit and duration. The single config is attached to
 // every inbound the product targets. Returns the client's email.
-func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int, name string) (string, error) {
+func (s *OrderService) provision(buyer *model.User, product *model.Product, orderId int, name string, tenantID int) (string, error) {
 	var expiry int64
 	if product.DurationDays > 0 {
 		expiry = time.Now().AddDate(0, 0, product.DurationDays).UnixMilli()
@@ -351,6 +366,7 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 		},
 		InboundIds: []int(product.InboundIds),
 		OwnerId:    buyer.Id,
+		TenantId:   tenantID, // the storefront the service was sold from
 	}
 	needRestart, err := s.clientService.Create(&s.inboundService, payload)
 	if err != nil {
@@ -410,37 +426,52 @@ func buildClientEmail(username string, orderId int) string {
 // ListOrders returns orders newest-first. When userId is non-nil results are
 // scoped to that user (the ownership filter for resellers/members); nil returns
 // every order (admin / moderator view).
-func (s *OrderService) ListOrders(userId *int, limit, offset int) ([]model.Order, error) {
+// OrderView is an order enriched with the buyer's identity so the orders list can
+// show WHO each order belongs to (username/email), not just the config name.
+type OrderView struct {
+	model.Order
+	Username  string `json:"username"`
+	UserEmail string `json:"userEmail"`
+}
+
+func (s *OrderService) ListOrders(userId *int, limit, offset int, scope model.Scope) ([]OrderView, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	q := database.GetDB().Model(&model.Order{}).Order("id DESC").Limit(limit).Offset(offset)
+	// Join users so each row carries the buyer. ApplyCol qualifies tenant_id with
+	// the "o" alias (a bare tenant_id would be ambiguous across the join).
+	q := scope.ApplyCol(database.GetDB().
+		Table("orders AS o").
+		Select("o.*, u.username AS username, u.email AS user_email").
+		Joins("LEFT JOIN users u ON u.id = o.user_id"), "o.tenant_id").
+		Order("o.id DESC").Limit(limit).Offset(offset)
 	if userId != nil {
-		q = q.Where("user_id = ?", *userId)
+		q = q.Where("o.user_id = ?", *userId)
 	}
-	var orders []model.Order
-	if err := q.Find(&orders).Error; err != nil {
+	var orders []OrderView
+	if err := q.Scan(&orders).Error; err != nil {
 		return nil, err
 	}
 	return orders, nil
 }
 
-// Get loads a single order by id.
-func (s *OrderService) Get(id int) (*model.Order, error) {
+// Get loads a single order by id within the caller's tenant scope.
+func (s *OrderService) Get(id int, scope model.Scope) (*model.Order, error) {
 	var o model.Order
-	if err := database.GetDB().Where("id = ?", id).First(&o).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&o).Error; err != nil {
 		return nil, ErrOrderNotFound
 	}
 	return &o, nil
 }
 
 // GetOrderOwner returns the user_id that owns an order, for ownership checks.
-func (s *OrderService) GetOrderOwner(id int) (int, error) {
+// Scoped so an order in another tenant reads as not-found.
+func (s *OrderService) GetOrderOwner(id int, scope model.Scope) (int, error) {
 	var o model.Order
-	if err := database.GetDB().Select("user_id").Where("id = ?", id).First(&o).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Select("user_id").Where("id = ?", id).First(&o).Error; err != nil {
 		return 0, ErrOrderNotFound
 	}
 	return o.UserId, nil

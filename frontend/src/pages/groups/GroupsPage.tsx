@@ -597,7 +597,7 @@ export default function GroupsPage()
                     data={filteredGroups}
                     rowKey={(row) => row.name}
                     loading={loading}
-                    pageSize={15}
+                    pageSize={10}
                     empty={
                       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
                         <Tags className="h-8 w-8 opacity-50" aria-hidden />

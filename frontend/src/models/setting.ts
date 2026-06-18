@@ -12,7 +12,7 @@ export class AllSetting
     public sessionMaxAge = 360;
     public trustedProxyCIDRs = '127.0.0.1/32,::1/128';
     public panelProxy = '';
-    public pageSize = 25;
+    public pageSize = 10;
     public expireDiff = 0;
     public trafficDiff = 0;
     public remarkModel = '-io';

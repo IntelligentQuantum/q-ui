@@ -128,7 +128,13 @@
     "support": "میز پشتیبانی",
     "finance": "مالی",
     "reports": "گزارش‌ها",
-    "operate": "عملیات"
+    "operate": "عملیات",
+    "managers": "مدیران",
+    "workspaceSettings": "فضای کاری",
+    "tenantUsers": "مشتریان",
+    "workspacePayments": "پرداخت‌ها",
+    "myWorkspace": "فضای کاری من",
+    "originalPanel": "پنل اصلی"
   },
   "pages": {
     "login": {
@@ -866,7 +872,8 @@
         "bulkAdjustedMixed": "{ok} تنظیم، {skipped} رد شد",
         "delDepleted": "{count} کلاینت اتمام‌یافته حذف شد",
         "insufficientBalance": "موجودی ناکافی",
-        "forbidden": "شما اجازه دسترسی به این منبع را ندارید."
+        "forbidden": "شما اجازه دسترسی به این منبع را ندارید.",
+        "bandwidthExhausted": "سهمیه پهنای باند فضای کاری به پایان رسیده — از ادمین بخواهید شارژ کند"
       },
       "name": "نام",
       "owner": "مالک",
@@ -1266,7 +1273,8 @@
         "zarinpalSandbox": "حالت آزمایشی زرین‌پال",
         "zarinpalSandboxDesc": "برای آزمایش، به‌جای پرداخت‌های واقعی از نقطه پایانی آزمایشی زرین‌پال استفاده کنید.",
         "referralCommission": "پورسانت معرفی (٪)",
-        "referralCommissionDesc": "درصدی از خرید فروشگاهی کاربر معرفی‌شده که به‌عنوان پورسانت به کیف پول نماینده معرف برمی‌گردد (۰ پرداخت‌ها را غیرفعال می‌کند)."
+        "referralCommissionDesc": "درصدی از خرید فروشگاهی کاربر معرفی‌شده که به‌عنوان پورسانت به کیف پول نماینده معرف برمی‌گردد (۰ پرداخت‌ها را غیرفعال می‌کند).",
+        "roleManager": "مدیر"
       },
       "toasts": {
         "modifySettings": "پارامترها تغییر کرده‌اند.",
@@ -1366,7 +1374,8 @@
       "panelTitle": "عنوان پنل",
       "panelTitleDesc": "نام برندی که در صفحه ورود، ثبت‌نام و نوار کناری نمایش داده می‌شود. برای استفاده از پیش‌فرض (Q-UI) خالی بگذارید.",
       "panelProxy": "پراکسی پنل",
-      "panelProxyDesc": "پراکسی خروجی اختیاری که پنل برای درخواست‌های خروجی خود استفاده می‌کند (به‌روزرسانی خودکار، بررسی نسخه‌های گیت‌هاب و غیره)."
+      "panelProxyDesc": "پراکسی خروجی اختیاری که پنل برای درخواست‌های خروجی خود استفاده می‌کند (به‌روزرسانی خودکار، بررسی نسخه‌های گیت‌هاب و غیره).",
+      "managerSettings": "تنظیمات مدیر"
     },
     "xray": {
       "title": "پیکربندی ایکس‌ری",
@@ -1994,10 +2003,11 @@
       "trackingPlaceholder": "کد رهگیری / شماره پیگیری انتقال بانکی",
       "depositDate": "تاریخ واریز",
       "depositTime": "ساعت واریز",
+      "depositedAt": "تاریخ و ساعت واریز",
       "descriptionLabel": "توضیحات",
-      "descriptionPlaceholder": "یادداشت اختیاری برای بررسی‌کننده",
+      "descriptionPlaceholder": "یادداشت برای بررسی‌کننده",
       "receipt": "تصویر رسید",
-      "receiptHint": "JPG، PNG یا WEBP — حداکثر ۵ مگابایت. اختیاری.",
+      "receiptHint": "JPG، PNG یا WEBP — حداکثر ۵ مگابایت. الزامی.",
       "chooseFile": "انتخاب فایل",
       "removeFile": "حذف",
       "submit": "ثبت درخواست",
@@ -2014,6 +2024,7 @@
       "toasts": {
         "submitted": "درخواست واریز شما ثبت شد و در انتظار بررسی است.",
         "invalidAmount": "لطفاً مبلغ معتبری وارد کنید.",
+        "fieldsRequired": "لطفاً همه فیلدها را پر کنید و رسید را پیوست کنید.",
         "duplicate": "درخواست واریزی با این شماره پیگیری از قبل وجود دارد.",
         "receiptTooLarge": "حجم تصویر رسید بیش از حد است (حداکثر ۵ مگابایت).",
         "receiptType": "نوع رسید پشتیبانی نمی‌شود. از JPG، PNG یا WEBP استفاده کنید.",
@@ -2124,6 +2135,7 @@
     },
     "orders": {
       "product": "محصول",
+      "customer": "مشتری",
       "config": "کانفیگ",
       "amount": "مبلغ",
       "status": "وضعیت",
@@ -2305,7 +2317,8 @@
       "totalUsers": "کل کاربران",
       "admins": "مدیران",
       "resellers": "نمایندگان",
-      "totalBalance": "موجودی کل"
+      "totalBalance": "موجودی کل",
+      "role_manager": "مدیر"
     },
     "profile": {
       "accountTitle": "حساب کاربری",
@@ -2389,6 +2402,111 @@
       "topResellersTitle": "نمایندگان برتر",
       "noActivity": "در ۳۰ روز اخیر هیچ درآمد یا هزینه‌ای ثبت نشده است.",
       "noResellers": "هنوز هزینه‌ای از سوی نمایندگان ثبت نشده است."
+    },
+    "managers": {
+      "title": "فضاهای کاری مدیران",
+      "addManager": "افزودن فضای کاری",
+      "slug": "شناسه",
+      "slugHint": "حروف کوچک، ارقام و خط تیره. در آدرس استفاده می‌شود: /panel/<slug>.",
+      "name": "نام",
+      "manager": "مدیر",
+      "status": "وضعیت",
+      "status_active": "فعال",
+      "status_suspended": "معلق",
+      "users": "کاربران",
+      "bandwidth": "پهنای باند (مصرف / سهمیه)",
+      "unlimited": "نامحدود",
+      "allocateBandwidth": "تخصیص پهنای باند",
+      "suspend": "تعلیق",
+      "activate": "فعال‌سازی",
+      "rotateKey": "تعویض کلید API",
+      "totalWorkspaces": "فضاهای کاری",
+      "activeWorkspaces": "فعال",
+      "totalTenantUsers": "کاربران مستأجر",
+      "quotaGb": "سهمیه (گیگابایت)",
+      "quotaHint": "برای پهنای باند نامحدود، عدد ۰ را وارد کنید.",
+      "bandwidthTitle": "تخصیص پهنای باند — {name}",
+      "apiKeyTitle": "کلید API",
+      "apiKeyHint": "این کلید را همین حالا کپی کنید — فقط یک‌بار نمایش داده می‌شود و بعداً قابل بازیابی نیست.",
+      "rotateConfirmTitle": "کلید API برای {name} تعویض شود؟",
+      "rotateConfirmContent": "کلید فعلی بلافاصله از کار می‌افتد. کلید جدید یک‌بار نمایش داده می‌شود.",
+      "deleteConfirmTitle": "فضای کاری {name} حذف شود؟",
+      "deleteConfirmContent": "حساب مدیر حذف می‌شود. داده‌های فضای کاری حفظ شده و برای ادمین قابل مشاهده می‌ماند.",
+      "toasts": {
+        "created": "فضای کاری ایجاد شد",
+        "slugInvalid": "شناسه نامعتبر است (رزرو‌شده یا قالب اشتباه)",
+        "slugTaken": "این شناسه قبلاً استفاده شده است",
+        "notFound": "فضای کاری یافت نشد",
+        "bandwidthUpdated": "پهنای باند به‌روزرسانی شد",
+        "statusUpdated": "وضعیت به‌روزرسانی شد",
+        "deleted": "فضای کاری حذف شد",
+        "domainUpdated": "دامنه به‌روزرسانی شد",
+        "domainInvalid": "دامنه نامعتبر است",
+        "domainTaken": "این دامنه قبلاً استفاده شده است",
+        "balanceUpdated": "موجودی فضای کاری به‌روزرسانی شد"
+      },
+      "setDomain": "تنظیم دامنه",
+      "domain": "دامنه اختصاصی",
+      "domainHint": "این دامنه/زیر‌دامنه را به پنل اشاره دهید؛ برای حذف خالی بگذارید.",
+      "domainTitle": "دامنه اختصاصی — {name}",
+      "openWorkspace": "ورود به فضای کاری",
+      "impersonating": "مشاهده فضای کاری {name} به عنوان ادمین",
+      "exitImpersonation": "خروج",
+      "viewDetails": "مشاهده جزئیات",
+      "detailsTitle": "فضای کاری — {name}",
+      "customers": "مشتریان",
+      "revenue": "درآمد",
+      "managerBalance": "موجودی مدیر",
+      "pendingDeposits": "واریزهای در انتظار",
+      "openTickets": "تیکت‌های باز",
+      "workspaceBalance": "موجودی فضای کاری",
+      "chargeBalance": "شارژ موجودی",
+      "chargeTitle": "شارژ موجودی فضای کاری — {name}",
+      "currentBalance": "موجودی فعلی"
+    },
+    "tenantUsers": {
+      "toasts": {
+        "forbidden": "این کاربر خارج از فضای کاری شماست",
+        "roleForbidden": "شما فقط می‌توانید حساب‌های عضو و فروشنده را مدیریت کنید"
+      }
+    },
+    "workspaceSettings": {
+      "title": "تنظیمات فضای کاری",
+      "branding": "برندینگ",
+      "brandTitle": "عنوان برند",
+      "brandLogo": "نشانی لوگو",
+      "brandFavicon": "نشانی فاوآیکون",
+      "urlHint": "یک نشانی اینترنتی در دسترس عموم.",
+      "theme": "پوسته",
+      "themeSystem": "سیستم",
+      "themeLight": "روشن",
+      "themeDark": "تیره",
+      "access": "دسترسی",
+      "registrationEnable": "اجازه ثبت‌نام",
+      "registrationHint": "به مشتریان جدید اجازه دهید در فضای کاری شما ثبت‌نام کنند.",
+      "subscription": "اشتراک",
+      "ticketCategories": "دسته‌بندی تیکت‌ها",
+      "subTitle": "عنوان اشتراک",
+      "subTitleHint": "در صفحه اشتراک مشتریان شما نمایش داده می‌شود.",
+      "toasts": {
+        "saved": "تنظیمات فضای کاری ذخیره شد"
+      },
+      "workspaceUrl": "نشانی فضای کاری",
+      "slug": "شناسه",
+      "slugHint": "پنل شما در /panel/manager/<slug> قرار دارد. حروف کوچک، ارقام و خط تیره."
+    },
+    "workspacePayments": {
+      "title": "درگاه‌های پرداخت",
+      "zarinpal": "زرین‌پال",
+      "enable": "فعال",
+      "zarinpalMerchant": "شناسه پذیرنده",
+      "zarinpalCurrency": "واحد پول",
+      "sandbox": "حالت آزمایشی",
+      "plisio": "پلیزیو (کریپتو)",
+      "plisioSecret": "کلید مخفی",
+      "toasts": {
+        "saved": "تنظیمات پرداخت ذخیره شد"
+      }
     }
   },
   "tgbot": {

@@ -1,5 +1,6 @@
-import { useEffect, useId, useMemo, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from './cn';
 import { ChevronDownIcon, CheckIcon, XIcon } from './icons';
 
@@ -27,7 +28,8 @@ export interface MultiSelectProps {
  * Multi-select listbox (replaces antd `<Select mode="multiple">`). Selected
  * values render as removable chips inside an input-styled box; the dropdown
  * lists options with a check toggle. Token-only, RTL-safe, hand-built. The
- * popup is absolutely positioned under the trigger.
+ * popup is PORTALLED to <body> with fixed positioning so it floats above a
+ * scrollable Modal body instead of being clipped inside it.
  */
 export function MultiSelect({
     value,
@@ -45,7 +47,9 @@ export function MultiSelect({
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(-1);
+    const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLUListElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
     const listId = useId();
 
@@ -65,6 +69,32 @@ export function MultiSelect({
         return options.filter((o) => (typeof o.label === 'string' ? o.label.toLowerCase().includes(q) : true));
     }, [options, query]);
 
+    // Position the portalled menu under the trigger; realign on scroll/resize.
+    useLayoutEffect(() =>
+    {
+        if (!open)
+        {
+            setMenuPos(null);
+            return;
+        }
+        const place = () =>
+        {
+            const r = rootRef.current?.getBoundingClientRect();
+            if (r)
+            {
+                setMenuPos({ top: r.bottom + 6, left: r.left, width: r.width });
+            }
+        };
+        place();
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
+        return () =>
+        {
+            window.removeEventListener('scroll', place, true);
+            window.removeEventListener('resize', place);
+        };
+    }, [open]);
+
     useEffect(() =>
     {
         if (!open)
@@ -74,7 +104,8 @@ export function MultiSelect({
         setActive(0);
         const onDoc = (e: MouseEvent) =>
         {
-            if (!rootRef.current?.contains(e.target as Node))
+            const target = e.target as Node;
+            if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target))
             {
                 setOpen(false);
                 setQuery('');
@@ -230,13 +261,15 @@ export function MultiSelect({
         />
       </div>
 
-      {open && (
+      {open && menuPos && createPortal(
         <ul
+          ref={menuRef}
           role="listbox"
           id={listId}
           aria-multiselectable
           tabIndex={-1}
-          className="absolute z-[var(--z-dropdown)] mt-1.5 max-h-60 w-full overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
+          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[var(--z-popover)] max-h-60 overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
         >
           {filtered.length === 0 && (
             <li className="px-2.5 py-2 text-sm text-muted-foreground">—</li>
@@ -277,7 +310,8 @@ export function MultiSelect({
               </li>
               );
           })}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
     );

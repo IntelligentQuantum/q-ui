@@ -19,11 +19,12 @@ import (
 // configured Plisio secret key instead. It is the only place a crypto deposit is
 // credited, and it is idempotent so replays/duplicates never double-credit.
 type PlisioWebhookController struct {
-	plisioService  service.PlisioService
-	paymentService service.PaymentService
-	walletService  service.WalletService
-	settingService service.SettingService
-	userService    service.UserService
+	plisioService        service.PlisioService
+	paymentService       service.PaymentService
+	walletService        service.WalletService
+	settingService       service.SettingService
+	tenantSettingService service.TenantSettingService
+	userService          service.UserService
 }
 
 // NewPlisioWebhookController registers the public callback route on the base
@@ -42,19 +43,11 @@ func (a *PlisioWebhookController) callback(c *gin.Context) {
 	}
 	form := c.Request.PostForm
 
-	enabled, _ := a.settingService.GetPlisioEnable()
-	secret, _ := a.settingService.GetPlisioSecretKey()
-	if !enabled || strings.TrimSpace(secret) == "" {
-		c.AbortWithStatus(http.StatusNotFound)
-		return
-	}
-	// 1. Authenticity: reject forged/replayed callbacks with a bad signature.
-	if !a.plisioService.VerifyCallback(form, secret) {
-		logger.Warning("plisio webhook: signature verification failed")
-		c.AbortWithStatus(http.StatusUnauthorized)
-		return
-	}
-
+	// Resolve the order FIRST (by our own UUID order_number) so we know which
+	// tenant's Plisio secret to verify against. Multi-tenancy: a Manager's crypto
+	// payments are signed with the Manager's own secret, not a shared one. The
+	// lookup is safe pre-verification — order_number is an unguessable UUID and we
+	// only ACK (never mutate) on a miss.
 	orderNumber := form.Get("order_number")
 	txnID := form.Get("txn_id")
 	status := form.Get("status")
@@ -63,6 +56,19 @@ func (a *PlisioWebhookController) callback(c *gin.Context) {
 	if err != nil || payment.Gateway != "plisio" {
 		// Unknown order — acknowledge so Plisio stops retrying; nothing to do.
 		c.JSON(http.StatusOK, gin.H{"success": true})
+		return
+	}
+
+	cfg := a.tenantSettingService.PlisioConfig(payment.TenantId)
+	if !cfg.Enabled || strings.TrimSpace(cfg.Secret) == "" {
+		c.AbortWithStatus(http.StatusNotFound)
+		return
+	}
+	// Authenticity: reject forged/replayed callbacks with a bad signature, using
+	// the owning tenant's secret.
+	if !a.plisioService.VerifyCallback(form, cfg.Secret) {
+		logger.Warning("plisio webhook: signature verification failed")
+		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
 

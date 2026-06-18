@@ -739,7 +739,7 @@ export default function OutboundsTab({
             onTest={onTest}
           />
         ) : (
-          <Table columns={columns} data={rows} rowKey={(r) => String(r.key)} pageSize={15} />
+          <Table columns={columns} data={rows} rowKey={(r) => String(r.key)} pageSize={10} />
         )}
 
         {/* Subscription outbounds (read-only, merged at runtime) */}

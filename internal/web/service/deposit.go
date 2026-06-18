@@ -109,8 +109,8 @@ func (in *CardInput) normalize() {
 // ListCards returns payment cards ordered for display. When activeOnly is true
 // only active cards are returned (the buyer view); otherwise every card is
 // returned (the admin view).
-func (s *DepositService) ListCards(activeOnly bool) ([]model.PaymentCard, error) {
-	q := database.GetDB().Model(&model.PaymentCard{}).Order("display_order asc, id asc")
+func (s *DepositService) ListCards(activeOnly bool, scope model.Scope) ([]model.PaymentCard, error) {
+	q := scope.Apply(database.GetDB().Model(&model.PaymentCard{})).Order("display_order asc, id asc")
 	if activeOnly {
 		q = q.Where("status = ?", model.PaymentCardActive)
 	}
@@ -122,9 +122,9 @@ func (s *DepositService) ListCards(activeOnly bool) ([]model.PaymentCard, error)
 }
 
 // GetCard loads a single payment card.
-func (s *DepositService) GetCard(id int) (*model.PaymentCard, error) {
+func (s *DepositService) GetCard(id int, scope model.Scope) (*model.PaymentCard, error) {
 	var card model.PaymentCard
-	if err := database.GetDB().Where("id = ?", id).First(&card).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&card).Error; err != nil {
 		if database.IsNotFound(err) {
 			return nil, ErrCardNotFound
 		}
@@ -134,12 +134,13 @@ func (s *DepositService) GetCard(id int) (*model.PaymentCard, error) {
 }
 
 // CreateCard adds a payment card. Card holder name and card number are required.
-func (s *DepositService) CreateCard(in CardInput) (*model.PaymentCard, error) {
+func (s *DepositService) CreateCard(in CardInput, scope model.Scope) (*model.PaymentCard, error) {
 	in.normalize()
 	if in.CardHolderName == "" || in.CardNumber == "" {
 		return nil, ErrInvalidCard
 	}
 	card := &model.PaymentCard{
+		TenantId:       scope.OwnerTenantID(),
 		Title:          in.Title,
 		CardHolderName: in.CardHolderName,
 		CardNumber:     in.CardNumber,
@@ -157,12 +158,12 @@ func (s *DepositService) CreateCard(in CardInput) (*model.PaymentCard, error) {
 
 // UpdateCard edits an existing payment card's details (status is changed via
 // SetCardStatus, not here).
-func (s *DepositService) UpdateCard(id int, in CardInput) (*model.PaymentCard, error) {
+func (s *DepositService) UpdateCard(id int, in CardInput, scope model.Scope) (*model.PaymentCard, error) {
 	in.normalize()
 	if in.CardHolderName == "" || in.CardNumber == "" {
 		return nil, ErrInvalidCard
 	}
-	card, err := s.GetCard(id)
+	card, err := s.GetCard(id, scope)
 	if err != nil {
 		return nil, err
 	}
@@ -173,7 +174,7 @@ func (s *DepositService) UpdateCard(id int, in CardInput) (*model.PaymentCard, e
 	card.Iban = in.Iban
 	card.AccountNumber = in.AccountNumber
 	card.DisplayOrder = in.DisplayOrder
-	if err := database.GetDB().Model(&model.PaymentCard{}).Where("id = ?", id).
+	if err := scope.Apply(database.GetDB().Model(&model.PaymentCard{})).Where("id = ?", id).
 		Updates(map[string]any{
 			"title":            card.Title,
 			"card_holder_name": card.CardHolderName,
@@ -189,12 +190,12 @@ func (s *DepositService) UpdateCard(id int, in CardInput) (*model.PaymentCard, e
 }
 
 // SetCardStatus activates/deactivates a card. Inactive cards are hidden from buyers.
-func (s *DepositService) SetCardStatus(id int, active bool) error {
+func (s *DepositService) SetCardStatus(id int, active bool, scope model.Scope) error {
 	status := model.PaymentCardInactive
 	if active {
 		status = model.PaymentCardActive
 	}
-	res := database.GetDB().Model(&model.PaymentCard{}).Where("id = ?", id).Update("status", status)
+	res := scope.Apply(database.GetDB().Model(&model.PaymentCard{})).Where("id = ?", id).Update("status", status)
 	if res.Error != nil {
 		return res.Error
 	}
@@ -205,8 +206,8 @@ func (s *DepositService) SetCardStatus(id int, active bool) error {
 }
 
 // DeleteCard removes a payment card.
-func (s *DepositService) DeleteCard(id int) error {
-	res := database.GetDB().Where("id = ?", id).Delete(&model.PaymentCard{})
+func (s *DepositService) DeleteCard(id int, scope model.Scope) error {
+	res := scope.Apply(database.GetDB()).Where("id = ?", id).Delete(&model.PaymentCard{})
 	if res.Error != nil {
 		return res.Error
 	}
@@ -289,6 +290,7 @@ func (s *DepositService) ReceiptFilePath(filename string) (string, error) {
 type DepositInput struct {
 	Amount         int64
 	TrackingNumber string
+	DepositedAt    string // buyer-reported transfer date+time (datetime-local string)
 	Description    string
 	ReceiptImage   string // stored filename, already validated+saved; may be empty
 }
@@ -296,7 +298,7 @@ type DepositInput struct {
 // CreateRequest records a new pending deposit. It rejects a non-positive amount
 // and a tracking number already used by any prior request (duplicate-submission
 // guard). The wallet is NOT touched here — only an approval credits it.
-func (s *DepositService) CreateRequest(userId int, in DepositInput) (*model.ManualDepositRequest, error) {
+func (s *DepositService) CreateRequest(userId int, in DepositInput, scope model.Scope) (*model.ManualDepositRequest, error) {
 	if userId <= 0 || in.Amount <= 0 {
 		return nil, ErrInvalidDeposit
 	}
@@ -313,8 +315,10 @@ func (s *DepositService) CreateRequest(userId int, in DepositInput) (*model.Manu
 	}
 	req := &model.ManualDepositRequest{
 		UserId:         userId,
+		TenantId:       scope.OwnerTenantID(),
 		Amount:         in.Amount,
 		TrackingNumber: tracking,
+		DepositedAt:    strings.TrimSpace(in.DepositedAt),
 		Description:    strings.TrimSpace(in.Description),
 		ReceiptImage:   in.ReceiptImage,
 		Status:         model.ManualDepositPending,
@@ -363,17 +367,17 @@ type ManualDepositView struct {
 // ListAll returns deposit requests for the admin review queue, optionally
 // filtered by status and a search term (matched against tracking number or
 // username), newest first.
-func (s *DepositService) ListAll(status, search string, limit, offset int) ([]ManualDepositView, error) {
+func (s *DepositService) ListAll(status, search string, limit, offset int, scope model.Scope) ([]ManualDepositView, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
 	if offset < 0 {
 		offset = 0
 	}
-	q := database.GetDB().
+	q := scope.ApplyCol(database.GetDB().
 		Table("manual_deposit_requests AS d").
 		Select("d.*, u.username AS username, u.role AS role").
-		Joins("LEFT JOIN users u ON u.id = d.user_id").
+		Joins("LEFT JOIN users u ON u.id = d.user_id"), "d.tenant_id").
 		Order("d.id desc").Limit(limit).Offset(offset)
 
 	switch status {
@@ -396,9 +400,9 @@ func (s *DepositService) ListAll(status, search string, limit, offset int) ([]Ma
 }
 
 // Get loads a single deposit request.
-func (s *DepositService) Get(id int) (*model.ManualDepositRequest, error) {
+func (s *DepositService) Get(id int, scope model.Scope) (*model.ManualDepositRequest, error) {
 	var req model.ManualDepositRequest
-	if err := database.GetDB().Where("id = ?", id).First(&req).Error; err != nil {
+	if err := scope.Apply(database.GetDB()).Where("id = ?", id).First(&req).Error; err != nil {
 		if database.IsNotFound(err) {
 			return nil, ErrDepositNotFound
 		}
@@ -413,23 +417,25 @@ func (s *DepositService) Get(id int) (*model.ManualDepositRequest, error) {
 // so concurrent/duplicate approvals can never double-credit. The status flip and
 // the ledger write share one DB transaction, so a credit failure rolls the whole
 // thing back and the request stays pending.
-func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest, error) {
-	// Surface a clear not-found/not-pending error before entering the tx.
-	if _, err := s.Get(id); err != nil {
+func (s *DepositService) Approve(adminId, id int, scope model.Scope) (*model.ManualDepositRequest, error) {
+	// Surface a clear not-found/not-pending error before entering the tx. The
+	// scoped Get also guarantees a manager can only approve their own tenant's
+	// deposits (a cross-tenant id reads as not-found).
+	if _, err := s.Get(id, scope); err != nil {
 		return nil, err
 	}
 
 	var result *model.ManualDepositRequest
 	err := s.walletService.withRetry(func(tx *gorm.DB) error {
 		var dep model.ManualDepositRequest
-		if e := tx.Where("id = ?", id).First(&dep).Error; e != nil {
+		if e := scope.Apply(tx).Where("id = ?", id).First(&dep).Error; e != nil {
 			return e
 		}
 		if dep.Status != model.ManualDepositPending {
 			return ErrDepositNotPending
 		}
 		now := time.Now().UnixMilli()
-		res := tx.Model(&model.ManualDepositRequest{}).
+		res := scope.Apply(tx.Model(&model.ManualDepositRequest{})).
 			Where("id = ? AND status = ?", id, model.ManualDepositPending).
 			Updates(map[string]any{
 				"status":      model.ManualDepositApproved,
@@ -485,16 +491,16 @@ func (s *DepositService) Approve(adminId, id int) (*model.ManualDepositRequest, 
 // Reject transitions a pending request to rejected with a reason. No balance is
 // credited. The CAS on status guarantees a request can't be rejected after it
 // was already approved (or vice versa).
-func (s *DepositService) Reject(adminId, id int, reason string) (*model.ManualDepositRequest, error) {
+func (s *DepositService) Reject(adminId, id int, reason string, scope model.Scope) (*model.ManualDepositRequest, error) {
 	reason = strings.TrimSpace(reason)
 	if reason == "" {
 		return nil, ErrInvalidDeposit
 	}
-	if _, err := s.Get(id); err != nil {
+	if _, err := s.Get(id, scope); err != nil {
 		return nil, err
 	}
 	now := time.Now().UnixMilli()
-	res := database.GetDB().Model(&model.ManualDepositRequest{}).
+	res := scope.Apply(database.GetDB().Model(&model.ManualDepositRequest{})).
 		Where("id = ? AND status = ?", id, model.ManualDepositPending).
 		Updates(map[string]any{
 			"status":           model.ManualDepositRejected,
@@ -510,7 +516,7 @@ func (s *DepositService) Reject(adminId, id int, reason string) (*model.ManualDe
 	}
 	logger.Infof("[audit] manual-deposit REJECTED: id=%d by-admin=%d reason=%q", id, adminId, reason)
 
-	req, gerr := s.Get(id)
+	req, gerr := s.Get(id, scope)
 	if gerr == nil {
 		// Notify the buyer their request was rejected, with the reason (best-effort).
 		_ = s.notificationService.Notify(
@@ -527,8 +533,8 @@ func (s *DepositService) Reject(adminId, id int, reason string) (*model.ManualDe
 
 // GetOwner returns the user id that owns the given deposit request, for the
 // receipt-access ownership check.
-func (s *DepositService) GetOwner(id int) (int, error) {
-	req, err := s.Get(id)
+func (s *DepositService) GetOwner(id int, scope model.Scope) (int, error) {
+	req, err := s.Get(id, scope)
 	if err != nil {
 		return 0, err
 	}

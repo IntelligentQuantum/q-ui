@@ -430,7 +430,7 @@ export default function BalancersTab({
               columns={columns}
               data={filteredRows}
               rowKey={(r) => String(r.key)}
-              pageSize={15}
+              pageSize={10}
             />
 
             {showObsEditor && (

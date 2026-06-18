@@ -9,6 +9,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -54,7 +55,7 @@ func (a *OrderController) list(c *gin.Context) {
 	}
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
-	orders, err := a.orderService.ListOrders(userFilter, limit, offset)
+	orders, err := a.orderService.ListOrders(userFilter, limit, offset, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -73,7 +74,7 @@ func (a *OrderController) get(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	owner, err := a.orderService.GetOrderOwner(id)
+	owner, err := a.orderService.GetOrderOwner(id, tenant.HomeScopeStrict(c))
 	if err != nil {
 		// Don't reveal existence to non-owners.
 		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
@@ -83,7 +84,7 @@ func (a *OrderController) get(c *gin.Context) {
 		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
 		return
 	}
-	order, err := a.orderService.Get(id)
+	order, err := a.orderService.Get(id, tenant.HomeScopeStrict(c))
 	if err != nil {
 		pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
 		return
@@ -111,7 +112,7 @@ func (a *OrderController) purchase(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	order, err := a.orderService.Purchase(user, form.ProductId, form.Name)
+	order, err := a.orderService.Purchase(user, form.ProductId, form.Name, tenant.ViewScope(c))
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInsufficientBalance):
@@ -150,7 +151,7 @@ func (a *OrderController) renew(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	order, err := a.orderService.Renew(user, form.ProductId, form.Email)
+	order, err := a.orderService.Renew(user, form.ProductId, form.Email, tenant.ViewScope(c))
 	if err != nil {
 		switch {
 		case errors.Is(err, service.ErrInsufficientBalance):

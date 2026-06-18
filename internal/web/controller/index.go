@@ -3,9 +3,11 @@ package controller
 import (
 	"errors"
 	"net/http"
+	"strings"
 	"text/template"
 	"time"
 
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
@@ -31,15 +33,43 @@ type RegisterForm struct {
 	Password        string `json:"password" form:"password"`
 	ConfirmPassword string `json:"confirmPassword" form:"confirmPassword"`
 	ReferralCode    string `json:"referralCode" form:"referralCode"`
+	// Workspace is the Manager slug from /panel/manager/<slug> (when the visitor
+	// registers on a manager's panel). Empty = the global/admin panel.
+	Workspace string `json:"workspace" form:"workspace"`
 }
 
 // IndexController handles the main index and login-related routes.
 type IndexController struct {
 	BaseController
 
-	settingService service.SettingService
-	userService    service.UserService
-	tgbot          tgbot.Tgbot
+	settingService       service.SettingService
+	userService          service.UserService
+	tenantService        service.TenantService
+	tenantSettingService service.TenantSettingService
+	tgbot                tgbot.Tgbot
+}
+
+// resolveWorkspaceTenant maps a workspace slug (from the /panel/manager/<slug>
+// entry, passed by the login/register pages) to its tenant id and per-tenant
+// registration flag. An empty/unknown/suspended slug resolves to the global
+// panel (tenant 0) with the global registration setting — so the original panel
+// behaves exactly as before.
+func (a *IndexController) resolveWorkspaceTenant(slug string) (tenantID int, registrationEnabled bool, title string) {
+	globalReg, _ := a.settingService.GetRegistrationEnable()
+	globalTitle, _ := a.settingService.GetPanelTitle()
+	slug = strings.ToLower(strings.TrimSpace(slug))
+	if slug == "" {
+		return model.GlobalTenantId, globalReg, globalTitle
+	}
+	t, err := a.tenantService.GetBySlug(slug)
+	if err != nil || t.Status != model.TenantActive {
+		return model.GlobalTenantId, globalReg, globalTitle
+	}
+	view, _ := a.tenantSettingService.Get(t.Id)
+	if view != nil {
+		return t.Id, view.RegistrationEnable, view.BrandTitle
+	}
+	return t.Id, false, globalTitle
 }
 
 // NewIndexController creates a new IndexController and initializes its routes.
@@ -61,6 +91,32 @@ func (a *IndexController) initRouter(g *gin.RouterGroup) {
 	g.POST("/getTwoFactorEnable", middleware.CSRFMiddleware(), a.getTwoFactorEnable)
 	g.POST("/getRegistrationEnable", middleware.CSRFMiddleware(), a.getRegistrationEnable)
 	g.POST("/getPanelTitle", middleware.CSRFMiddleware(), a.getPanelTitle)
+	// Pre-login branding for a Manager workspace: the login/register pages call
+	// this with the slug from /panel/manager/<slug> to show that workspace's title
+	// + logo and whether its registration is open. Public (pre-auth) by design.
+	g.POST("/getWorkspaceInfo", middleware.CSRFMiddleware(), a.getWorkspaceInfo)
+}
+
+type workspaceInfoForm struct {
+	Slug string `json:"slug" form:"slug"`
+}
+
+func (a *IndexController) getWorkspaceInfo(c *gin.Context) {
+	var form workspaceInfoForm
+	_ = c.ShouldBind(&form)
+	tenantID, regEnabled, title := a.resolveWorkspaceTenant(form.Slug)
+	logo := ""
+	if tenantID != model.GlobalTenantId {
+		if view, err := a.tenantSettingService.Get(tenantID); err == nil {
+			logo = view.BrandLogo
+		}
+	}
+	jsonObj(c, gin.H{
+		"title":              title,
+		"logo":               logo,
+		"registrationEnable": regEnabled,
+		"tenant":             tenantID != model.GlobalTenantId,
+	}, nil)
 }
 
 // index handles the root route, redirecting logged-in users to the panel or showing the login page.
@@ -161,7 +217,9 @@ func (a *IndexController) registerPage(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path")+"panel/")
 		return
 	}
-	if enabled, err := a.settingService.GetRegistrationEnable(); err != nil || !enabled {
+	// Registration is gated per workspace: the ?ws=<slug> query (set by the
+	// register link on a manager's panel) selects whose registration flag applies.
+	if _, regEnabled, _ := a.resolveWorkspaceTenant(c.Query("ws")); !regEnabled {
 		c.Header("Cache-Control", "no-store")
 		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
 		return
@@ -183,12 +241,6 @@ func (a *IndexController) getRegistrationEnable(c *gin.Context) {
 // validates/normalizes every field before delegating uniqueness and hashing to
 // the user service.
 func (a *IndexController) register(c *gin.Context) {
-	enabled, err := a.settingService.GetRegistrationEnable()
-	if err != nil || !enabled {
-		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.register.toasts.disabled"))
-		return
-	}
-
 	remoteIP := getRemoteIp(c)
 	if _, ok := defaultRegisterLimiter.allow(remoteIP, registrationLimitBucket); !ok {
 		logger.Warningf("registration throttled: IP=%q", remoteIP)
@@ -209,6 +261,15 @@ func (a *IndexController) register(c *gin.Context) {
 		return
 	}
 
+	// Resolve the workspace from the slug and gate on ITS registration flag, so a
+	// signup on /panel/manager/<slug> joins that manager's tenant (or the global
+	// panel when no/unknown slug). Registration may be open per-workspace.
+	tenantID, regEnabled, _ := a.resolveWorkspaceTenant(form.Workspace)
+	if !regEnabled {
+		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.register.toasts.disabled"))
+		return
+	}
+
 	user, regErr := a.userService.Register(service.RegisterInput{
 		FullName:     form.FullName,
 		Phone:        form.Phone,
@@ -216,6 +277,7 @@ func (a *IndexController) register(c *gin.Context) {
 		Username:     form.Username,
 		Password:     form.Password,
 		ReferralCode: form.ReferralCode,
+		TenantID:     tenantID,
 	})
 	if regErr != nil {
 		defaultRegisterLimiter.registerFailure(remoteIP, registrationLimitBucket)

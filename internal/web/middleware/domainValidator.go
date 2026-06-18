@@ -14,14 +14,23 @@ import (
 // It extracts the host from the request, strips any port number, and compares it
 // against the configured domain. Requests from unauthorized domains are rejected
 // with HTTP 403 Forbidden status.
-func DomainValidatorMiddleware(domain string) gin.HandlerFunc {
+// tenantDomainChecker admits hosts that belong to a registered Manager workspace.
+// Kept as a narrow interface so the middleware needn't depend on the service layer.
+type tenantDomainChecker interface {
+	DomainExists(host string) bool
+}
+
+func DomainValidatorMiddleware(domain string, tenants tenantDomainChecker) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		host := c.Request.Host
 		if colonIndex := strings.LastIndex(host, ":"); colonIndex != -1 {
 			host, _, _ = net.SplitHostPort(c.Request.Host)
 		}
 
-		if host != domain {
+		// Allow the global panel domain, or any active Manager workspace's own
+		// custom domain (multi-tenancy: a Manager may serve their panel on their
+		// own domain/subdomain).
+		if host != domain && !(tenants != nil && tenants.DomainExists(host)) {
 			c.AbortWithStatus(http.StatusForbidden)
 			return
 		}

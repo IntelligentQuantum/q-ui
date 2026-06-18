@@ -10,6 +10,7 @@ import { ErrorState, SearchInput, StatCard } from '@/components/ui';
 
 import { HttpUtil } from '@/utils';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useMe } from '@/hooks/useMe';
 import PageShell from '@/layouts/PageShell';
 import {
     Badge,
@@ -22,6 +23,8 @@ import type { BadgeVariant, Column } from '@/components/ui';
 interface Order {
   id: number;
   userId: number;
+  username: string;
+  userEmail: string;
   productId: number;
   productName: string;
   clientEmail: string;
@@ -46,6 +49,10 @@ export default function OrdersPage()
 {
     const { t } = useTranslation();
     const { format, formatNumber, unit } = useCurrency();
+    const { me } = useMe();
+    // Only staff who see EVERY order (admin/manager) need a "whose order" column;
+    // a regular user only ever sees their own, so it's noise for them.
+    const canSeeAll = !!me && (me.isAdmin || me.permissions.includes('order.view_all'));
 
     const { data: orders, isLoading, isError, refetch } = useQuery({
         queryKey: ['orders'],
@@ -86,7 +93,11 @@ export default function OrdersPage()
             {
                 return true;
             }
-            return (o.productName || '').toLowerCase().includes(s) || String(o.id).includes(s);
+            return (o.productName || '').toLowerCase().includes(s)
+              || (o.username || '').toLowerCase().includes(s)
+              || (o.userEmail || '').toLowerCase().includes(s)
+              || (o.clientEmail || '').toLowerCase().includes(s)
+              || String(o.id).includes(s);
         });
     }, [list, q, status]);
 
@@ -97,6 +108,16 @@ export default function OrdersPage()
             header: t('pages.orders.product'),
             cell: (o) => o.productName || `#${ o.productId }`
         },
+        ...(canSeeAll ? [{
+            key: 'customer',
+            header: t('pages.orders.customer'),
+            cell: (o: Order) => (
+        <div className="flex flex-col">
+          <span>{o.username || `#${ o.userId }`}</span>
+          {o.userEmail ? <span className="text-xs text-muted-foreground">{o.userEmail}</span> : null}
+        </div>
+            )
+        } satisfies Column<Order>] : []),
         {
             key: 'config',
             header: t('pages.orders.config'),
@@ -180,7 +201,7 @@ export default function OrdersPage()
               data={filtered}
               rowKey={(o) => String(o.id)}
               loading={isLoading}
-              pageSize={15}
+              pageSize={10}
               empty={t('noData')}
             />
           )}

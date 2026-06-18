@@ -120,15 +120,18 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 		}
 	}
 
-	// Stamp ownership on the freshly-created client record. The record is
+	// Stamp ownership + tenant on the freshly-created client record. The record is
 	// created inside AddInboundClient/SyncInbound keyed by the unique email, so
-	// a single targeted update is safe here.
+	// a single targeted update is safe here. tenant_id confines the client to the
+	// creator's workspace (0 = global/admin); owner_id is the within-tenant owner.
+	stamp := map[string]any{"tenant_id": payload.TenantId}
 	if payload.OwnerId != 0 {
-		if err := database.GetDB().Model(&model.ClientRecord{}).
-			Where("email = ?", client.Email).
-			Update("owner_id", payload.OwnerId).Error; err != nil {
-			return needRestart, err
-		}
+		stamp["owner_id"] = payload.OwnerId
+	}
+	if err := database.GetDB().Model(&model.ClientRecord{}).
+		Where("email = ?", client.Email).
+		Updates(stamp).Error; err != nil {
+		return needRestart, err
 	}
 
 	return needRestart, nil

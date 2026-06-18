@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { CircleCheck, Server, QrCode, RefreshCw, Pencil } from 'lucide-react';
@@ -87,6 +88,9 @@ export default function ServicesPage()
     const { t } = useTranslation();
     const qc = useQueryClient();
     const { format } = useCurrency();
+    // Renew/change-plan options come from the current storefront's catalog; key
+    // on the /manager/<slug> URL so navigation refetches the right products.
+    const { tenantSlug } = useParams();
     const [qrClient, setQrClient] = useState<ClientRow | null>(null);
     const [editing, setEditing] = useState<ClientRow | null>(null);
     const [renewing, setRenewing] = useState<ClientRow | null>(null);
@@ -120,7 +124,7 @@ export default function ServicesPage()
     });
 
     const { data: products } = useQuery({
-        queryKey: ['products', 'store'],
+        queryKey: ['products', 'store', tenantSlug ?? ''],
         queryFn: async () =>
         {
             const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });

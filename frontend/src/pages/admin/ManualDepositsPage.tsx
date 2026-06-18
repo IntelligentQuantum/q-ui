@@ -283,7 +283,7 @@ export default function ManualDepositsPage()
             data={depositsQuery.data ?? []}
             rowKey={(row) => String(row.id)}
             loading={depositsQuery.isFetching}
-            pageSize={15}
+            pageSize={10}
             empty={<div className="py-6 text-center text-muted-foreground">{t('pages.adminDeposits.empty')}</div>}
           />
         </CardContent>

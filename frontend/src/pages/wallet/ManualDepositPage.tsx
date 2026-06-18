@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import type { Dayjs } from 'dayjs';
 import {
     Banknote,
     Check,
@@ -19,6 +20,7 @@ import { HttpUtil, IntlUtil } from '@/utils';
 import { message } from '@/components/ui/message';
 import { setMessageInstance } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
+import DateTimePicker from '@/components/form/DateTimePicker';
 import {
     Alert,
     Badge,
@@ -37,7 +39,6 @@ import {
 } from '@/components/ui';
 import type { BadgeVariant, Column } from '@/components/ui';
 
-const QUICK_AMOUNTS = [50000, 100000, 200000, 500000];
 const MAX_RECEIPT_BYTES = 5 * 1024 * 1024;
 
 interface PaymentCard {
@@ -56,8 +57,7 @@ interface DepositRequest {
   id: number;
   amount: number;
   trackingNumber: string;
-  depositDate: string;
-  depositTime: string;
+  depositedAt: string;
   description: string;
   receiptImage: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -135,8 +135,9 @@ export default function ManualDepositPage()
     const cardsQuery = useQuery({ queryKey: ['deposits', 'cards'], queryFn: fetchCards });
     const depositsQuery = useQuery({ queryKey: ['deposits', 'mine'], queryFn: fetchDeposits });
 
-    const [amount, setAmount] = useState<number>(QUICK_AMOUNTS[1]);
+    const [amount, setAmount] = useState<number>(0);
     const [tracking, setTracking] = useState('');
+    const [depositedAt, setDepositedAt] = useState<Dayjs | null>(null);
     const [description, setDescription] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
@@ -164,6 +165,7 @@ export default function ManualDepositPage()
             const fd = new FormData();
             fd.append('amount', String(amount));
             fd.append('trackingNumber', tracking);
+            fd.append('depositedAt', depositedAt ? depositedAt.toISOString() : '');
             fd.append('description', description);
             if (receipt)
             {
@@ -176,7 +178,9 @@ export default function ManualDepositPage()
             if (msg?.success)
             {
                 messageApi.success(t('pages.manualDeposit.toasts.submitted'));
+                setAmount(0);
                 setTracking('');
+                setDepositedAt(null);
                 setDescription('');
                 setReceipt(null);
                 if (fileRef.current)
@@ -210,6 +214,12 @@ export default function ManualDepositPage()
         if (!amount || amount <= 0)
         {
             messageApi.error(t('pages.manualDeposit.toasts.invalidAmount'));
+            return;
+        }
+        // Every field is mandatory, and a receipt image must be attached.
+        if (!tracking.trim() || !depositedAt || !description.trim() || !receipt)
+        {
+            messageApi.error(t('pages.manualDeposit.toasts.fieldsRequired'));
             return;
         }
         submitMut.mutate();
@@ -331,14 +341,6 @@ export default function ManualDepositPage()
           <CardContent className="flex flex-col gap-4 p-4 pt-0 sm:p-5 sm:pt-0">
             <Alert variant="info">{t('pages.manualDeposit.formHint')}</Alert>
 
-            <div className="flex flex-wrap gap-2">
-              {QUICK_AMOUNTS.map((a) => (
-                <Button key={a} variant={amount === a ? 'primary' : 'secondary'} onClick={() => setAmount(a)}>
-                  {formatNumber(a)}
-                </Button>
-              ))}
-            </div>
-
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="dep-amount">{t('pages.manualDeposit.amount')}</Label>
@@ -346,6 +348,7 @@ export default function ManualDepositPage()
                   <Input
                     id="dep-amount"
                     inputMode="numeric"
+                    required
                     className={cn('rounded-e-none')}
                     value={amount ? formatNumber(amount) : ''}
                     onChange={(e) => setAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
@@ -361,10 +364,17 @@ export default function ManualDepositPage()
                 <Input
                   id="dep-tracking"
                   dir="ltr"
+                  required
                   placeholder={t('pages.manualDeposit.trackingPlaceholder')}
                   value={tracking}
                   onChange={(e) => setTracking(e.target.value)}
                 />
+              </div>
+
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="dep-when">{t('pages.manualDeposit.depositedAt')}</Label>
+                {/* Jalali calendar for Persian, native datetime for English. */}
+                <DateTimePicker value={depositedAt} onChange={setDepositedAt} showTime />
               </div>
             </div>
 
@@ -372,6 +382,7 @@ export default function ManualDepositPage()
               <Label htmlFor="dep-desc">{t('pages.manualDeposit.descriptionLabel')}</Label>
               <Textarea
                 id="dep-desc"
+                required
                 placeholder={t('pages.manualDeposit.descriptionPlaceholder')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
@@ -441,7 +452,7 @@ export default function ManualDepositPage()
               data={filteredDeposits}
               rowKey={(row) => String(row.id)}
               loading={depositsQuery.isFetching}
-              pageSize={15}
+              pageSize={10}
               empty={<div className="py-6 text-center text-muted-foreground">{t('pages.manualDeposit.empty')}</div>}
             />
           </CardContent>

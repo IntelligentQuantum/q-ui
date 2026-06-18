@@ -1,5 +1,6 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useLayoutEffect, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
+import { createPortal } from 'react-dom';
 import { cn } from './cn';
 import { inputClasses } from './Input';
 import { ChevronDownIcon, CheckIcon } from './icons';
@@ -25,8 +26,9 @@ export interface SelectProps {
 /**
  * Custom listbox select (no native <select>, no Radix). Keyboard: ↑/↓ to move,
  * Enter/Space to choose, Esc to close, type nothing fancy. Closes on outside
- * click. Token-only, RTL-safe. The popup is absolutely positioned under the
- * trigger (fine for forms; can be portalled later if clipping shows up).
+ * click. Token-only, RTL-safe. The popup is PORTALLED to <body> with fixed
+ * positioning so it is never clipped by (or stacked under) a scrollable Modal
+ * body — it always floats above, at popover z-index.
  */
 export function Select({
     value,
@@ -42,9 +44,38 @@ export function Select({
 {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
+    const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
+    const menuRef = useRef<HTMLUListElement>(null);
     const listId = useId();
     const selected = options.find((o) => o.value === value) ?? null;
+
+    // Position the portalled menu under the trigger using viewport coordinates,
+    // and keep it aligned on scroll/resize while open.
+    useLayoutEffect(() =>
+    {
+        if (!open)
+        {
+            setMenuPos(null);
+            return;
+        }
+        const place = () =>
+        {
+            const r = rootRef.current?.getBoundingClientRect();
+            if (r)
+            {
+                setMenuPos({ top: r.bottom + 6, left: r.left, width: r.width });
+            }
+        };
+        place();
+        window.addEventListener('scroll', place, true);
+        window.addEventListener('resize', place);
+        return () =>
+        {
+            window.removeEventListener('scroll', place, true);
+            window.removeEventListener('resize', place);
+        };
+    }, [open]);
 
     useEffect(() =>
     {
@@ -55,7 +86,9 @@ export function Select({
         setActive(options.findIndex((o) => o.value === value));
         const onDoc = (e: MouseEvent) =>
         {
-            if (!rootRef.current?.contains(e.target as Node))
+            const target = e.target as Node;
+            // The menu is portalled OUTSIDE rootRef, so check it explicitly.
+            if (!rootRef.current?.contains(target) && !menuRef.current?.contains(target))
             {
                 setOpen(false);
             }
@@ -162,12 +195,14 @@ export function Select({
         />
       </button>
 
-      {open && (
+      {open && menuPos && createPortal(
         <ul
+          ref={menuRef}
           role="listbox"
           id={listId}
           tabIndex={-1}
-          className="absolute z-[var(--z-dropdown)] mt-1.5 max-h-60 w-full overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
+          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width }}
+          className="z-[var(--z-popover)] max-h-60 overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
         >
           {options.map((opt, i) => (
             <li
@@ -194,7 +229,8 @@ export function Select({
               <span className="truncate">{opt.label}</span>
             </li>
           ))}
-        </ul>
+        </ul>,
+        document.body
       )}
     </div>
     );

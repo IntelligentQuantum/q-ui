@@ -12,7 +12,9 @@ import (
 	"github.com/gin-gonic/gin"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/config"
+	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/logger"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
 )
 
@@ -71,6 +73,32 @@ func withServerBasePath(spec []byte, basePath string) ([]byte, error) {
 	return json.Marshal(doc)
 }
 
+// ServePanelSPA serves the React SPA shell (index.html). Exported so the
+// engine's NoRoute fallback can boot the app for any unmatched GET navigation
+// under /panel/ — notably a Manager's /panel/<slug>/... deep link or refresh,
+// which has no dedicated server route (the slug is dynamic). React Router then
+// reads the URL and mounts the right page.
+func ServePanelSPA(c *gin.Context) { serveDistPage(c, "index.html") }
+
+// domainWorkspaceSlug returns the slug of the ACTIVE workspace whose custom
+// domain matches the request Host, or "" when the Host is the main panel domain.
+// Lets the SPA boot straight into a workspace storefront on its own domain.
+func domainWorkspaceSlug(c *gin.Context) string {
+	host := c.Request.Host
+	if i := strings.IndexByte(host, ':'); i >= 0 {
+		host = host[:i]
+	}
+	host = strings.ToLower(strings.TrimSpace(host))
+	if host == "" {
+		return ""
+	}
+	t, err := (&service.TenantService{}).GetByDomain(host)
+	if err != nil || t.Status != model.TenantActive {
+		return ""
+	}
+	return t.Slug
+}
+
 func serveDistPage(c *gin.Context, name string) {
 	body, err := distFS.ReadFile("dist/" + name)
 	if err != nil {
@@ -115,6 +143,12 @@ func serveDistPage(c *gin.Context, name string) {
 		escapedVer := jsEscape.Replace(config.GetVersion())
 		script += `;window.Q_UI_CUR_VER="` + escapedVer + `"`
 		script += `;window.Q_UI_DB_TYPE="` + config.GetDBKind() + `"`
+	}
+	// When the panel is reached on a workspace's own custom domain, tell the SPA
+	// which workspace it is, so it scopes the storefront + branding to it with no
+	// /manager/<slug> in the URL.
+	if slug := domainWorkspaceSlug(c); slug != "" {
+		script += `;window.Q_UI_WORKSPACE="` + jsEscape.Replace(slug) + `"`
 	}
 	script += `;</script>`
 	inject := []byte(script)

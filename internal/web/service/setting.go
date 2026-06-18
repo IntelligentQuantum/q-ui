@@ -584,12 +584,16 @@ func (s *SettingService) SetRegistrationEnable(value bool) error {
 }
 
 // roleCostSuffix maps a user's role to the per-role setting-key suffix used by
-// the cost getters. Reseller and member are priced independently; any other
-// non-admin role (e.g. moderator) falls back to the member rate. Admin is
-// handled by the callers, which return 0 (admins are never charged).
+// the cost getters. Two global tiers exist: the "Reseller"-suffixed keys are the
+// admin's pricing for MANAGERS (the admin's direct partners — the settings UI
+// labels this tier "Manager"), and "Member" covers everyone else (members, and
+// resellers in the global scope, who are otherwise priced by their own manager's
+// per-tenant settings). Admin is handled by callers, which return 0 (never
+// charged). The "Reseller" key names are kept to avoid a stored-settings
+// migration; the UI presents this tier as Manager.
 func roleCostSuffix(role string) string {
 	switch model.NormalizeRole(role) {
-	case model.RoleReseller:
+	case model.RoleManager:
 		return "Reseller"
 	default:
 		return "Member"

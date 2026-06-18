@@ -19,16 +19,28 @@ var (
 
 const zarinpalHTTPTimeout = 20 * time.Second
 
-// ZarinpalService talks to the ZarinPal REST gateway (v4). It reads the
-// merchant id, sandbox flag and currency from settings on each call so config
-// changes take effect without a restart.
+// ZarinpalConfig is the per-call gateway configuration. It is built from either
+// the global settings (admin/tenant-0) or a Manager workspace's own settings, so
+// each tenant's payments go to THAT tenant's merchant — never a shared one. A
+// tenant with no merchant configured is simply not Enabled (fail-safe: a missing
+// config disables the gateway, it never falls back to another merchant).
+type ZarinpalConfig struct {
+	Enabled  bool
+	Merchant string
+	Sandbox  bool
+	Currency string
+}
+
+// ZarinpalService talks to the ZarinPal REST gateway (v4). Gateway credentials
+// are passed in per call via ZarinpalConfig (resolved per tenant by the caller);
+// only the proxy HTTP client is read from global settings.
 type ZarinpalService struct {
 	settingService SettingService
 }
 
-// baseURL returns the API host for the configured environment.
-func (z *ZarinpalService) baseURL() string {
-	if sandbox, _ := z.settingService.GetZarinpalSandbox(); sandbox {
+// zpBaseURL returns the API host for the configured environment.
+func zpBaseURL(sandbox bool) string {
+	if sandbox {
 		return "https://sandbox.zarinpal.com"
 	}
 	return "https://payment.zarinpal.com"
@@ -36,8 +48,8 @@ func (z *ZarinpalService) baseURL() string {
 
 // StartPayURL is the page the buyer's browser is redirected to after a
 // successful request.
-func (z *ZarinpalService) StartPayURL(authority string) string {
-	return z.baseURL() + "/pg/StartPay/" + authority
+func (z *ZarinpalService) StartPayURL(cfg ZarinpalConfig, authority string) string {
+	return zpBaseURL(cfg.Sandbox) + "/pg/StartPay/" + authority
 }
 
 type zpRequestBody struct {
@@ -100,16 +112,13 @@ func (z *ZarinpalService) postJSON(url string, body any) (*zpResponse, error) {
 
 // RequestPayment opens a payment for `amount` credits and returns the gateway
 // authority plus the StartPay URL the browser should be redirected to.
-func (z *ZarinpalService) RequestPayment(amount int64, description, callbackURL, email, mobile string) (authority string, startPay string, err error) {
-	enabled, _ := z.settingService.GetZarinpalEnable()
-	if !enabled {
+func (z *ZarinpalService) RequestPayment(cfg ZarinpalConfig, amount int64, description, callbackURL, email, mobile string) (authority string, startPay string, err error) {
+	if !cfg.Enabled {
 		return "", "", ErrZarinpalDisabled
 	}
-	merchant, _ := z.settingService.GetZarinpalMerchantId()
-	if merchant == "" {
+	if cfg.Merchant == "" {
 		return "", "", errors.New("zarinpal merchant id is not configured")
 	}
-	currency, _ := z.settingService.GetZarinpalCurrency()
 
 	metadata := map[string]string{}
 	if email != "" {
@@ -119,10 +128,10 @@ func (z *ZarinpalService) RequestPayment(amount int64, description, callbackURL,
 		metadata["mobile"] = mobile
 	}
 
-	resp, err := z.postJSON(z.baseURL()+"/pg/v4/payment/request.json", zpRequestBody{
-		MerchantId:  merchant,
+	resp, err := z.postJSON(zpBaseURL(cfg.Sandbox)+"/pg/v4/payment/request.json", zpRequestBody{
+		MerchantId:  cfg.Merchant,
 		Amount:      amount,
-		Currency:    currency,
+		Currency:    cfg.Currency,
 		Description: description,
 		CallbackURL: callbackURL,
 		Metadata:    metadata,
@@ -133,16 +142,15 @@ func (z *ZarinpalService) RequestPayment(amount int64, description, callbackURL,
 	if resp.Data.Code != 100 || resp.Data.Authority == "" {
 		return "", "", fmt.Errorf("zarinpal request failed (code %d): %s", resp.Data.Code, string(resp.Errors))
 	}
-	return resp.Data.Authority, z.StartPayURL(resp.Data.Authority), nil
+	return resp.Data.Authority, z.StartPayURL(cfg, resp.Data.Authority), nil
 }
 
 // VerifyPayment confirms a returned authority for the given amount. A ref id is
 // returned on success. Codes 100 (first verify) and 101 (already verified) both
 // mean the money was captured.
-func (z *ZarinpalService) VerifyPayment(amount int64, authority string) (refID string, alreadyVerified bool, err error) {
-	merchant, _ := z.settingService.GetZarinpalMerchantId()
-	resp, err := z.postJSON(z.baseURL()+"/pg/v4/payment/verify.json", zpVerifyBody{
-		MerchantId: merchant,
+func (z *ZarinpalService) VerifyPayment(cfg ZarinpalConfig, amount int64, authority string) (refID string, alreadyVerified bool, err error) {
+	resp, err := z.postJSON(zpBaseURL(cfg.Sandbox)+"/pg/v4/payment/verify.json", zpVerifyBody{
+		MerchantId: cfg.Merchant,
 		Amount:     amount,
 		Authority:  authority,
 	})

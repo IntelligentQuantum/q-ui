@@ -538,7 +538,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
           onChange={(e) => setServerSearch(e.target.value)}
         />
       </div>
-      <Table columns={dnsColumns} data={filteredDnsServers} rowKey={(r) => String(r.key)} pageSize={15} />
+      <Table columns={dnsColumns} data={filteredDnsServers} rowKey={(r) => String(r.key)} pageSize={10} />
     </div>
     );
 
@@ -557,7 +557,7 @@ export default function DnsTab({ templateSettings, setTemplateSettings }: DnsTab
           {t('pages.xray.fakedns.add')}
         </Button>
       </div>
-      <Table columns={fakednsColumns} data={fakeDnsList} rowKey={(r) => String(r.key)} pageSize={15} />
+      <Table columns={fakednsColumns} data={fakeDnsList} rowKey={(r) => String(r.key)} pageSize={10} />
     </div>
     );
 

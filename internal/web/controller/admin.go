@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
@@ -18,9 +19,32 @@ import (
 // non-admin session (or none) can never reach user management, balance
 // adjustments or the global transaction log.
 type AdminController struct {
-	userService   service.UserService
-	walletService service.WalletService
-	reportService service.ReportService
+	userService    service.UserService
+	walletService  service.WalletService
+	reportService  service.ReportService
+	managerService service.ManagerService
+}
+
+// syncManagerWorkspace keeps a user's workspace in step with their role when
+// edited from the Users page: promoting to manager provisions a workspace (so a
+// manager is never left without one); any other role suspends a workspace they
+// previously owned (so a demoted manager's panel isn't left running). Best-effort
+// — a failure is logged and the user op still succeeds.
+func (a *AdminController) syncManagerWorkspace(user *model.User) {
+	if user == nil {
+		return
+	}
+	if user.CanonicalRole() == model.RoleManager {
+		if t, err := a.managerService.EnsureWorkspaceForUser(user.Id); err != nil {
+			logger.Warning("ensure manager workspace failed:", err)
+		} else {
+			user.TenantId = t.Id
+		}
+		return
+	}
+	if err := a.managerService.SuspendWorkspaceForUser(user.Id); err != nil {
+		logger.Warning("suspend demoted manager workspace failed:", err)
+	}
 }
 
 func NewAdminController(g *gin.RouterGroup) *AdminController {
@@ -92,6 +116,7 @@ func (a *AdminController) createUser(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
+	a.syncManagerWorkspace(user)
 	jsonObj(c, user, nil)
 }
 
@@ -123,6 +148,7 @@ func (a *AdminController) updateUser(c *gin.Context) {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
+	a.syncManagerWorkspace(user)
 	jsonObj(c, user, nil)
 }
 

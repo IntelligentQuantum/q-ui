@@ -23,9 +23,24 @@ const TITLE_KEYS: Record<string, string> = {
     '/finance': 'menu.finance',
     '/tickets': 'menu.tickets',
     '/support': 'menu.support',
+    '/referral': 'menu.referral',
+    '/managers': 'menu.managers',
+    '/tenant-users': 'menu.tenantUsers',
+    '/workspace-settings': 'menu.workspaceSettings',
+    '/workspace-payments': 'menu.workspacePayments',
     '/manual-deposit': 'menu.manualDeposit',
     '/manual-deposits': 'menu.manualDeposits'
 };
+
+// A workspace page lives under /manager/<slug>/…; strip that prefix so the title
+// lookup uses the logical path. Without this, every page inside a manager
+// workspace has no mapped title — and PageShell hides its whole header (and thus
+// actions like the "Add product" button) when the title is null.
+function logicalPath(pathname: string): string
+{
+    const m = pathname.match(/^\/manager\/[^/]+(\/.*)?$/);
+    return m ? (m[1] || '/') : pathname;
+}
 
 export function usePageTitle()
 {
@@ -34,7 +49,7 @@ export function usePageTitle()
 
     useEffect(() =>
     {
-        const key = TITLE_KEYS[pathname];
+        const key = TITLE_KEYS[logicalPath(pathname)];
         const title = key ? t(key) : BrandManager.getTitle();
         const host = window.location.hostname;
         document.title = host ? `${ host } - ${ title }` : title;
@@ -47,6 +62,6 @@ export function usePageTitleText(): string | null
 {
     const { pathname } = useLocation();
     const { t } = useTranslation();
-    const key = TITLE_KEYS[pathname];
+    const key = TITLE_KEYS[logicalPath(pathname)];
     return key ? t(key) : null;
 }

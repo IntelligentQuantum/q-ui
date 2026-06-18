@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
+import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
 import { LayoutGrid, CircleCheck, CircleX, Plus } from 'lucide-react';
@@ -98,6 +99,9 @@ export default function ProductsPage()
 {
     const { t } = useTranslation();
     const qc = useQueryClient();
+    // The catalog is the current storefront's (the /manager/<slug> URL); key on it
+    // so navigating between workspaces refetches instead of reusing the cache.
+    const { tenantSlug } = useParams();
     const [editing, setEditing] = useState<Product | null>(null);
     const [open, setOpen] = useState(false);
 
@@ -112,7 +116,7 @@ export default function ProductsPage()
     });
 
     const { data: products, isLoading, isError, refetch } = useQuery({
-        queryKey: ['products', 'manage'],
+        queryKey: ['products', 'manage', tenantSlug ?? ''],
         queryFn: async () =>
         {
             const msg = await HttpUtil.get('/panel/api/products', undefined, { silent: true });

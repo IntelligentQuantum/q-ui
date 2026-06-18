@@ -49,6 +49,12 @@ type RegisterInput struct {
 	// `?ref=` URL param (the user never types it). It is optional and never
 	// affects whether registration succeeds — see the attribution step below.
 	ReferralCode string
+	// TenantID is the Manager workspace the new account belongs to (0 = the
+	// global/admin panel). Set server-side from the resolved workspace slug, so a
+	// customer who signs up on /panel/manager/<slug> becomes a member of that
+	// manager's tenant. Never trusted from raw client input — the controller
+	// resolves it from the slug.
+	TenantID int
 }
 
 // minPasswordLen is the only password requirement: a basic minimum length. The
@@ -117,6 +123,7 @@ func (s *UserService) Register(input RegisterInput) (*model.User, error) {
 		Phone:    in.Phone,
 		Email:    in.Email,
 		Role:     model.RoleMember, // self-registered accounts are end customers (members)
+		TenantId: in.TenantID,      // the manager workspace they signed up on (0 = global)
 	}
 
 	db := database.GetDB()
@@ -367,6 +374,29 @@ func (s *UserService) GetUserByID(id int) (*model.User, error) {
 // balance. Username uniqueness is case-insensitive; email (when present) must
 // be unique and valid; password must satisfy the shared strength policy.
 func (s *UserService) AdminCreateUser(in AdminUserInput) (*model.User, error) {
+	var user *model.User
+	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
+		u, err := s.adminCreateUserTx(tx, in)
+		if err != nil {
+			return err
+		}
+		user = u
+		return nil
+	})
+	if err != nil {
+		return nil, err
+	}
+	user.Password = ""
+	return user, nil
+}
+
+// adminCreateUserTx is the transactional core of AdminCreateUser: it validates
+// the input, enforces case-insensitive username/email uniqueness, and creates
+// the row using the supplied tx. It is factored out so other workspace-creating
+// flows (ManagerService.Create) can compose user creation into a larger atomic
+// transaction without duplicating the validation/uniqueness logic. The returned
+// user still carries its password hash — the caller clears it.
+func (s *UserService) adminCreateUserTx(tx *gorm.DB, in AdminUserInput) (*model.User, error) {
 	in.Username = strings.TrimSpace(in.Username)
 	in.FullName = strings.TrimSpace(in.FullName)
 	in.Phone = strings.TrimSpace(in.Phone)
@@ -402,28 +432,24 @@ func (s *UserService) AdminCreateUser(in AdminUserInput) (*model.User, error) {
 		Balance:           balance,
 		CostPerGBOverride: override,
 	}
-	err = database.GetDB().Transaction(func(tx *gorm.DB) error {
-		var count int64
-		if err := tx.Model(model.User{}).Where("LOWER(username) = ?", strings.ToLower(in.Username)).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
-			return ErrUsernameTaken
-		}
-		if email != "" {
-			if err := tx.Model(model.User{}).Where("LOWER(email) = ?", email).Count(&count).Error; err != nil {
-				return err
-			}
-			if count > 0 {
-				return ErrEmailTaken
-			}
-		}
-		return tx.Create(user).Error
-	})
-	if err != nil {
+	var count int64
+	if err := tx.Model(model.User{}).Where("LOWER(username) = ?", strings.ToLower(in.Username)).Count(&count).Error; err != nil {
 		return nil, err
 	}
-	user.Password = ""
+	if count > 0 {
+		return nil, ErrUsernameTaken
+	}
+	if email != "" {
+		if err := tx.Model(model.User{}).Where("LOWER(email) = ?", email).Count(&count).Error; err != nil {
+			return nil, err
+		}
+		if count > 0 {
+			return nil, ErrEmailTaken
+		}
+	}
+	if err := tx.Create(user).Error; err != nil {
+		return nil, err
+	}
 	return user, nil
 }
 

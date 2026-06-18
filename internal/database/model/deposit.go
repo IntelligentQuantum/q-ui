@@ -53,7 +53,10 @@ type ManualDepositRequest struct {
 	// uniquely indexed so the same receipt can't be submitted twice (duplicate
 	// detection); a blank value is allowed and not deduplicated.
 	TrackingNumber string `json:"trackingNumber" gorm:"column:tracking_number;index"`
-	Description    string `json:"description" gorm:"default:''"`
+	// DepositedAt is the date+time the buyer reports making the transfer, as a
+	// free-form string captured from a datetime-local input (e.g. "2026-06-18T14:30").
+	DepositedAt string `json:"depositedAt" gorm:"column:deposited_at;default:''"`
+	Description string `json:"description" gorm:"default:''"`
 	// ReceiptImage is the stored filename (not a path) of the uploaded receipt,
 	// served back only through the authenticated receipt endpoint. Empty when no
 	// receipt was attached.

@@ -39,7 +39,7 @@ interface ProfileFormValues {
 
 const ROLE_BADGE: Record<string, BadgeVariant> = {
     admin: 'warning',
-    moderator: 'primary',
+    manager: 'primary',
     reseller: 'neutral',
     member: 'success'
 };

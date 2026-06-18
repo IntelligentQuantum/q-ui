@@ -20,11 +20,12 @@ import (
 // target ZarinPal redirects to, so it verifies, credits and 302s back to the
 // SPA billing page.
 type PaymentController struct {
-	zarinpalService service.ZarinpalService
-	plisioService   service.PlisioService
-	paymentService  service.PaymentService
-	walletService   service.WalletService
-	settingService  service.SettingService
+	zarinpalService      service.ZarinpalService
+	plisioService        service.PlisioService
+	paymentService       service.PaymentService
+	walletService        service.WalletService
+	settingService       service.SettingService
+	tenantSettingService service.TenantSettingService
 }
 
 func NewPaymentController(g *gin.RouterGroup) *PaymentController {
@@ -78,13 +79,15 @@ func (a *PaymentController) zarinpalRequest(c *gin.Context) {
 	callbackURL := absoluteURL(c, basePath+"panel/api/billing/zarinpal/callback")
 	desc := "Panel balance top-up for " + user.Username
 
-	authority, startPay, err := a.zarinpalService.RequestPayment(form.Amount, desc, callbackURL, user.Email, user.Phone)
+	// Per-tenant gateway: a Manager's customer pays the Manager's own merchant.
+	zpCfg := a.tenantSettingService.ZarinpalConfig(user.TenantId)
+	authority, startPay, err := a.zarinpalService.RequestPayment(zpCfg, form.Amount, desc, callbackURL, user.Email, user.Phone)
 	if err != nil {
 		logger.Warning("zarinpal request failed:", err)
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.billing.toasts.requestFailed"))
 		return
 	}
-	if _, err := a.paymentService.CreatePending(user.Id, "zarinpal", authority, form.Amount); err != nil {
+	if _, err := a.paymentService.CreatePending(user.Id, user.TenantId, "zarinpal", authority, form.Amount); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -131,11 +134,12 @@ func (a *PaymentController) plisioRequest(c *gin.Context) {
 	orderName := "wallet-topup-" + user.Username
 	desc := "Panel balance top-up for " + user.Username
 
-	if _, err := a.paymentService.CreateCryptoPending(user.Id, "plisio", authority, sourceCurrency, form.Amount); err != nil {
+	if _, err := a.paymentService.CreateCryptoPending(user.Id, user.TenantId, "plisio", authority, sourceCurrency, form.Amount); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	_, invoiceURL, err := a.plisioService.CreateInvoice(authority, orderName, desc, callbackURL,
+	plCfg := a.tenantSettingService.PlisioConfig(user.TenantId)
+	_, invoiceURL, err := a.plisioService.CreateInvoice(plCfg, authority, orderName, desc, callbackURL,
 		billingPage+"?status=crypto_pending", billingPage+"?status=crypto_failed", user.Email, sourceCurrency, fiatAmount)
 	if err != nil {
 		_ = a.paymentService.MarkFailed(authority)
@@ -195,7 +199,11 @@ func (a *PaymentController) zarinpalCallback(c *gin.Context) {
 		return
 	}
 
-	refID, _, err := a.zarinpalService.VerifyPayment(payment.Amount, authority)
+	// Verify against the merchant the payment was created under (its tenant),
+	// resolved from the stored tenant_id so the unauthenticated callback uses the
+	// right credentials.
+	zpCfg := a.tenantSettingService.ZarinpalConfig(payment.TenantId)
+	refID, _, err := a.zarinpalService.VerifyPayment(zpCfg, payment.Amount, authority)
 	if err != nil {
 		logger.Warning("zarinpal verify failed:", err)
 		_ = a.paymentService.MarkFailed(authority)

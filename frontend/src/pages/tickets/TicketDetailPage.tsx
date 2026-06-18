@@ -211,7 +211,7 @@ export default function TicketDetailPage()
             {messages.map((m) =>
             {
                 const mine = m.userId === me?.id;
-                const staffAuthor = m.authorRole === 'admin' || m.authorRole === 'moderator';
+                const staffAuthor = m.authorRole === 'admin' || m.authorRole === 'manager';
                 return (
               <div
                 key={m.id}

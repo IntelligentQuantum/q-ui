@@ -61,7 +61,7 @@ func (s *Server) initRouter() (*gin.Engine, error) {
 	}
 
 	if subDomain != "" {
-		engine.Use(middleware.DomainValidatorMiddleware(subDomain))
+		engine.Use(middleware.DomainValidatorMiddleware(subDomain, &service.TenantService{}))
 	}
 
 	LinksPath, err := s.settingService.GetSubPath()

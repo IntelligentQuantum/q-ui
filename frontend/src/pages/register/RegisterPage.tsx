@@ -117,21 +117,23 @@ export default function RegisterPage()
         let cancelled = false;
         (async () =>
         {
-            const [msg, panelTitle] = await Promise.all([
-                HttpUtil.post('/getRegistrationEnable', undefined, { silent: true }),
-                HttpUtil.post('/getPanelTitle', undefined, { silent: true })
-            ]);
+            // Workspace context (/panel/manager/<slug>) flows in via ?ws so the
+            // page shows that manager's brand and gates on ITS registration flag;
+            // the new account is created in that manager's tenant.
+            const ws = new URLSearchParams(window.location.search).get('ws') || window.Q_UI_WORKSPACE || '';
+            const info = await HttpUtil.post('/getWorkspaceInfo', { slug: ws }, { silent: true });
             if (cancelled)
             {
                 return;
             }
-            if (panelTitle.success)
+            const obj = info.success && info.obj ? (info.obj as { title?: string; registrationEnable?: boolean }) : null;
+            if (obj?.title)
             {
-                setBrandTitle(BrandManager.setTitle(panelTitle.obj as string));
+                setBrandTitle(BrandManager.setTitle(obj.title));
             }
-            if (!(msg.success && msg.obj))
+            if (!obj?.registrationEnable)
             {
-                window.location.replace(basePath || '/');
+                window.location.replace(ws ? `${ basePath || '/' }?ws=${ encodeURIComponent(ws) }` : (basePath || '/'));
             }
         })();
         return () =>
@@ -145,6 +147,7 @@ export default function RegisterPage()
         setSubmitting(true);
         try
         {
+            const ws = new URLSearchParams(window.location.search).get('ws') || window.Q_UI_WORKSPACE || '';
             const payload = {
                 fullName: values.fullName.trim(),
                 phone: values.phone.trim(),
@@ -154,14 +157,16 @@ export default function RegisterPage()
                 confirmPassword: values.confirmPassword,
                 // Auto-attached from first-touch capture; never a visible field.
                 // Omitted when absent so the backend treats it as no-referral.
-                ...(getStoredReferralCode() ? { referralCode: getStoredReferralCode() } : {})
+                ...(getStoredReferralCode() ? { referralCode: getStoredReferralCode() } : {}),
+                // The manager workspace to join (empty = global panel).
+                ...(ws ? { workspace: ws } : {})
             };
             const msg = await HttpUtil.post('/register', payload);
             if (msg.success)
             {
                 window.setTimeout(() =>
                 {
-                    window.location.href = basePath || '/';
+                    window.location.href = ws ? `${ basePath || '/' }?ws=${ encodeURIComponent(ws) }` : (basePath || '/');
                 }, REDIRECT_DELAY_MS);
             }
             else

@@ -7,15 +7,16 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
 
-// FinanceController is the admin/moderator financial control center. Everything
-// here is READ-ONLY reporting — money only moves through the ledger-backed
-// WalletService elsewhere. The whole group requires finance.view_all (admin +
-// moderator). Members/resellers use their own scoped endpoints (own
-// transactions/orders) which live in other controllers.
+// FinanceController is the financial control center for admins (tenant 0) and
+// managers (their own workspace). Everything here is READ-ONLY reporting — money
+// only moves through the ledger-backed WalletService elsewhere. The whole group
+// requires finance.view_all (admin + manager) and is scoped per workspace.
+// Members/resellers use their own scoped endpoints (own transactions/orders).
 type FinanceController struct {
 	financeService service.FinanceService
 }
@@ -52,7 +53,7 @@ func (a *FinanceController) initRouter(g *gin.RouterGroup) {
 }
 
 func (a *FinanceController) dashboard(c *gin.Context) {
-	d, err := a.financeService.Dashboard()
+	d, err := a.financeService.Dashboard(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -62,7 +63,7 @@ func (a *FinanceController) dashboard(c *gin.Context) {
 
 func (a *FinanceController) timeSeries(c *gin.Context) {
 	days, _ := strconv.Atoi(c.Query("days"))
-	rows, err := a.financeService.TimeSeries(days)
+	rows, err := a.financeService.TimeSeries(days, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -71,7 +72,7 @@ func (a *FinanceController) timeSeries(c *gin.Context) {
 }
 
 func (a *FinanceController) paymentBreakdown(c *gin.Context) {
-	rows, err := a.financeService.PaymentBreakdown()
+	rows, err := a.financeService.PaymentBreakdown(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -80,7 +81,7 @@ func (a *FinanceController) paymentBreakdown(c *gin.Context) {
 }
 
 func (a *FinanceController) segments(c *gin.Context) {
-	seg, err := a.financeService.Segments()
+	seg, err := a.financeService.Segments(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -90,7 +91,7 @@ func (a *FinanceController) segments(c *gin.Context) {
 
 func (a *FinanceController) topProducts(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
-	rows, err := a.financeService.TopProducts(limit)
+	rows, err := a.financeService.TopProducts(limit, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -100,7 +101,7 @@ func (a *FinanceController) topProducts(c *gin.Context) {
 
 func (a *FinanceController) topCustomers(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
-	rows, err := a.financeService.TopCustomers(limit)
+	rows, err := a.financeService.TopCustomers(limit, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -110,7 +111,7 @@ func (a *FinanceController) topCustomers(c *gin.Context) {
 
 func (a *FinanceController) topResellers(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
-	rows, err := a.financeService.TopResellers(limit)
+	rows, err := a.financeService.TopResellers(limit, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -120,7 +121,7 @@ func (a *FinanceController) topResellers(c *gin.Context) {
 
 func (a *FinanceController) topDepositors(c *gin.Context) {
 	limit, _ := strconv.Atoi(c.Query("limit"))
-	rows, err := a.financeService.TopDepositors(limit)
+	rows, err := a.financeService.TopDepositors(limit, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -131,7 +132,7 @@ func (a *FinanceController) topDepositors(c *gin.Context) {
 func (a *FinanceController) cashflow(c *gin.Context) {
 	from, _ := strconv.ParseInt(c.Query("from"), 10, 64)
 	to, _ := strconv.ParseInt(c.Query("to"), 10, 64)
-	cf, err := a.financeService.Cashflow(from, to)
+	cf, err := a.financeService.Cashflow(from, to, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -140,7 +141,7 @@ func (a *FinanceController) cashflow(c *gin.Context) {
 }
 
 func (a *FinanceController) consistency(c *gin.Context) {
-	chk, err := a.financeService.ConsistencyCheck()
+	chk, err := a.financeService.ConsistencyCheck(tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -164,7 +165,7 @@ func (a *FinanceController) deposits(c *gin.Context) {
 		To:     to,
 		Limit:  limit,
 		Offset: offset,
-	})
+	}, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -174,7 +175,7 @@ func (a *FinanceController) deposits(c *gin.Context) {
 
 func (a *FinanceController) userProfile(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	p, err := a.financeService.UserProfile(id)
+	p, err := a.financeService.UserProfile(id, tenant.HomeScopeStrict(c))
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -192,17 +193,17 @@ func sendCSV(c *gin.Context, filename string, data []byte) {
 }
 
 func (a *FinanceController) exportTransactions(c *gin.Context) {
-	sendCSV(c, "transactions.csv", a.financeService.ExportTransactionsCSV())
+	sendCSV(c, "transactions.csv", a.financeService.ExportTransactionsCSV(tenant.HomeScopeStrict(c)))
 }
 
 func (a *FinanceController) exportOrders(c *gin.Context) {
-	sendCSV(c, "orders.csv", a.financeService.ExportOrdersCSV())
+	sendCSV(c, "orders.csv", a.financeService.ExportOrdersCSV(tenant.HomeScopeStrict(c)))
 }
 
 func (a *FinanceController) exportDeposits(c *gin.Context) {
-	sendCSV(c, "deposits.csv", a.financeService.ExportDepositsCSV())
+	sendCSV(c, "deposits.csv", a.financeService.ExportDepositsCSV(tenant.HomeScopeStrict(c)))
 }
 
 func (a *FinanceController) exportUsers(c *gin.Context) {
-	sendCSV(c, "users.csv", a.financeService.ExportUsersCSV())
+	sendCSV(c, "users.csv", a.financeService.ExportUsersCSV(tenant.HomeScopeStrict(c)))
 }

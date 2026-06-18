@@ -3,9 +3,9 @@ import { useQuery } from '@tanstack/react-query';
 import { HttpUtil } from '@/utils';
 
 // Role names mirror the backend's canonical roles (database/model: admin,
-// moderator, reseller, member). The backend is the source of truth; these are
-// only used to drive presentation.
-export type Role = 'admin' | 'moderator' | 'reseller' | 'member';
+// manager, moderator, reseller, member). The backend is the source of truth;
+// these are only used to drive presentation.
+export type Role = 'admin' | 'manager' | 'reseller' | 'member';
 
 // Permission strings mirror database/model/rbac.go. Keep in sync with the
 // backend matrix; the backend independently enforces every one.
@@ -28,7 +28,11 @@ export type Permission =
   | 'customer.view'
   | 'order.view_all'
   | 'order.view_own'
-  | 'balance.view_own';
+  | 'balance.view_own'
+  | 'tenant.settings'
+  | 'tenant.payments'
+  | 'tenant.users'
+  | 'manager.admin';
 
 export interface MeInfo {
   id: number;
@@ -37,9 +41,17 @@ export interface MeInfo {
   role: Role;
   permissions: Permission[];
   isAdmin: boolean;
-  isModerator: boolean;
+  isManager: boolean;
   isReseller: boolean;
   isMember: boolean;
+  // Multi-tenancy: the user's home workspace. tenantId 0 = global/admin scope
+  // (no workspace); a manager and their sub-users carry their tenant id + slug.
+  tenantId: number;
+  tenantSlug: string;
+  // Workspace branding (tenant users only; empty for the global/admin scope).
+  brandLogo: string;
+  brandFavicon: string;
+  brandTheme: string;
   balance: number;
   clientCost: number;
   clientCostPerGB: number;
@@ -62,10 +74,12 @@ function normalizeRole(role: unknown): Role
     switch (String(role))
     {
         case 'admin':
-        case 'moderator':
+        case 'manager':
         case 'reseller':
         case 'member':
             return role as Role;
+        case 'moderator':
+            return 'reseller'; // legacy alias — moderator role removed
         case 'user':
             return 'reseller'; // legacy alias
         default:
@@ -88,9 +102,14 @@ async function fetchMe(): Promise<MeInfo>
         role: normalizeRole(o.role),
         permissions: Array.isArray(o.permissions) ? (o.permissions as Permission[]) : [],
         isAdmin: Boolean(o.isAdmin),
-        isModerator: Boolean(o.isModerator),
+        isManager: Boolean(o.isManager),
         isReseller: Boolean(o.isReseller),
         isMember: Boolean(o.isMember),
+        tenantId: Number(o.tenantId) || 0,
+        tenantSlug: String(o.tenantSlug ?? ''),
+        brandLogo: String(o.brandLogo ?? ''),
+        brandFavicon: String(o.brandFavicon ?? ''),
+        brandTheme: String(o.brandTheme ?? ''),
         balance: Number(o.balance) || 0,
         clientCost: Number(o.clientCost) || 0,
         clientCostPerGB: Number(o.clientCostPerGB) || 0,
@@ -129,6 +148,8 @@ export function useMe()
         role: me?.role,
         can,
         isAdmin: me?.isAdmin,
+        isManager: me?.isManager,
+        tenantSlug: me?.tenantSlug ?? '',
         balance: me?.balance ?? 0,
         clientCost: me?.clientCost ?? 0,
         loading: query.isLoading,

@@ -24,6 +24,13 @@ var ErrFinanceUserNotFound = errors.New("user not found")
 // segmentation, a unified deposit feed, per-user profiles, consistency checks
 // and CSV exports. It never mutates money — that only happens through the
 // ledger-backed WalletService.
+//
+// Every public method takes a model.Scope: admins (global) see platform-wide
+// figures exactly as before, while a manager sees only their own workspace's
+// finance. Because every source table carries tenant_id, scoping is applied by
+// deriving the working DB from scope.Apply(...) (a no-op for the global scope);
+// JOINed/aliased queries use scope.ApplyCol with a qualified column to stay
+// unambiguous.
 type FinanceService struct{}
 
 // FinanceHighValueThreshold is the lifetime-deposit cutoff (in credits) above
@@ -58,8 +65,8 @@ func startOfYearMilli() int64 {
 // confirmedDepositVolume returns the gross real-money deposit volume since `since`
 // (0 = all time): approved manual card-to-card deposits + paid gateway/crypto
 // payments. Bonuses are NOT counted (granted credit, not received money).
-func (s *FinanceService) confirmedDepositVolume(since int64) int64 {
-	db := database.GetDB()
+func (s *FinanceService) confirmedDepositVolume(since int64, scope model.Scope) int64 {
+	db := scope.Apply(database.GetDB())
 	manual := db.Model(&model.ManualDepositRequest{}).Where("status = ?", model.ManualDepositApproved)
 	gateway := db.Model(&model.Payment{}).Where("status = ?", model.PaymentPaid)
 	if since > 0 {
@@ -73,17 +80,17 @@ func (s *FinanceService) confirmedDepositVolume(since int64) int64 {
 
 // FinanceDashboard is the platform-wide financial snapshot.
 type FinanceDashboard struct {
-	TotalRevenue   int64 `json:"totalRevenue"`
-	TodayRevenue   int64 `json:"todayRevenue"`
-	WeekRevenue    int64 `json:"weekRevenue"`
-	MonthRevenue   int64 `json:"monthRevenue"`
-	YearRevenue    int64 `json:"yearRevenue"`
-	GrossRevenue   int64 `json:"grossRevenue"`
-	NetRevenue     int64 `json:"netRevenue"`
+	TotalRevenue    int64 `json:"totalRevenue"`
+	TodayRevenue    int64 `json:"todayRevenue"`
+	WeekRevenue     int64 `json:"weekRevenue"`
+	MonthRevenue    int64 `json:"monthRevenue"`
+	YearRevenue     int64 `json:"yearRevenue"`
+	GrossRevenue    int64 `json:"grossRevenue"`
+	NetRevenue      int64 `json:"netRevenue"`
 	LifetimeRevenue int64 `json:"lifetimeRevenue"`
 
-	TotalDeposits     int64 `json:"totalDeposits"`     // volume (confirmed)
-	TotalWithdrawals  int64 `json:"totalWithdrawals"`  // manual admin debits
+	TotalDeposits      int64 `json:"totalDeposits"`    // volume (confirmed)
+	TotalWithdrawals   int64 `json:"totalWithdrawals"` // manual admin debits
 	TotalWalletBalance int64 `json:"totalWalletBalance"`
 
 	PendingDeposits  int64 `json:"pendingDeposits"`
@@ -96,11 +103,11 @@ type FinanceDashboard struct {
 	TotalProductSales        int64 `json:"totalProductSales"`
 	ProductSalesCount        int64 `json:"productSalesCount"`
 
-	TotalUsers   int64 `json:"totalUsers"`
-	PayingUsers  int64 `json:"payingUsers"`
-	ActiveUsers  int64 `json:"activeUsers"`
-	ARPU         int64 `json:"arpu"`
-	AOV          int64 `json:"aov"`
+	TotalUsers  int64 `json:"totalUsers"`
+	PayingUsers int64 `json:"payingUsers"`
+	ActiveUsers int64 `json:"activeUsers"`
+	ARPU        int64 `json:"arpu"`
+	AOV         int64 `json:"aov"`
 
 	// Operations (consumption side, ported from the old reports page): total
 	// wallet balance consumed via debits, plus client/service counts.
@@ -109,17 +116,17 @@ type FinanceDashboard struct {
 	NewClientsMonth int64 `json:"newClientsMonth"`
 }
 
-func (s *FinanceService) Dashboard() (*FinanceDashboard, error) {
-	db := database.GetDB()
+func (s *FinanceService) Dashboard(scope model.Scope) (*FinanceDashboard, error) {
+	db := scope.Apply(database.GetDB())
 	d := &FinanceDashboard{}
 
-	d.GrossRevenue = s.confirmedDepositVolume(0)
+	d.GrossRevenue = s.confirmedDepositVolume(0, scope)
 	d.TotalRevenue = d.GrossRevenue
 	d.LifetimeRevenue = d.GrossRevenue
-	d.TodayRevenue = s.confirmedDepositVolume(startOfDayMilli(0))
-	d.WeekRevenue = s.confirmedDepositVolume(startOfDayMilli(7))
-	d.MonthRevenue = s.confirmedDepositVolume(startOfMonthMilli())
-	d.YearRevenue = s.confirmedDepositVolume(startOfYearMilli())
+	d.TodayRevenue = s.confirmedDepositVolume(startOfDayMilli(0), scope)
+	d.WeekRevenue = s.confirmedDepositVolume(startOfDayMilli(7), scope)
+	d.MonthRevenue = s.confirmedDepositVolume(startOfMonthMilli(), scope)
+	d.YearRevenue = s.confirmedDepositVolume(startOfYearMilli(), scope)
 	d.TotalDeposits = d.GrossRevenue
 
 	d.TotalRefunds = sumInt64(db.Model(&model.Transaction{}).Where("source = ?", model.TxSourceRefund), "amount")
@@ -140,10 +147,10 @@ func (s *FinanceService) Dashboard() (*FinanceDashboard, error) {
 	d.ProductSalesCount = countRows(db.Model(&model.Order{}).Where("status = ?", model.OrderCompleted))
 
 	d.TotalUsers = countRows(db.Model(&model.User{}))
-	deposits := s.depositByUser()
+	deposits := s.depositByUser(scope)
 	d.PayingUsers = int64(len(deposits))
 	// Active = engaged: at least one completed order or one confirmed deposit.
-	buyers := s.orderCountByUser()
+	buyers := s.orderCountByUser(scope)
 	active := map[int]bool{}
 	for u := range deposits {
 		active[u] = true
@@ -168,8 +175,8 @@ func (s *FinanceService) Dashboard() (*FinanceDashboard, error) {
 }
 
 // depositByUser maps user id -> lifetime confirmed deposit volume.
-func (s *FinanceService) depositByUser() map[int]int64 {
-	db := database.GetDB()
+func (s *FinanceService) depositByUser(scope model.Scope) map[int]int64 {
+	db := scope.Apply(database.GetDB())
 	out := map[int]int64{}
 	type row struct {
 		UserId int
@@ -191,8 +198,8 @@ func (s *FinanceService) depositByUser() map[int]int64 {
 }
 
 // orderCountByUser maps user id -> completed-order count.
-func (s *FinanceService) orderCountByUser() map[int]int64 {
-	db := database.GetDB()
+func (s *FinanceService) orderCountByUser(scope model.Scope) map[int]int64 {
+	db := scope.Apply(database.GetDB())
 	out := map[int]int64{}
 	type row struct {
 		UserId int
@@ -220,11 +227,11 @@ type FinanceDayPoint struct {
 
 // TimeSeries buckets the last `days` days (DB-agnostic: rows are fetched in the
 // window and bucketed in Go, so no engine-specific date SQL is needed).
-func (s *FinanceService) TimeSeries(days int) ([]FinanceDayPoint, error) {
+func (s *FinanceService) TimeSeries(days int, scope model.Scope) ([]FinanceDayPoint, error) {
 	if days <= 0 || days > 365 {
 		days = 30
 	}
-	db := database.GetDB()
+	db := scope.Apply(database.GetDB())
 	since := startOfDayMilli(days - 1)
 	loc := time.Now().Location()
 	dayKey := func(ms int64) string { return time.UnixMilli(ms).In(loc).Format("2006-01-02") }
@@ -284,15 +291,15 @@ func (s *FinanceService) TimeSeries(days int) ([]FinanceDayPoint, error) {
 
 type FinanceMethodStat struct {
 	Method   string `json:"method"`
-	Count    int64  `json:"count"`    // confirmed count
-	Volume   int64  `json:"volume"`   // confirmed volume
+	Count    int64  `json:"count"`  // confirmed count
+	Volume   int64  `json:"volume"` // confirmed volume
 	Bonus    int64  `json:"bonus"`
 	Pending  int64  `json:"pending"`
 	Rejected int64  `json:"rejected"`
 }
 
-func (s *FinanceService) PaymentBreakdown() ([]FinanceMethodStat, error) {
-	db := database.GetDB()
+func (s *FinanceService) PaymentBreakdown(scope model.Scope) ([]FinanceMethodStat, error) {
+	db := scope.Apply(database.GetDB())
 	out := []FinanceMethodStat{}
 
 	manual := FinanceMethodStat{Method: "manual"}
@@ -318,25 +325,25 @@ func (s *FinanceService) PaymentBreakdown() ([]FinanceMethodStat, error) {
 // ---- segmentation ---------------------------------------------------------
 
 type FinanceSegments struct {
-	TotalUsers              int64 `json:"totalUsers"`
+	TotalUsers               int64 `json:"totalUsers"`
 	RegisteredNeverDeposited int64 `json:"registeredNeverDeposited"`
-	DepositedNeverPurchased int64 `json:"depositedNeverPurchased"`
-	PurchasedOnce           int64 `json:"purchasedOnce"`
-	RepeatBuyers            int64 `json:"repeatBuyers"`
-	HighValue               int64 `json:"highValue"`
-	Inactive90d             int64 `json:"inactive90d"`
-	Resellers               int64 `json:"resellers"`
-	Members                 int64 `json:"members"`
-	Moderators              int64 `json:"moderators"`
-	Admins                  int64 `json:"admins"`
+	DepositedNeverPurchased  int64 `json:"depositedNeverPurchased"`
+	PurchasedOnce            int64 `json:"purchasedOnce"`
+	RepeatBuyers             int64 `json:"repeatBuyers"`
+	HighValue                int64 `json:"highValue"`
+	Inactive90d              int64 `json:"inactive90d"`
+	Resellers                int64 `json:"resellers"`
+	Members                  int64 `json:"members"`
+	Managers                 int64 `json:"managers"`
+	Admins                   int64 `json:"admins"`
 }
 
-func (s *FinanceService) Segments() (*FinanceSegments, error) {
-	db := database.GetDB()
+func (s *FinanceService) Segments(scope model.Scope) (*FinanceSegments, error) {
+	db := scope.Apply(database.GetDB())
 	seg := &FinanceSegments{}
 	seg.TotalUsers = countRows(db.Model(&model.User{}))
 
-	deposits := s.depositByUser()
+	deposits := s.depositByUser(scope)
 	seg.RegisteredNeverDeposited = seg.TotalUsers - int64(len(deposits))
 	if seg.RegisteredNeverDeposited < 0 {
 		seg.RegisteredNeverDeposited = 0
@@ -384,12 +391,12 @@ func (s *FinanceService) Segments() (*FinanceSegments, error) {
 	db.Model(&model.User{}).Select("role, COUNT(*) AS c").Group("role").Scan(&rr)
 	for _, r := range rr {
 		switch model.NormalizeRole(r.Role) {
+		case model.RoleManager:
+			seg.Managers += r.C
 		case model.RoleReseller:
 			seg.Resellers += r.C
 		case model.RoleMember:
 			seg.Members += r.C
-		case model.RoleModerator:
-			seg.Moderators += r.C
 		case model.RoleAdmin:
 			seg.Admins += r.C
 		}
@@ -406,13 +413,13 @@ type FinanceTopProduct struct {
 	Revenue   int64  `json:"revenue"`
 }
 
-func (s *FinanceService) TopProducts(limit int) ([]FinanceTopProduct, error) {
+func (s *FinanceService) TopProducts(limit int, scope model.Scope) ([]FinanceTopProduct, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
 	var rows []FinanceTopProduct
-	err := database.GetDB().
-		Table("orders AS o").
+	q := scope.ApplyCol(database.GetDB().Table("orders AS o"), "o.tenant_id")
+	err := q.
 		Select("o.product_id AS product_id, MAX(o.product_name) AS name, COUNT(*) AS sales, COALESCE(SUM(o.amount),0) AS revenue").
 		Where("o.status = ?", model.OrderCompleted).
 		Group("o.product_id").Order("revenue DESC").Limit(limit).Scan(&rows).Error
@@ -427,13 +434,13 @@ type FinanceTopUser struct {
 	Count    int64  `json:"count"`
 }
 
-func (s *FinanceService) TopCustomers(limit int) ([]FinanceTopUser, error) {
+func (s *FinanceService) TopCustomers(limit int, scope model.Scope) ([]FinanceTopUser, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
 	var rows []FinanceTopUser
-	err := database.GetDB().
-		Table("orders AS o").
+	q := scope.ApplyCol(database.GetDB().Table("orders AS o"), "o.tenant_id")
+	err := q.
 		Joins("LEFT JOIN users u ON u.id = o.user_id").
 		Select("o.user_id AS user_id, MAX(u.username) AS username, MAX(u.role) AS role, COALESCE(SUM(o.amount),0) AS value, COUNT(*) AS count").
 		Where("o.status = ?", model.OrderCompleted).
@@ -444,13 +451,13 @@ func (s *FinanceService) TopCustomers(limit int) ([]FinanceTopUser, error) {
 	return rows, err
 }
 
-func (s *FinanceService) TopResellers(limit int) ([]FinanceTopUser, error) {
+func (s *FinanceService) TopResellers(limit int, scope model.Scope) ([]FinanceTopUser, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
 	var rows []FinanceTopUser
-	err := database.GetDB().
-		Table("transactions AS t").
+	q := scope.ApplyCol(database.GetDB().Table("transactions AS t"), "t.tenant_id")
+	err := q.
 		Joins("LEFT JOIN users u ON u.id = t.user_id").
 		Select("t.user_id AS user_id, MAX(u.username) AS username, MAX(u.role) AS role, COALESCE(SUM(t.amount),0) AS value, COUNT(*) AS count").
 		Where("t.source = ?", model.TxSourceReferral).
@@ -462,11 +469,11 @@ func (s *FinanceService) TopResellers(limit int) ([]FinanceTopUser, error) {
 }
 
 // TopDepositors ranks users by lifetime confirmed deposit volume.
-func (s *FinanceService) TopDepositors(limit int) ([]FinanceTopUser, error) {
+func (s *FinanceService) TopDepositors(limit int, scope model.Scope) ([]FinanceTopUser, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 10
 	}
-	deposits := s.depositByUser()
+	deposits := s.depositByUser(scope)
 	rows := make([]FinanceTopUser, 0, len(deposits))
 	for uid, v := range deposits {
 		rows = append(rows, FinanceTopUser{UserId: uid, Value: v})
@@ -490,7 +497,7 @@ func (s *FinanceService) TopDepositors(limit int) ([]FinanceTopUser, error) {
 		Role     string
 	}
 	var urs []ur
-	database.GetDB().Model(&model.User{}).Select("id, username, role").Where("id IN ?", ids).Scan(&urs)
+	scope.Apply(database.GetDB()).Model(&model.User{}).Select("id, username, role").Where("id IN ?", ids).Scan(&urs)
 	for _, u := range urs {
 		users[u.Id] = struct {
 			Username string
@@ -519,11 +526,11 @@ type FinanceCashflow struct {
 }
 
 // Cashflow reports money movement within [from, to] (ms). to<=0 means "now".
-func (s *FinanceService) Cashflow(from, to int64) (*FinanceCashflow, error) {
+func (s *FinanceService) Cashflow(from, to int64, scope model.Scope) (*FinanceCashflow, error) {
 	if to <= 0 {
 		to = time.Now().UnixMilli()
 	}
-	db := database.GetDB()
+	db := scope.Apply(database.GetDB())
 	cf := &FinanceCashflow{From: from, To: to}
 	manualA := db.Model(&model.ManualDepositRequest{}).Where("status = ? AND approved_at >= ? AND approved_at <= ?", model.ManualDepositApproved, from, to)
 	gatewayP := db.Model(&model.Payment{}).Where("status = ? AND created_at >= ? AND created_at <= ?", model.PaymentPaid, from, to)
@@ -554,8 +561,8 @@ type FinanceConsistency struct {
 // integrity anomalies. A non-zero Difference is expected only when balances were
 // seeded directly (e.g. admin-created users with an initial balance) rather than
 // via the ledger — that's the documented exception.
-func (s *FinanceService) ConsistencyCheck() (*FinanceConsistency, error) {
-	db := database.GetDB()
+func (s *FinanceService) ConsistencyCheck(scope model.Scope) (*FinanceConsistency, error) {
+	db := scope.Apply(database.GetDB())
 	c := &FinanceConsistency{}
 	c.SumUserBalances = sumInt64(db.Model(&model.User{}), "balance")
 	credits := sumInt64(db.Model(&model.Transaction{}).Where("type = ?", model.TxCredit), "amount")
@@ -573,9 +580,9 @@ func (s *FinanceService) ConsistencyCheck() (*FinanceConsistency, error) {
 		Group("tracking_number").Having("COUNT(*) > 1").Scan(&dups)
 	c.DuplicateTracking = int64(len(dups))
 
-	// Orders pointing at a product that no longer exists.
+	// Orders pointing at a product that no longer exists (within scope).
 	c.OrphanedOrders = countRows(db.Model(&model.Order{}).
-		Where("product_id NOT IN (?)", db.Model(&model.Product{}).Select("id")))
+		Where("product_id NOT IN (?)", scope.Apply(database.GetDB()).Model(&model.Product{}).Select("id")))
 	return c, nil
 }
 
@@ -621,8 +628,9 @@ func gatewayStatusToUnified(s string) string {
 // DepositsFeed merges manual + gateway deposits into one filtered, paginated,
 // newest-first feed. Both tables are queried with the filters applied, capped at
 // offset+limit each, then merged and sliced — bounded work suitable for an admin
-// console.
-func (s *FinanceService) DepositsFeed(f FinanceDepositFilter) ([]FinanceDeposit, int64, error) {
+// console. The feed JOINs users, so tenant scoping uses the qualified "d."
+// alias to stay unambiguous.
+func (s *FinanceService) DepositsFeed(f FinanceDepositFilter, scope model.Scope) ([]FinanceDeposit, int64, error) {
 	if f.Limit <= 0 || f.Limit > 200 {
 		f.Limit = 25
 	}
@@ -638,6 +646,7 @@ func (s *FinanceService) DepositsFeed(f FinanceDepositFilter) ([]FinanceDeposit,
 
 	if includeManual && (f.Status == "" || f.Status == "pending" || f.Status == "approved" || f.Status == "rejected") {
 		q := db.Table("manual_deposit_requests AS d").Joins("LEFT JOIN users u ON u.id = d.user_id")
+		q = scope.ApplyCol(q, "d.tenant_id")
 		switch f.Status {
 		case "approved":
 			q = q.Where("d.status = ?", model.ManualDepositApproved)
@@ -679,6 +688,7 @@ func (s *FinanceService) DepositsFeed(f FinanceDepositFilter) ([]FinanceDeposit,
 
 	if includeGateway {
 		q := db.Table("payments AS d").Joins("LEFT JOIN users u ON u.id = d.user_id")
+		q = scope.ApplyCol(q, "d.tenant_id")
 		if f.Method == "zarinpal" || f.Method == "plisio" {
 			q = q.Where("d.gateway = ?", f.Method)
 		}
@@ -695,16 +705,16 @@ func (s *FinanceService) DepositsFeed(f FinanceDepositFilter) ([]FinanceDeposit,
 		q.Session(&gorm.Session{}).Count(&cnt)
 		total += cnt
 		type grow struct {
-			Id        int
-			UserId    int
-			Username  string
-			Role      string
-			Gateway   string
-			Amount    int64
+			Id          int
+			UserId      int
+			Username    string
+			Role        string
+			Gateway     string
+			Amount      int64
 			BonusAmount int64
-			Currency  string
-			Status    string
-			CreatedAt int64
+			Currency    string
+			Status      string
+			CreatedAt   int64
 		}
 		var rows []grow
 		q.Select("d.id, d.user_id, u.username, u.role, d.gateway, d.amount, d.bonus_amount, d.currency, d.status, d.created_at").
@@ -776,9 +786,11 @@ type FinanceUserProfile struct {
 	Purchases []model.Order       `json:"purchases"`
 }
 
-func (s *FinanceService) UserProfile(userId int) (*FinanceUserProfile, error) {
-	db := database.GetDB()
+func (s *FinanceService) UserProfile(userId int, scope model.Scope) (*FinanceUserProfile, error) {
+	db := scope.Apply(database.GetDB())
 	var u model.User
+	// Scoped lookup: a manager requesting a user outside their tenant gets a
+	// not-found, never another workspace's customer profile.
 	if err := db.Where("id = ?", userId).First(&u).Error; err != nil {
 		return nil, ErrFinanceUserNotFound
 	}
@@ -839,9 +851,9 @@ func csvBytes(header []string, rows [][]string) []byte {
 
 const exportRowCap = 50000
 
-func (s *FinanceService) ExportTransactionsCSV() []byte {
+func (s *FinanceService) ExportTransactionsCSV(scope model.Scope) []byte {
 	var txs []model.Transaction
-	database.GetDB().Order("id DESC").Limit(exportRowCap).Find(&txs)
+	scope.Apply(database.GetDB()).Order("id DESC").Limit(exportRowCap).Find(&txs)
 	rows := make([][]string, 0, len(txs))
 	for _, t := range txs {
 		rows = append(rows, []string{
@@ -853,9 +865,9 @@ func (s *FinanceService) ExportTransactionsCSV() []byte {
 	return csvBytes([]string{"id", "user_id", "type", "amount", "balance_before", "balance_after", "source", "ref_id", "actor", "description", "created_at"}, rows)
 }
 
-func (s *FinanceService) ExportOrdersCSV() []byte {
+func (s *FinanceService) ExportOrdersCSV(scope model.Scope) []byte {
 	var orders []model.Order
-	database.GetDB().Order("id DESC").Limit(exportRowCap).Find(&orders)
+	scope.Apply(database.GetDB()).Order("id DESC").Limit(exportRowCap).Find(&orders)
 	rows := make([][]string, 0, len(orders))
 	for _, o := range orders {
 		rows = append(rows, []string{
@@ -866,8 +878,8 @@ func (s *FinanceService) ExportOrdersCSV() []byte {
 	return csvBytes([]string{"id", "user_id", "product_id", "product_name", "amount", "status", "client_email", "created_at"}, rows)
 }
 
-func (s *FinanceService) ExportDepositsCSV() []byte {
-	all, _, _ := s.DepositsFeed(FinanceDepositFilter{Limit: 200})
+func (s *FinanceService) ExportDepositsCSV(scope model.Scope) []byte {
+	all, _, _ := s.DepositsFeed(FinanceDepositFilter{Limit: 200}, scope)
 	rows := make([][]string, 0, len(all))
 	for _, d := range all {
 		rows = append(rows, []string{
@@ -878,10 +890,10 @@ func (s *FinanceService) ExportDepositsCSV() []byte {
 	return csvBytes([]string{"method", "ref_id", "user_id", "username", "role", "amount", "bonus", "currency", "status", "created_at"}, rows)
 }
 
-func (s *FinanceService) ExportUsersCSV() []byte {
+func (s *FinanceService) ExportUsersCSV(scope model.Scope) []byte {
 	var users []model.User
-	database.GetDB().Order("id ASC").Limit(exportRowCap).Find(&users)
-	deposits := s.depositByUser()
+	scope.Apply(database.GetDB()).Order("id ASC").Limit(exportRowCap).Find(&users)
+	deposits := s.depositByUser(scope)
 	rows := make([][]string, 0, len(users))
 	for _, u := range users {
 		rows = append(rows, []string{

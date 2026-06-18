@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import type { AllSetting } from '@/models/setting';
 import { Input, Select, SettingListItem, Switch } from '@/components/ui';
 
-interface ResellerTabProps {
+interface ManagerTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
@@ -16,28 +16,32 @@ type CostKey = {
 interface RoleCostRowProps {
   title: string;
   description: string;
-  resellerKey: CostKey;
+  managerKey: CostKey;
   memberKey: CostKey;
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
 
-// RoleCostRow renders one cost with a separate input per chargeable role
-// (reseller / member). Admins are always free, so they have no input.
-function RoleCostRow({ title, description, resellerKey, memberKey, allSetting, updateSetting }: RoleCostRowProps)
+// RoleCostRow renders one cost with a separate input per chargeable tier
+// (manager / member). Admins are always free, so they have no input. The
+// "manager" tier is the admin's price for their direct partners; resellers in
+// the global scope fall back to the member rate (managers price their own
+// resellers via per-tenant settings). The underlying setting keys keep their
+// historical "*Reseller" names; only the presentation is the Manager tier.
+function RoleCostRow({ title, description, managerKey, memberKey, allSetting, updateSetting }: RoleCostRowProps)
 {
     const { t } = useTranslation();
     return (
     <SettingListItem paddings="small" title={title} description={description}>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
         <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">{t('pages.settings.security.roleReseller')}</span>
+          <span className="text-sm text-muted-foreground">{t('pages.settings.security.roleManager')}</span>
           <Input
             type="number"
             min={0}
             className="w-28"
-            value={allSetting[resellerKey] as number}
-            onChange={(e) => updateSetting({ [resellerKey]: Number(e.target.value) || 0 } as Partial<AllSetting>)}
+            value={allSetting[managerKey] as number}
+            onChange={(e) => updateSetting({ [managerKey]: Number(e.target.value) || 0 } as Partial<AllSetting>)}
           />
         </div>
         <div className="flex items-center gap-2">
@@ -55,10 +59,10 @@ function RoleCostRow({ title, description, resellerKey, memberKey, allSetting, u
     );
 }
 
-// ResellerTab groups the reseller economy controls — what creating a client and
-// resetting its traffic costs, priced per role (admins are always free), and the
-// ZarinPal gateway used to top up balances.
-export default function ResellerTab({ allSetting, updateSetting }: ResellerTabProps)
+// ManagerTab groups the manager economy controls — what creating a client and
+// resetting its traffic costs, priced per tier (admins are always free), the
+// referral commission, and the ZarinPal gateway used to top up balances.
+export default function ManagerTab({ allSetting, updateSetting }: ManagerTabProps)
 {
     const { t } = useTranslation();
 
@@ -67,7 +71,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       <RoleCostRow
         title={t('pages.settings.security.clientCost')}
         description={t('pages.settings.security.clientCostDesc')}
-        resellerKey="clientCostReseller"
+        managerKey="clientCostReseller"
         memberKey="clientCostMember"
         allSetting={allSetting}
         updateSetting={updateSetting}
@@ -76,7 +80,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       <RoleCostRow
         title={t('pages.settings.security.clientCostPerGB')}
         description={t('pages.settings.security.clientCostPerGBDesc')}
-        resellerKey="clientCostPerGBReseller"
+        managerKey="clientCostPerGBReseller"
         memberKey="clientCostPerGBMember"
         allSetting={allSetting}
         updateSetting={updateSetting}
@@ -85,7 +89,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       <RoleCostRow
         title={t('pages.settings.security.resetTrafficCost')}
         description={t('pages.settings.security.resetTrafficCostDesc')}
-        resellerKey="resetTrafficCostReseller"
+        managerKey="resetTrafficCostReseller"
         memberKey="resetTrafficCostMember"
         allSetting={allSetting}
         updateSetting={updateSetting}
@@ -94,7 +98,7 @@ export default function ResellerTab({ allSetting, updateSetting }: ResellerTabPr
       <RoleCostRow
         title={t('pages.settings.security.resetTrafficCostPerGB')}
         description={t('pages.settings.security.resetTrafficCostPerGBDesc')}
-        resellerKey="resetTrafficCostPerGBReseller"
+        managerKey="resetTrafficCostPerGBReseller"
         memberKey="resetTrafficCostPerGBMember"
         allSetting={allSetting}
         updateSetting={updateSetting}
