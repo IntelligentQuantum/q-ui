@@ -272,6 +272,9 @@ export function useXraySetting(): UseXraySettingResult
             oldOutboundTestUrlRef.current = sentTestUrl;
             setSaveDisabled(true);
             queryClient.invalidateQueries({ queryKey: keys.xray.config() });
+            // The Node form's egress select reads outbound tags from the live
+            // config — refresh it so a newly added outbound shows up immediately.
+            queryClient.invalidateQueries({ queryKey: keys.xray.outboundTags() });
         }
     });
 

@@ -22,6 +22,11 @@ type LoginForm struct {
 	Username      string `json:"username" form:"username"`
 	Password      string `json:"password" form:"password"`
 	TwoFactorCode string `json:"twoFactorCode" form:"twoFactorCode"`
+	// Workspace is the Manager slug the login is happening on (from the
+	// /panel/manager/<slug> URL, ?ws, or a custom domain). It selects which
+	// workspace's account set the credentials are checked against — empty = the
+	// original/admin panel (tenant 0).
+	Workspace string `json:"workspace" form:"workspace"`
 }
 
 // RegisterForm represents the self-registration request structure.
@@ -163,7 +168,10 @@ func (a *IndexController) login(c *gin.Context) {
 		return
 	}
 
-	user, checkErr := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode)
+	// Resolve which workspace's accounts to authenticate against (per-workspace
+	// logins): the slug → tenant id, or tenant 0 for the original panel.
+	loginTenantID, _, _ := a.resolveWorkspaceTenant(form.Workspace)
+	user, checkErr := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode, loginTenantID)
 
 	if user == nil {
 		reason := loginFailureReason(checkErr)

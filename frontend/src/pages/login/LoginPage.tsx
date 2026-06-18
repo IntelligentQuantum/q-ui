@@ -169,10 +169,18 @@ export default function LoginPage()
         setSubmitting(true);
         try
         {
-            const msg = await HttpUtil.post('/login', values);
+            // Per-workspace login: tell the backend which workspace's accounts to
+            // authenticate against (the ?ws slug, or this custom domain's workspace).
+            const urlWs = new URLSearchParams(window.location.search).get('ws');
+            const ws = urlWs || window.Q_UI_WORKSPACE || '';
+            const msg = await HttpUtil.post('/login', { ...values, workspace: ws });
             if (msg.success)
             {
-                window.location.href = basePath + 'panel/';
+                // Land in the workspace just logged into (path-based); a custom
+                // domain keeps its clean root.
+                window.location.href = urlWs
+                    ? `${ basePath }panel/manager/${ encodeURIComponent(urlWs) }/`
+                    : basePath + 'panel/';
             }
         }
         finally

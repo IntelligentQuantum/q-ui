@@ -17,6 +17,7 @@ import { ME_QUERY_KEY, useMe } from '@/hooks/useMe';
 import { useCurrency } from '@/hooks/useCurrency';
 import PageShell from '@/layouts/PageShell';
 import {
+    Alert,
     Button,
     Card,
     Input,
@@ -48,11 +49,18 @@ export default function StorePage()
 {
     const { t } = useTranslation();
     const qc = useQueryClient();
-    const { balance } = useMe();
+    const { me, balance } = useMe();
     // The catalog is storefront-specific (the /manager/<slug> URL, empty = admin
     // store). Key the query on it so SPA navigation between stores refetches
     // instead of showing the previous store's products until a hard refresh.
     const { tenantSlug } = useParams();
+    // Per-workspace wallets: a customer can only buy on THEIR OWN workspace's
+    // store. On a foreign store their balance isn't usable, so buying is blocked
+    // (the backend enforces it too). Managers/admins transact cross-workspace.
+    const storeSlug = tenantSlug || window.Q_UI_WORKSPACE || '';
+    const homeSlug = me?.isAdmin ? '' : (me?.tenantSlug || '');
+    const onOwnStore = homeSlug ? storeSlug === homeSlug : !storeSlug;
+    const onForeignStore = !!me && !me.isAdmin && !me.isManager && !onOwnStore;
     const { format, formatNumber, unit } = useCurrency();
     const [buying, setBuying] = useState<Product | null>(null);
     const [name, setName] = useState('');
@@ -79,6 +87,11 @@ export default function StorePage()
     // the client "email", as on the Clients page).
     const openBuy = (p: Product) =>
     {
+        if (onForeignStore)
+        {
+            getMessage().error(t('pages.store.toasts.foreignWorkspace'));
+            return;
+        }
         setBuying(p);
         setName('');
     };
@@ -135,18 +148,24 @@ export default function StorePage()
     return (
     <PageShell name="store-page">
       <div className="flex w-full flex-col gap-4">
+        {onForeignStore && (
+          <Alert variant="warning">{t('pages.store.toasts.foreignWorkspace')}</Alert>
+        )}
         {/* Summary */}
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-          <StatCard
-            icon={<Wallet className="h-5 w-5" aria-hidden />}
-            label={t('pages.store.balance')}
-            value={
-              <>
-                {formatNumber(balance)}{' '}
-                <span className="text-base font-medium text-muted-foreground">{unit}</span>
-              </>
-            }
-          />
+          {/* Your balance is per-workspace — only meaningful on your own store. */}
+          {!onForeignStore && (
+            <StatCard
+              icon={<Wallet className="h-5 w-5" aria-hidden />}
+              label={t('pages.store.balance')}
+              value={
+                <>
+                  {formatNumber(balance)}{' '}
+                  <span className="text-base font-medium text-muted-foreground">{unit}</span>
+                </>
+              }
+            />
+          )}
           <StatCard
             icon={<LayoutGrid className="h-5 w-5" aria-hidden />}
             label={t('pages.store.available')}
@@ -219,7 +238,7 @@ export default function StorePage()
 
                     <Button
                       className="mt-auto w-full"
-                      disabled={!affordable}
+                      disabled={onForeignStore || !affordable}
                       onClick={() => openBuy(p)}
                     >
                       <ShoppingCart className="h-4 w-4" aria-hidden />

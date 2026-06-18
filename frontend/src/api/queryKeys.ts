@@ -29,6 +29,8 @@ export const keys = {
     xray: {
         root: () => ['xray'] as const,
         config: () => ['xray', 'config'] as const,
-        outboundsTraffic: () => ['xray', 'outboundsTraffic'] as const
+        outboundsTraffic: () => ['xray', 'outboundsTraffic'] as const,
+        // Outbound tag list derived from the live config (Node form egress select).
+        outboundTags: () => ['xray', 'outboundTags'] as const
     }
 } as const;

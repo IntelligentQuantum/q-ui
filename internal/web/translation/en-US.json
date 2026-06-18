@@ -615,6 +615,9 @@
         "partialTitle": "Some connection details could not be generated",
         "partialBody": "Your subscription was created successfully, but generating the config links failed. You can retry.",
         "retried": "Connection details refreshed"
+      },
+      "toasts": {
+        "foreignWorkspace": "This balance belongs to a different workspace. Register or sign in on this workspace to buy here."
       }
     },
     "orders": {
@@ -709,6 +712,10 @@
       "hello": "Hello",
       "title": "Welcome",
       "loginAgain": "Your session has expired, please log in again",
+      "foreignTitle": "Workspace: {name}",
+      "foreignDesc": "This is a separate workspace. Sign in with your account for it, or create one — your other account isn't valid here.",
+      "foreignSignIn": "Sign in to this workspace",
+      "foreignRegister": "Create an account here",
       "toasts": {
         "invalidFormData": "The input data format is invalid.",
         "emptyUsername": "Username is required",

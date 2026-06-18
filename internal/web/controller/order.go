@@ -117,6 +117,8 @@ func (a *OrderController) purchase(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrInsufficientBalance):
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
+		case errors.Is(err, service.ErrForeignWorkspace):
+			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.store.toasts.foreignWorkspace"))
 		case errors.Is(err, service.ErrProductUnavailable):
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
 		default:
@@ -156,6 +158,8 @@ func (a *OrderController) renew(c *gin.Context) {
 		switch {
 		case errors.Is(err, service.ErrInsufficientBalance):
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
+		case errors.Is(err, service.ErrForeignWorkspace):
+			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.store.toasts.foreignWorkspace"))
 		case errors.Is(err, service.ErrServiceForbidden), errors.Is(err, service.ErrServiceNotFound):
 			pureJsonMsg(c, http.StatusForbidden, false, I18nWeb(c, "fail"))
 		case errors.Is(err, service.ErrProductUnavailable):

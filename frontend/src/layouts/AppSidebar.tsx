@@ -167,6 +167,10 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
     // While impersonating, the admin sees the workspace exactly as its owner would.
     const realAdmin = !!me?.isAdmin && !imp;
     const impersonating = !!imp;
+    // A customer's wallet is per-workspace: on a storefront that is NOT their own
+    // (e.g. a tenant-0 customer on a manager's store), their balance is neither
+    // shown nor usable. Managers/admins are exempt (they transact cross-workspace).
+    const onForeignStore = !!me && !me.isAdmin && !me.isManager && !onOwnStore;
     // Navigation stays inside whichever storefront the URL is on.
     const navPrefix = urlSlug ? `/manager/${ urlSlug }` : '';
 
@@ -492,7 +496,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
 
     const balanceChip = (iconOnly: boolean) =>
     {
-        if (!me)
+        if (!me || onForeignStore)
         {
             return null;
         }

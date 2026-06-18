@@ -129,17 +129,22 @@ func (s *UserService) Register(input RegisterInput) (*model.User, error) {
 	db := database.GetDB()
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var count int64
-		if err := tx.Model(model.User{}).Where("LOWER(username) = ?", strings.ToLower(in.Username)).Count(&count).Error; err != nil {
+		// Uniqueness is PER WORKSPACE: the same username/email may exist in
+		// different workspaces as separate accounts (separate sites), so scope the
+		// checks to the tenant being registered into.
+		if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND tenant_id = ?", strings.ToLower(in.Username), in.TenantID).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
 			return ErrUsernameTaken
 		}
-		if err := tx.Model(model.User{}).Where("LOWER(email) = ?", in.Email).Count(&count).Error; err != nil {
-			return err
-		}
-		if count > 0 {
-			return ErrEmailTaken
+		if in.Email != "" {
+			if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND tenant_id = ?", strings.ToLower(in.Email), in.TenantID).Count(&count).Error; err != nil {
+				return err
+			}
+			if count > 0 {
+				return ErrEmailTaken
+			}
 		}
 		return tx.Create(user).Error
 	})
@@ -179,13 +184,18 @@ func (s *UserService) GetFirstUser() (*model.User, error) {
 	return user, nil
 }
 
-func (s *UserService) CheckUser(username string, password string, twoFactorCode string) (*model.User, error) {
+// CheckUser authenticates a login WITHIN a workspace: the (username, tenantId)
+// pair identifies the account, so the same username can exist independently in
+// different workspaces ("separate websites"). tenantId 0 is the original/admin
+// panel. The workspace is resolved server-side from the login URL/domain, never
+// trusted from the username alone.
+func (s *UserService) CheckUser(username string, password string, twoFactorCode string, tenantId int) (*model.User, error) {
 	db := database.GetDB()
 
 	user := &model.User{}
 
 	err := db.Model(model.User{}).
-		Where("username = ?", username).
+		Where("LOWER(username) = ? AND tenant_id = ?", strings.ToLower(username), tenantId).
 		First(user).
 		Error
 	if err == gorm.ErrRecordNotFound {
@@ -324,6 +334,9 @@ type AdminUserInput struct {
 	Role              string
 	Balance           int64
 	CostPerGBOverride int // per-GB price override; 0 = use role default
+	// TenantID is the workspace the account belongs to (0 = admin panel). Used to
+	// stamp the account and scope per-workspace username/email uniqueness.
+	TenantID int
 }
 
 // normalizeRole canonicalizes an admin-supplied role into one of the four
@@ -431,16 +444,19 @@ func (s *UserService) adminCreateUserTx(tx *gorm.DB, in AdminUserInput) (*model.
 		Role:              normalizeRole(in.Role),
 		Balance:           balance,
 		CostPerGBOverride: override,
+		TenantId:          in.TenantID, // the workspace the account belongs to (0 = admin panel)
 	}
 	var count int64
-	if err := tx.Model(model.User{}).Where("LOWER(username) = ?", strings.ToLower(in.Username)).Count(&count).Error; err != nil {
+	// Uniqueness is PER WORKSPACE: scope the checks to the account's tenant so the
+	// same username/email can exist as separate accounts in different workspaces.
+	if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND tenant_id = ?", strings.ToLower(in.Username), in.TenantID).Count(&count).Error; err != nil {
 		return nil, err
 	}
 	if count > 0 {
 		return nil, ErrUsernameTaken
 	}
 	if email != "" {
-		if err := tx.Model(model.User{}).Where("LOWER(email) = ?", email).Count(&count).Error; err != nil {
+		if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND tenant_id = ?", strings.ToLower(email), in.TenantID).Count(&count).Error; err != nil {
 			return nil, err
 		}
 		if count > 0 {
@@ -501,14 +517,15 @@ func (s *UserService) AdminUpdateUser(id int, in AdminUserInput) (*model.User, e
 			return err
 		}
 		var count int64
-		if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND id <> ?", strings.ToLower(in.Username), id).Count(&count).Error; err != nil {
+		// Uniqueness scoped to the account's OWN workspace (per-workspace identities).
+		if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND tenant_id = ? AND id <> ?", strings.ToLower(in.Username), existing.TenantId, id).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
 			return ErrUsernameTaken
 		}
 		if email != "" {
-			if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND id <> ?", email, id).Count(&count).Error; err != nil {
+			if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND tenant_id = ? AND id <> ?", strings.ToLower(email), existing.TenantId, id).Count(&count).Error; err != nil {
 				return err
 			}
 			if count > 0 {
@@ -621,14 +638,16 @@ func (s *UserService) UpdateSelfProfile(userId int, in SelfProfileInput) (*model
 
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var count int64
-		if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND id <> ?", strings.ToLower(in.Username), userId).Count(&count).Error; err != nil {
+		// Scope uniqueness to the caller's OWN workspace (per-workspace identities).
+		tenantSub := tx.Model(model.User{}).Select("tenant_id").Where("id = ?", userId)
+		if err := tx.Model(model.User{}).Where("LOWER(username) = ? AND id <> ? AND tenant_id = (?)", strings.ToLower(in.Username), userId, tenantSub).Count(&count).Error; err != nil {
 			return err
 		}
 		if count > 0 {
 			return ErrUsernameTaken
 		}
 		if email != "" {
-			if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND id <> ?", email, userId).Count(&count).Error; err != nil {
+			if err := tx.Model(model.User{}).Where("LOWER(email) = ? AND id <> ? AND tenant_id = (?)", strings.ToLower(email), userId, tenantSub).Count(&count).Error; err != nil {
 				return err
 			}
 			if count > 0 {

@@ -20,6 +20,7 @@ var (
 	ErrBuyerRequired      = errors.New("buyer is required")
 	ErrServiceNotFound    = errors.New("service not found")
 	ErrServiceForbidden   = errors.New("you do not own this service")
+	ErrForeignWorkspace   = errors.New("you can only buy on your own workspace")
 )
 
 // OrderService handles product purchases, provisioning and order history.
@@ -73,6 +74,21 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
 	}
 }
 
+// workspaceCanBuy enforces per-workspace wallets: a customer (member/reseller)
+// may only buy on THEIR OWN workspace's storefront, because their balance is
+// separate per workspace and is not usable on another workspace's store. Admins
+// and managers are exempt — a manager legitimately buys from the admin store to
+// resell. Returns ErrForeignWorkspace when a customer targets a foreign store.
+func workspaceCanBuy(buyer *model.User, view model.Scope) error {
+	if buyer.IsAdmin() || buyer.IsManager() {
+		return nil
+	}
+	if view.TenantID != buyer.TenantId {
+		return ErrForeignWorkspace
+	}
+	return nil
+}
+
 // Purchase buys a product for the given buyer (taken from the session, never
 // from request input, so a caller cannot purchase as someone else). name is the
 // buyer-chosen config name (the client "email"); blank falls back to an
@@ -80,6 +96,9 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
 func (s *OrderService) Purchase(buyer *model.User, productId int, name string, view model.Scope) (*model.Order, error) {
 	if buyer == nil {
 		return nil, ErrBuyerRequired
+	}
+	if err := workspaceCanBuy(buyer, view); err != nil {
+		return nil, err
 	}
 	// The product is bought from the STOREFRONT being browsed (view scope), so a
 	// customer on /panel/manager/<slug> buys that manager's product; the sale is
@@ -154,6 +173,9 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 func (s *OrderService) Renew(buyer *model.User, productId int, email string, view model.Scope) (*model.Order, error) {
 	if buyer == nil {
 		return nil, ErrBuyerRequired
+	}
+	if err := workspaceCanBuy(buyer, view); err != nil {
+		return nil, err
 	}
 	product, err := s.productService.Get(productId, view)
 	if err != nil || product.Status != model.ProductActive {

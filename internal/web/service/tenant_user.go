@@ -78,6 +78,9 @@ func (s *TenantUserService) Create(in AdminUserInput, scope model.Scope) (*model
 	if !tenantManageableRole(in.Role) {
 		return nil, ErrTenantRoleForbidden
 	}
+	// Create the account directly IN this workspace so per-workspace uniqueness is
+	// checked against the right tenant (the same username may exist elsewhere).
+	in.TenantID = scope.OwnerTenantID()
 	var user *model.User
 	err := database.GetDB().Transaction(func(tx *gorm.DB) error {
 		u, err := s.userService.adminCreateUserTx(tx, in)

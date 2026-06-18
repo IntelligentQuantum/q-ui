@@ -46,7 +46,7 @@ func TestRegisterCreatesUserWithHashedPassword(t *testing.T) {
 	}
 
 	// Confirm the stored password is a bcrypt hash that verifies, not plaintext.
-	stored, err := s.CheckUser("jane_doe", "Sup3rSecret", "")
+	stored, err := s.CheckUser("jane_doe", "Sup3rSecret", "", 0)
 	if err != nil {
 		t.Fatalf("CheckUser failed for the new account: %v", err)
 	}

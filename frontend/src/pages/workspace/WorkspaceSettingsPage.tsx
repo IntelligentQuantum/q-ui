@@ -2,15 +2,16 @@ import { useEffect, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Save } from 'lucide-react';
+import { Save, Wallet } from 'lucide-react';
 
 import { usePageTitle } from '@/hooks/usePageTitle';
-import { ME_QUERY_KEY } from '@/hooks/useMe';
+import { ME_QUERY_KEY, useMe } from '@/hooks/useMe';
+import { useCurrency } from '@/hooks/useCurrency';
 import { HttpUtil } from '@/utils';
 import { message } from '@/components/ui/message';
 import { setMessageInstance } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
-import { Button, Card, ErrorState, Input, Label, Select, Spinner, Switch } from '@/components/ui';
+import { Button, Card, ErrorState, Input, Label, Select, Spinner, StatCard, Switch } from '@/components/ui';
 // Reused as-is: the ticket-category manager hits /tickets/admin/categories, which
 // is tenant-scoped, so a manager edits ONLY their own workspace's categories.
 import TicketCategoriesTab from '@/pages/settings/TicketCategoriesTab';
@@ -56,6 +57,8 @@ export default function WorkspaceSettingsPage()
 {
     usePageTitle();
     const { t } = useTranslation();
+    const { me } = useMe();
+    const { format: formatMoney } = useCurrency();
     const [messageApi] = message.useMessage();
     useEffect(() =>
     {
@@ -118,6 +121,14 @@ export default function WorkspaceSettingsPage()
       }
     >
       <div className="flex flex-col gap-4">
+        {/* The workspace's prepaid pool = the manager's own balance. Every sale on
+            this workspace draws it down, so a manager can see how much is left. */}
+        <StatCard
+          icon={<Wallet className="h-5 w-5" aria-hidden />}
+          label={t('pages.managers.workspaceBalance')}
+          value={formatMoney(me?.balance ?? 0)}
+        />
+
         <Card className="flex flex-col gap-4 p-4 sm:p-5">
           <h2 className="text-sm font-semibold text-muted-foreground">{t('pages.workspaceSettings.workspaceUrl')}</h2>
           <Field label={t('pages.workspaceSettings.slug')} htmlFor="ws-slug" hint={t('pages.workspaceSettings.slugHint')}>

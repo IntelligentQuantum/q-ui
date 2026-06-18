@@ -1,6 +1,6 @@
 import { useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Eye, LogOut } from 'lucide-react';
+import { Eye, LogIn, LogOut, UserPlus } from 'lucide-react';
 import { Outlet, useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import { useWebSocketBridge } from '@/api/websocketBridge';
@@ -8,6 +8,8 @@ import { usePageTitle } from '@/hooks/usePageTitle';
 import { useBranding } from '@/hooks/useBranding';
 import { useMe, type MeInfo } from '@/hooks/useMe';
 import { clearImpersonation, getImpersonation } from '@/utils/impersonation';
+import { HttpUtil } from '@/utils';
+import { Button } from '@/components/ui';
 
 // canAccess mirrors the backend permission matrix (database/model/rbac.go).
 // This is a UX guard ONLY — the backend independently enforces RBAC on every
@@ -133,9 +135,15 @@ export default function PanelLayout()
     // own balance, and reach their workspace via the sidebar.
     const needWorkspaceLanding = !!me && !!ownSlug && !urlSlug && logicalPath === '/' && !me.isManager;
 
+    // Separate sites: a logged-in user who is NOT a member of the workspace in the
+    // URL must not see its content — they get ITS OWN login/register instead. The
+    // admin (oversight / impersonation) is exempt; not-logged-in visitors already
+    // hit the ?ws login via the axios 401 redirect.
+    const viewingForeignWorkspace = !!me && !me.isAdmin && !!urlSlug && (me.tenantSlug || '') !== urlSlug;
+
     useEffect(() =>
     {
-        if (!me)
+        if (!me || viewingForeignWorkspace)
         {
             return;
         }
@@ -148,7 +156,43 @@ export default function PanelLayout()
         {
             navigate(home, { replace: true });
         }
-    }, [me, needWorkspaceLanding, ownSlug, restricted, home, navigate]);
+    }, [me, viewingForeignWorkspace, needWorkspaceLanding, ownSlug, restricted, home, navigate]);
+
+    // Not a member of this workspace → show ITS login/register, not its content.
+    // The buttons end the current (other-workspace) session first, so the
+    // workspace's own auth page shows instead of bouncing back to /panel/.
+    if (viewingForeignWorkspace && urlSlug)
+    {
+        const base = window.Q_UI_BASE_PATH || '/';
+        const go = async (path: string) =>
+        {
+            await HttpUtil.post('/logout');
+            window.location.href = path;
+        };
+        return (
+      <div className="flex min-h-screen items-center justify-center bg-background p-4">
+        <div className="flex w-full max-w-sm flex-col items-center gap-5 rounded-xl border border-border bg-surface p-8 text-center shadow-lg">
+          <div className="grid h-12 w-12 place-items-center rounded-full bg-accent-subtle text-accent">
+            <LogIn className="h-6 w-6" aria-hidden />
+          </div>
+          <div className="flex flex-col gap-1">
+            <h1 className="text-lg font-semibold text-foreground">{t('pages.login.foreignTitle', { name: urlSlug })}</h1>
+            <p className="text-sm text-muted-foreground">{t('pages.login.foreignDesc')}</p>
+          </div>
+          <div className="flex w-full flex-col gap-2">
+            <Button className="w-full" onClick={() => go(`${ base }?ws=${ encodeURIComponent(urlSlug) }`)}>
+              <LogIn className="h-4 w-4" aria-hidden />
+              {t('pages.login.foreignSignIn')}
+            </Button>
+            <Button variant="secondary" className="w-full" onClick={() => go(`${ base }register?ws=${ encodeURIComponent(urlSlug) }`)}>
+              <UserPlus className="h-4 w-4" aria-hidden />
+              {t('pages.login.foreignRegister')}
+            </Button>
+          </div>
+        </div>
+      </div>
+        );
+    }
 
     // Avoid flashing the wrong page for the frame before a redirect lands.
     if (needWorkspaceLanding || restricted)
