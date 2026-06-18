@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 380 144" width="380" height="144" role="img" aria-label="Q-UI">
+  <defs>
+    <linearGradient id="qg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#818cf8"/>
+      <stop offset="1" stop-color="#6366f1"/>
+    </linearGradient>
+  </defs>
+  <!-- icon badge -->
+  <rect x="16" y="24" width="96" height="96" rx="26" fill="url(#qg)"/>
+  <!-- stylized Q: ring + tail -->
+  <circle cx="60" cy="66" r="25" fill="none" stroke="#0b0b12" stroke-width="11"/>
+  <line x1="74" y1="80" x2="92" y2="98" stroke="#0b0b12" stroke-width="11" stroke-linecap="round"/>
+  <!-- wordmark -->
+  <text x="134" y="94" font-family="'Segoe UI', 'Helvetica Neue', Arial, sans-serif" font-size="62" font-weight="800" letter-spacing="-1" fill="#f5f5fa">Q<tspan fill="#818cf8">-</tspan>UI</text>
+</svg>
