@@ -15,12 +15,13 @@ import (
 
 // Errors returned by OrderService.
 var (
-	ErrOrderNotFound      = errors.New("order not found")
-	ErrProductUnavailable = errors.New("product is not available for purchase")
-	ErrBuyerRequired      = errors.New("buyer is required")
-	ErrServiceNotFound    = errors.New("service not found")
-	ErrServiceForbidden   = errors.New("you do not own this service")
-	ErrForeignWorkspace   = errors.New("you can only buy on your own workspace")
+	ErrOrderNotFound        = errors.New("order not found")
+	ErrProductUnavailable   = errors.New("product is not available for purchase")
+	ErrProductMisconfigured = errors.New("product references an inbound that no longer exists")
+	ErrBuyerRequired        = errors.New("buyer is required")
+	ErrServiceNotFound      = errors.New("service not found")
+	ErrServiceForbidden     = errors.New("you do not own this service")
+	ErrForeignWorkspace     = errors.New("you can only buy on your own workspace")
 )
 
 // OrderService handles product purchases, provisioning and order history.
@@ -112,6 +113,17 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 	if !buyer.Can(model.PermProductManage) && !ProductAudienceAllows(product.Audience, buyer.CanonicalRole()) {
 		return nil, ErrProductUnavailable
 	}
+	// A product can only be delivered if every inbound it targets still exists.
+	// An inbound deleted (or whose id changed across a panel update / db restore)
+	// after the product was created would otherwise blow up mid-purchase inside
+	// provisioning with a raw gorm "record not found". Detect it up front so the
+	// buyer gets a clear message and is NEVER charged for a config we can't create.
+	if miss, merr := missingInbounds([]int(product.InboundIds)); merr != nil {
+		return nil, merr
+	} else if len(miss) > 0 {
+		logger.Warningf("purchase: product %d (%q) targets missing inbound(s) %v — purchase blocked", product.Id, product.Name, miss)
+		return nil, ErrProductMisconfigured
+	}
 
 	var charged int64
 	var chargedManager int
@@ -185,6 +197,14 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 	// ("all" or their own). admin/moderator manage the catalog and may buy any.
 	if !buyer.Can(model.PermProductManage) && !ProductAudienceAllows(product.Audience, buyer.CanonicalRole()) {
 		return nil, ErrProductUnavailable
+	}
+	// Same guard as Purchase: a plan-switch onto a product whose inbound no longer
+	// exists must fail clearly before charging, not leave the config half-migrated.
+	if miss, merr := missingInbounds([]int(product.InboundIds)); merr != nil {
+		return nil, merr
+	} else if len(miss) > 0 {
+		logger.Warningf("renew: product %d (%q) targets missing inbound(s) %v — renew blocked", product.Id, product.Name, miss)
+		return nil, ErrProductMisconfigured
 	}
 	owner, err := s.clientService.GetOwnerByEmail(email)
 	if err != nil {
@@ -355,6 +375,31 @@ func (s *OrderService) refund(userId, managerId int, amount int64, product *mode
 		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
 		logger.Errorf("order: refund of %d to user %d (manager %d) failed (manual reconciliation needed): %v", amount, userId, managerId, err)
 	}
+}
+
+// missingInbounds returns the subset of inbound ids that do NOT exist in the
+// inbounds table. Used to validate a product is deliverable BEFORE charging the
+// buyer, so a product pointing at a deleted / renumbered inbound fails clearly
+// (ErrProductMisconfigured) instead of mid-provision with a raw "record not found".
+func missingInbounds(ids []int) ([]int, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	var existing []int
+	if err := database.GetDB().Model(&model.Inbound{}).Where("id IN ?", ids).Pluck("id", &existing).Error; err != nil {
+		return nil, err
+	}
+	present := make(map[int]bool, len(existing))
+	for _, id := range existing {
+		present[id] = true
+	}
+	var missing []int
+	for _, id := range ids {
+		if !present[id] {
+			missing = append(missing, id)
+		}
+	}
+	return missing, nil
 }
 
 // provision creates a buyer-owned Xray client on the product's inbound(s), sized

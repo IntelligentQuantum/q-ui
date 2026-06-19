@@ -617,7 +617,8 @@
         "retried": "Connection details refreshed"
       },
       "toasts": {
-        "foreignWorkspace": "This balance belongs to a different workspace. Register or sign in on this workspace to buy here."
+        "foreignWorkspace": "This balance belongs to a different workspace. Register or sign in on this workspace to buy here.",
+        "productUnavailable": "This product is temporarily unavailable. Please try another plan or contact support."
       }
     },
     "orders": {
