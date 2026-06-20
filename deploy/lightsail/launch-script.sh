@@ -1,12 +1,12 @@
 #!/bin/bash
 #
-# Amazon Lightsail launch script for 3x-ui (self-service, per-instance creds).
+# Amazon Lightsail launch script for q-ui (self-service, per-instance creds).
 #
 # Use it one of two ways when creating an Ubuntu 24.04 Lightsail instance:
 #   * Console: "Add launch script" -> paste this file.
 #   * CLI:     aws lightsail create-instances --user-data file://launch-script.sh ...
 #
-# It installs the latest 3x-ui release non-interactively and generates unique
+# It installs the latest q-ui release non-interactively and generates unique
 # random credentials for THIS instance. The full credentials land in
 # /etc/q-ui/install-result.env (mode 600); /etc/motd shows only the URL + username.
 #
@@ -41,7 +41,7 @@ if [ -r /etc/q-ui/install-result.env ]; then
     . /etc/q-ui/install-result.env
     {
         echo
-        echo "=== 3x-ui panel (generated on first boot) ==="
+        echo "=== q-ui panel (generated on first boot) ==="
         echo "URL:      ${QUI_ACCESS_URL:-unknown}"
         echo "Username: ${QUI_USERNAME:-unknown}"
         echo "Password + API token: sudo cat /etc/q-ui/install-result.env"

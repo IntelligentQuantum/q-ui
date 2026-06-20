@@ -88,11 +88,11 @@ fi
 
 # Declare Variables
 if [[ "${running_in_docker}" == "true" ]]; then
-    xui_folder="${QUI_MAIN_FOLDER:=/app}"
+    qui_folder="${QUI_MAIN_FOLDER:=/app}"
 else
-    xui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
+    qui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
 fi
-xui_service="${QUI_SERVICE:=/etc/systemd/system}"
+qui_service="${QUI_SERVICE:=/etc/systemd/system}"
 log_folder="${QUI_LOG_FOLDER:=/var/log/q-ui}"
 mkdir -p "${log_folder}"
 iplimit_log_path="${log_folder}/3xipl.log"
@@ -167,7 +167,7 @@ update_menu() {
     fi
 
     curl -fLRo /usr/bin/q-ui https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.sh
-    chmod +x ${xui_folder}/q-ui.sh
+    chmod +x ${qui_folder}/q-ui.sh
     chmod +x /usr/bin/q-ui
 
     if [[ $? == 0 ]]; then
@@ -200,7 +200,7 @@ delete_script() {
     exit 1
 }
 
-xui_env_file_path() {
+qui_env_file_path() {
     case "${release}" in
         ubuntu | debian | armbian)
             echo "/etc/default/q-ui"
@@ -230,14 +230,14 @@ uninstall() {
     else
         systemctl stop q-ui
         systemctl disable q-ui
-        rm ${xui_service}/q-ui.service -f
+        rm ${qui_service}/q-ui.service -f
         systemctl daemon-reload
         systemctl reset-failed
     fi
 
     rm /etc/q-ui/ -rf
-    rm ${xui_folder}/ -rf
-    rm -f "$(xui_env_file_path)"
+    rm ${qui_folder}/ -rf
+    rm -f "$(qui_env_file_path)"
 
     echo ""
     echo -e "Uninstalled Successfully.\n"
@@ -265,9 +265,9 @@ reset_user() {
 
     read -rp "Do you want to disable currently configured two-factor authentication? (y/n): " twoFactorConfirm
     if [[ $twoFactorConfirm != "y" && $twoFactorConfirm != "Y" ]]; then
-        ${xui_folder}/q-ui setting -username "${config_account}" -password "${config_password}" > /dev/null 2>&1
+        ${qui_folder}/q-ui setting -username "${config_account}" -password "${config_password}" > /dev/null 2>&1
     else
-        ${xui_folder}/q-ui setting -username "${config_account}" -password "${config_password}" -resetTwoFactor=true > /dev/null 2>&1
+        ${qui_folder}/q-ui setting -username "${config_account}" -password "${config_password}" -resetTwoFactor=true > /dev/null 2>&1
         echo -e "Two factor authentication has been disabled."
     fi
 
@@ -296,7 +296,7 @@ reset_webbasepath() {
     config_webBasePath=$(gen_random_string 18)
 
     # Apply the new web base path setting
-    ${xui_folder}/q-ui setting -webBasePath "${config_webBasePath}" > /dev/null 2>&1
+    ${qui_folder}/q-ui setting -webBasePath "${config_webBasePath}" > /dev/null 2>&1
 
     echo -e "Web base path has been reset to: ${green}${config_webBasePath}${plain}"
     echo -e "${green}Please use the new web base path to access the panel.${plain}"
@@ -311,13 +311,13 @@ reset_config() {
         fi
         return 0
     fi
-    ${xui_folder}/q-ui setting -reset
+    ${qui_folder}/q-ui setting -reset
     echo -e "All panel settings have been reset to default."
     restart
 }
 
 check_config() {
-    local info=$(${xui_folder}/q-ui setting -show true)
+    local info=$(${qui_folder}/q-ui setting -show true)
     if [[ $? != 0 ]]; then
         LOGE "get current settings error, please check logs"
         show_menu
@@ -326,7 +326,7 @@ check_config() {
     LOGI "${info}"
 
     local db_env_file
-    db_env_file="$(xui_env_file_path)"
+    db_env_file="$(qui_env_file_path)"
     if [[ -r "$db_env_file" ]] && grep -q '^QUI_DB_TYPE=postgres' "$db_env_file"; then
         local dsn
         dsn="$(grep -E '^QUI_DB_DSN=' "$db_env_file" | head -1 | cut -d= -f2-)"
@@ -339,7 +339,7 @@ check_config() {
 
     local existing_webBasePath=$(echo "$info" | grep -Eo 'webBasePath: .+' | awk '{print $2}')
     local existing_port=$(echo "$info" | grep -Eo 'port: .+' | awk '{print $2}')
-    local existing_cert=$(${xui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_cert=$(${qui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
     local URL_lists=(
         "https://api4.ipify.org"
         "https://ipv4.icanhazip.com"
@@ -423,7 +423,7 @@ set_port() {
         LOGD "Cancelled"
         before_show_menu
     else
-        ${xui_folder}/q-ui setting -port ${port}
+        ${qui_folder}/q-ui setting -port ${port}
         echo -e "The port is set, Please restart the panel now, and use the new port ${green}${port}${plain} to access web panel"
         confirm_restart
     fi
@@ -499,9 +499,9 @@ stop() {
 
 restart() {
     if [[ "${running_in_docker}" == "true" ]]; then
-        if signal_xui HUP; then
+        if signal_qui HUP; then
             sleep 1
-            signal_xui USR1
+            signal_qui USR1
             LOGI "Restart signal sent to the panel and xray-core."
         else
             LOGE "Could not find the running panel process to signal."
@@ -537,7 +537,7 @@ restart() {
 
 restart_xray() {
     if [[ "${running_in_docker}" == "true" ]]; then
-        if signal_xui USR1; then
+        if signal_qui USR1; then
             LOGI "xray-core Restart signal sent successfully, Please check the log information to confirm whether xray restarted successfully"
         else
             LOGE "Could not find the running panel process to signal."
@@ -787,13 +787,13 @@ update_shell() {
     fi
 }
 
-xui_pid() {
-    ps -ef 2> /dev/null | grep -F "${xui_folder}/q-ui" | grep -v grep | awk 'NR==1 {print $1}'
+qui_pid() {
+    ps -ef 2> /dev/null | grep -F "${qui_folder}/q-ui" | grep -v grep | awk 'NR==1 {print $1}'
 }
 
-signal_xui() {
+signal_qui() {
     local sig="$1" pid
-    pid="$(xui_pid)"
+    pid="$(qui_pid)"
     if [[ -z "${pid}" ]]; then
         return 1
     fi
@@ -803,10 +803,10 @@ signal_xui() {
 # 0: running, 1: not running, 2: not installed
 check_status() {
     if [[ "${running_in_docker}" == "true" ]]; then
-        if [[ ! -x "${xui_folder}/q-ui" ]]; then
+        if [[ ! -x "${qui_folder}/q-ui" ]]; then
             return 2
         fi
-        if [[ -n "$(xui_pid)" ]]; then
+        if [[ -n "$(qui_pid)" ]]; then
             return 0
         else
             return 1
@@ -822,7 +822,7 @@ check_status() {
             return 1
         fi
     else
-        if [[ ! -f ${xui_service}/q-ui.service ]]; then
+        if [[ ! -f ${qui_service}/q-ui.service ]]; then
             return 2
         fi
         temp=$(systemctl status q-ui | grep Active | awk '{print $3}' | cut -d "(" -f2 | cut -d ")" -f1)
@@ -932,7 +932,7 @@ show_xray_status() {
 # show_mtproto_status reports each mtproto inbound's mtg sidecar (one process per
 # inbound, run outside xray). Silent when no mtproto inbound is configured.
 show_mtproto_status() {
-    local cfg_dir="${xui_folder}/bin/mtproto"
+    local cfg_dir="${qui_folder}/bin/mtproto"
     local cfgs=()
     if [[ -d "${cfg_dir}" ]]; then
         for f in "${cfg_dir}"/mtg-*.toml; do
@@ -1175,7 +1175,7 @@ update_geofiles() {
         # Remove suffix for remote filename (e.g., geoip_IR -> geoip)
         remote_file="${dat%%_*}"
         # -z skips the download (server answers 304) when the local copy is already current
-        http_code=$(curl -sSfLRo ${xui_folder}/bin/${dat}.dat -z ${xui_folder}/bin/${dat}.dat -w '%{http_code}' \
+        http_code=$(curl -sSfLRo ${qui_folder}/bin/${dat}.dat -z ${qui_folder}/bin/${dat}.dat -w '%{http_code}' \
             https://github.com/${dat_source}/releases/latest/download/${remote_file}.dat)
         if [[ $? -ne 0 ]]; then
             echo -e "${red}${dat}.dat: download failed${plain}"
@@ -1306,9 +1306,9 @@ ssl_cert_issue_main() {
 
                     # If the panel currently serves this domain's cert, clear the stored paths
                     # so it stops loading the now-deleted files, then restart.
-                    local existing_cert=$(${xui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+                    local existing_cert=$(${qui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
                     if [[ "${existing_cert}" == "/root/cert/${domain}/"* ]]; then
-                        ${xui_folder}/q-ui cert -reset
+                        ${qui_folder}/q-ui cert -reset
                         LOGI "Cleared panel certificate paths referencing ${domain}; restarting panel."
                         restart
                     fi
@@ -1355,7 +1355,7 @@ ssl_cert_issue_main() {
             fi
             # The panel's configured certificate may live outside /root/cert
             # (e.g. certbot under /etc/letsencrypt) — show it too (#5070).
-            local panel_cert=$(${xui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+            local panel_cert=$(${qui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
             if [[ -n "${panel_cert}" && "${panel_cert}" != /root/cert/* ]]; then
                 echo -e "Panel certificate (custom path): ${panel_cert}"
                 if [[ -f "${panel_cert}" ]] && command -v openssl > /dev/null 2>&1; then
@@ -1374,7 +1374,7 @@ ssl_cert_issue_main() {
                 read -rp "Certificate file path (fullchain): " webCertFile
                 read -rp "Private key file path: " webKeyFile
                 if [[ -f "${webCertFile}" && -f "${webKeyFile}" ]]; then
-                    ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+                    ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
                     echo "Panel certificate paths set:"
                     echo "  - Certificate File: $webCertFile"
                     echo "  - Private Key File: $webKeyFile"
@@ -1398,7 +1398,7 @@ ssl_cert_issue_main() {
                     local webKeyFile="/root/cert/${domain}/privkey.pem"
 
                     if [[ -f "${webCertFile}" && -f "${webKeyFile}" ]]; then
-                        ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+                        ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
                         echo "Panel paths set for domain: $domain"
                         echo "  - Certificate File: $webCertFile"
                         echo "  - Private Key File: $webKeyFile"
@@ -1445,8 +1445,8 @@ ssl_cert_issue_for_ip() {
     LOGI "Starting automatic SSL certificate generation for server IP..."
     LOGI "Using Let's Encrypt shortlived profile (~6 days validity, auto-renews)"
 
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
 
     # Get server IP
     local URL_lists=(
@@ -1631,7 +1631,7 @@ ssl_cert_issue_for_ip() {
     read -rp "Would you like to set this certificate for the panel? (y/n): " setPanel
     if [[ "$setPanel" == "y" || "$setPanel" == "Y" ]]; then
         if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+            ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
             LOGI "Panel paths set for IP: $server_ip"
             LOGI "  - Certificate File: $webCertFile"
             LOGI "  - Private Key File: $webKeyFile"
@@ -1651,8 +1651,8 @@ ssl_cert_issue_for_ip() {
 }
 
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
         echo "acme.sh could not be found. we will install it"
@@ -1850,7 +1850,7 @@ ssl_cert_issue() {
         local webKeyFile="/root/cert/${domain}/privkey.pem"
 
         if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+            ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
             LOGI "Panel paths set for domain: $domain"
             LOGI "  - Certificate File: $webCertFile"
             LOGI "  - Private Key File: $webKeyFile"
@@ -1865,8 +1865,8 @@ ssl_cert_issue() {
 }
 
 ssl_cert_issue_CF() {
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     LOGI "****** Instructions for Use ******"
     LOGI "Follow the steps below to complete the process:"
     LOGI "1. A Cloudflare API Token (recommended, scoped to Zone:DNS:Edit) or the Global API Key + registered email."
@@ -1999,7 +1999,7 @@ ssl_cert_issue_CF() {
             local webKeyFile="${certPath}/privkey.pem"
 
             if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-                ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+                ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
                 LOGI "Panel paths set for domain: $CF_Domain"
                 LOGI "  - Certificate File: $webCertFile"
                 LOGI "  - Private Key File: $webKeyFile"
@@ -2415,7 +2415,7 @@ EOF
     ssh_ports=$(grep -oP '^[[:space:]]*Port[[:space:]]+\K[0-9]+' /etc/ssh/sshd_config 2>/dev/null | paste -sd, -)
     [[ -z "${ssh_ports}" ]] && ssh_ports="22"
     local panel_port
-    panel_port=$(${xui_folder}/q-ui setting -show true 2>/dev/null | grep -Eo 'port: .+' | awk '{print $2}')
+    panel_port=$(${qui_folder}/q-ui setting -show true 2>/dev/null | grep -Eo 'port: .+' | awk '{print $2}')
     local exempt_ports="${ssh_ports}"
     [[ -n "${panel_port}" ]] && exempt_ports="${exempt_ports},${panel_port}"
 
@@ -2498,11 +2498,11 @@ SSH_port_forwarding() {
         done
     fi
 
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
-    local existing_listenIP=$(${xui_folder}/q-ui setting -getListen true | grep -Eo 'listenIP: .+' | awk '{print $2}')
-    local existing_cert=$(${xui_folder}/q-ui setting -getCert true | grep -Eo 'cert: .+' | awk '{print $2}')
-    local existing_key=$(${xui_folder}/q-ui setting -getCert true | grep -Eo 'key: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_listenIP=$(${qui_folder}/q-ui setting -getListen true | grep -Eo 'listenIP: .+' | awk '{print $2}')
+    local existing_cert=$(${qui_folder}/q-ui setting -getCert true | grep -Eo 'cert: .+' | awk '{print $2}')
+    local existing_key=$(${qui_folder}/q-ui setting -getCert true | grep -Eo 'key: .+' | awk '{print $2}')
 
     local config_listenIP=""
     local listen_choice=""
@@ -2543,7 +2543,7 @@ SSH_port_forwarding() {
                 config_listenIP="127.0.0.1"
                 [[ "$listen_choice" == "2" ]] && read -rp "Enter custom IP to listen on: " config_listenIP
 
-                ${xui_folder}/q-ui setting -listenIP "${config_listenIP}" > /dev/null 2>&1
+                ${qui_folder}/q-ui setting -listenIP "${config_listenIP}" > /dev/null 2>&1
                 echo -e "${green}listen IP has been set to ${config_listenIP}.${plain}"
                 echo -e "\n${green}SSH Port Forwarding Configuration:${plain}"
                 echo -e "Standard SSH command:"
@@ -2559,7 +2559,7 @@ SSH_port_forwarding() {
             fi
             ;;
         2)
-            ${xui_folder}/q-ui setting -listenIP 0.0.0.0 > /dev/null 2>&1
+            ${qui_folder}/q-ui setting -listenIP 0.0.0.0 > /dev/null 2>&1
             echo -e "${green}Listen IP has been cleared.${plain}"
             restart
             ;;
@@ -2693,14 +2693,14 @@ pg_require_installed() {
     fi
 }
 
-# Installs a local PostgreSQL server and creates a dedicated xui user/database.
+# Installs a local PostgreSQL server and creates a dedicated q-ui user/database.
 # Progress goes to stderr; on success the connection DSN is printed to stdout so
 # callers can capture it. Mirrors install_postgres_local() from install.sh, so the
 # panel can be set up without re-running the remote install script.
 pg_install_local() {
     local pg_user pg_pass pg_db pg_host pg_port
     pg_pass=$(gen_random_string 24)
-    pg_db="xui"
+    pg_db="qui"
     pg_host="127.0.0.1"
     pg_port="5432"
 
@@ -2823,7 +2823,7 @@ pg_ensure_client() {
 # Writes QUI_DB_TYPE/QUI_DB_DSN into the service env file, preserving other entries.
 pg_write_env() {
     local dsn="$1" envfile
-    envfile="$(xui_env_file_path)"
+    envfile="$(qui_env_file_path)"
     install -d -m 755 "$(dirname "$envfile")"
     touch "$envfile"
     sed -i '/^QUI_DB_TYPE=/d; /^QUI_DB_DSN=/d' "$envfile"
@@ -2837,7 +2837,7 @@ pg_write_env() {
 pg_install_server_action() {
     if postgresql_installed; then
         LOGI "PostgreSQL already appears to be installed on this system."
-        confirm "Run setup anyway (ensures the xui database/user exist)?" "n" || return 0
+        confirm "Run setup anyway (ensures the q-ui database/user exist)?" "n" || return 0
     fi
     LOGI "Installing PostgreSQL server and creating a dedicated user/database..."
     local dsn
@@ -2856,7 +2856,7 @@ pg_install_server_action() {
 
 # Copies the current SQLite data into PostgreSQL, then switches the panel over.
 migrate_to_postgres() {
-    if [[ ! -x "${xui_folder}/q-ui" ]]; then
+    if [[ ! -x "${qui_folder}/q-ui" ]]; then
         LOGE "q-ui is not installed."
         return 1
     fi
@@ -2902,14 +2902,14 @@ migrate_to_postgres() {
 
     echo ""
     LOGI "Migrating data into PostgreSQL..."
-    if ! ${xui_folder}/q-ui migrate-db --dsn "$dsn"; then
+    if ! ${qui_folder}/q-ui migrate-db --dsn "$dsn"; then
         LOGE "Migration failed. The panel was NOT switched to PostgreSQL."
         start 0 > /dev/null 2>&1
         return 1
     fi
 
     pg_write_env "$dsn"
-    LOGI "Wrote database settings to $(xui_env_file_path) (QUI_DB_TYPE=postgres)."
+    LOGI "Wrote database settings to $(qui_env_file_path) (QUI_DB_TYPE=postgres)."
     LOGI "Restarting panel on PostgreSQL..."
     restart 0
     sleep 1
@@ -2921,7 +2921,7 @@ migrate_to_postgres() {
 }
 
 postgresql_menu() {
-    echo -e "${green}\t1.${plain} ${green}Install${plain} PostgreSQL (server + client + xui db)"
+    echo -e "${green}\t1.${plain} ${green}Install${plain} PostgreSQL (server + client + q-ui db)"
     echo -e "${green}\t2.${plain} Migrate SQLite ${green}->${plain} PostgreSQL"
     echo -e "${green}\t3.${plain} Status (clusters & port 5432)"
     echo -e "${green}\t4.${plain} ${green}Start${plain} PostgreSQL"
@@ -2986,7 +2986,7 @@ postgresql_menu() {
 migrate_db() {
     local input="$1" output="$2"
     local default_db="/etc/q-ui/q-ui.db"
-    local bin="${xui_folder}/q-ui"
+    local bin="${qui_folder}/q-ui"
 
     [[ -z "$input" ]] && input="$default_db"
 

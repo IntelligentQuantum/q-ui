@@ -1,5 +1,5 @@
 [Unit]
-Description=3x-ui first-boot per-instance credential generation
+Description=q-ui first-boot per-instance credential generation
 Documentation=https://github.com/IntelligentQuantum/q-ui
 # Run after the network and cloud-init are up, but BEFORE the panel starts, so
 # the panel never serves the default admin/admin account.

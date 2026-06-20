@@ -23,8 +23,6 @@ import {
 } from '@/components/ui';
 import type { DropdownItem, InputProps } from '@/components/ui';
 
-const HEADLINE_INTERVAL_MS = 2000;
-
 type LoginForm = LoginFormValues;
 
 const basePath = window.Q_UI_BASE_PATH || '';
@@ -91,7 +89,6 @@ export default function LoginPage()
     const [registrationEnable, setRegistrationEnable] = useState(false);
     const [brandTitle, setBrandTitle] = useState<string>(() => BrandManager.getTitle());
     const [brandLogo, setBrandLogo] = useState<string>('');
-    const [headlineIndex, setHeadlineIndex] = useState(0);
     const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
 
     const {
@@ -102,11 +99,6 @@ export default function LoginPage()
         defaultValues: { username: '', password: '', twoFactorCode: '' }
     });
 
-    const headlineWords = useMemo(
-        () => [t('pages.login.hello'), t('pages.login.title')],
-        [t]
-    );
-
     // Keep the workspace slug on the "create account" link so signup lands in the
     // same manager's tenant.
     const registerHref = useMemo(() =>
@@ -114,15 +106,6 @@ export default function LoginPage()
         const ws = new URLSearchParams(window.location.search).get('ws');
         return (basePath || '/') + 'register' + (ws ? `?ws=${ encodeURIComponent(ws) }` : '');
     }, []);
-
-    useEffect(() =>
-    {
-        const timer = window.setInterval(() =>
-        {
-            setHeadlineIndex((i) => (i + 1) % headlineWords.length);
-        }, HEADLINE_INTERVAL_MS);
-        return () => window.clearInterval(timer);
-    }, [headlineWords.length]);
 
     useEffect(() =>
     {
@@ -259,13 +242,7 @@ export default function LoginPage()
                     <span aria-hidden="true" className="h-[3px] w-10 rounded-full bg-accent" />
                   </div>
 
-                  <h2 className="mt-3 mb-7 min-h-[1.25em] text-center text-3xl font-bold leading-tight text-foreground">
-                    <b key={headlineIndex} className="inline-block font-bold motion-safe:animate-[fade-in_280ms_ease]">
-                      {headlineWords[headlineIndex]}
-                    </b>
-                  </h2>
-
-                  <form noValidate onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
+                  <form noValidate onSubmit={handleSubmit(onSubmit)} className="mt-8 flex flex-col gap-4">
                     <Field label={t('username')} htmlFor="login-username" error={errors.username?.message}>
                       <IconInput
                         id="login-username"

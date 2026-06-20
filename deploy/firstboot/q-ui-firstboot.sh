@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# q-ui-firstboot.sh — generate per-instance 3x-ui panel credentials on first boot.
+# q-ui-firstboot.sh — generate per-instance q-ui panel credentials on first boot.
 #
 # A golden image (AMI / qcow2) MUST ship without an initialized q-ui.db: the
 # panel seeds a hardcoded admin/admin user and generates its session secret +
@@ -92,7 +92,7 @@ fi
 if [ "$default_creds" = "false" ]; then
     log "non-default admin already configured; skipping credential regeneration."
     {
-        echo "3x-ui first-boot: a non-default admin account already exists on this"
+        echo "q-ui first-boot: a non-default admin account already exists on this"
         echo "instance, so credentials were left unchanged."
     } > "$MOTD_FILE" 2> /dev/null || true
     : > "$SENTINEL" 2> /dev/null || true
@@ -127,7 +127,7 @@ ACCESS_URL="http://${SERVER_IP}:${NEW_PORT}/${NEW_PATH}"
 # metacharacters (the smoke test and operators source this file).
 umask 077
 {
-    echo "# 3x-ui per-instance credentials (generated on first boot)"
+    echo "# q-ui per-instance credentials (generated on first boot)"
     printf 'QUI_USERNAME=%q\n' "$NEW_USER"
     printf 'QUI_PASSWORD=%q\n' "$NEW_PASS"
     printf 'QUI_PANEL_PORT=%q\n' "$NEW_PORT"
@@ -143,7 +143,7 @@ chmod 600 "$CRED_FILE" 2> /dev/null || true
 cat > "$MOTD_FILE" 2> /dev/null << EOF
 
 ========================================================================
-  3x-ui panel — per-instance credentials (generated on first boot)
+  q-ui panel — per-instance credentials (generated on first boot)
 ========================================================================
   Access URL : ${ACCESS_URL}
   Username   : ${NEW_USER}

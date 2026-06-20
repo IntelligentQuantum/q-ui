@@ -8,8 +8,8 @@ plain='\033[0m'
 
 cur_dir=$(pwd)
 
-xui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
-xui_service="${QUI_SERVICE:=/etc/systemd/system}"
+qui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
+qui_service="${QUI_SERVICE:=/etc/systemd/system}"
 
 # check root
 [[ $EUID -ne 0 ]] && echo -e "${red}Fatal error: ${plain} Please run this script with root privilege \n " && exit 1
@@ -183,7 +183,7 @@ write_install_result() {
 install_postgres_local() {
     local pg_user pg_pass
     pg_pass=$(gen_random_string 24)
-    local pg_db="xui"
+    local pg_db="qui"
     local pg_host="127.0.0.1"
     local pg_port="5432"
 
@@ -394,7 +394,7 @@ setup_ssl_certificate() {
     local webKeyFile="/root/cert/${domain}/privkey.pem"
 
     if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-        ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
+        ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
         echo -e "${green}SSL certificate installed and configured successfully!${plain}"
         return 0
     else
@@ -543,7 +543,7 @@ setup_ip_certificate() {
 
     # Configure panel to use the certificate
     echo -e "${green}Setting certificate paths for the panel...${plain}"
-    ${xui_folder}/q-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
+    ${qui_folder}/q-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
 
     if [ $? -ne 0 ]; then
         echo -e "${yellow}Warning: Could not set certificate paths automatically${plain}"
@@ -562,8 +562,8 @@ setup_ip_certificate() {
 
 # Comprehensive manual SSL certificate issuance via acme.sh
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
@@ -757,7 +757,7 @@ ssl_cert_issue() {
         local webKeyFile="/root/cert/${domain}/privkey.pem"
 
         if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+            ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
             echo -e "${green}Certificate paths set for the panel${plain}"
             echo -e "${green}Certificate File: $webCertFile${plain}"
             echo -e "${green}Private Key File: $webKeyFile${plain}"
@@ -905,7 +905,7 @@ prompt_and_setup_ssl() {
             done
 
             # 3.4 Apply Settings via q-ui binary
-            ${xui_folder}/q-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
+            ${qui_folder}/q-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
 
             # Set SSL_HOST for composing Panel URL
             if [[ -n "$custom_domain" ]]; then
@@ -939,7 +939,7 @@ prompt_and_setup_ssl() {
                 read -rp "Bind the panel to 127.0.0.1 only? (recommended — forces SSH tunnel / reverse-proxy access) [y/N]: " bind_local
             fi
             if [[ "$bind_local" == "y" || "$bind_local" == "Y" ]]; then
-                ${xui_folder}/q-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
+                ${qui_folder}/q-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
                 SSL_HOST="127.0.0.1"
                 echo -e "${green}✓ Panel bound to 127.0.0.1 only. It is now unreachable from the public internet.${plain}"
                 echo ""
@@ -967,11 +967,11 @@ prompt_and_setup_ssl() {
 }
 
 config_after_install() {
-    local existing_hasDefaultCredential=$(${xui_folder}/q-ui setting -show true | grep -Eo 'hasDefaultCredential: .+' | awk '{print $2}')
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_hasDefaultCredential=$(${qui_folder}/q-ui setting -show true | grep -Eo 'hasDefaultCredential: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
     # Properly detect empty cert by checking if cert: line exists and has content after it
-    local existing_cert=$(${xui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_cert=$(${qui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
     local URL_lists=(
         "https://api4.ipify.org"
         "https://ipv4.icanhazip.com"
@@ -1034,33 +1034,33 @@ config_after_install() {
                 db_choice="${db_choice:-1}"
             fi
             if [[ "$db_choice" == "2" ]]; then
-                local xui_env_file
+                local qui_env_file
                 case "${release}" in
                     ubuntu | debian | armbian)
-                        xui_env_file="/etc/default/q-ui"
+                        qui_env_file="/etc/default/q-ui"
                         ;;
                     arch | manjaro | parch | alpine)
-                        xui_env_file="/etc/conf.d/q-ui"
+                        qui_env_file="/etc/conf.d/q-ui"
                         ;;
                     *)
-                        xui_env_file="/etc/sysconfig/q-ui"
+                        qui_env_file="/etc/sysconfig/q-ui"
                         ;;
                 esac
 
-                local xui_dsn=""
+                local qui_dsn=""
                 local pg_mode=""
                 local pg_local_installed=0
-                while [[ -z "$xui_dsn" ]]; do
+                while [[ -z "$qui_dsn" ]]; do
                     if [[ "$NONINTERACTIVE" == "1" ]]; then
                         if [[ -n "${QUI_DB_DSN:-}" ]]; then
-                            xui_dsn="${QUI_DB_DSN}"
+                            qui_dsn="${QUI_DB_DSN}"
                             db_label="PostgreSQL (external)"
                             break
                         fi
                         echo -e "${yellow}Installing PostgreSQL locally (non-interactive)...${plain}"
                         local pg_cred_file
                         pg_cred_file=$(mktemp 2> /dev/null) || pg_cred_file=$(mktemp -t q-ui-pg-creds.XXXXXXXX)
-                        if [[ -n "${pg_cred_file}" ]] && xui_dsn=$(PG_CRED_FILE="${pg_cred_file}" install_postgres_local); then
+                        if [[ -n "${pg_cred_file}" ]] && qui_dsn=$(PG_CRED_FILE="${pg_cred_file}" install_postgres_local); then
                             pg_local_installed=1
                             if [[ -r "${pg_cred_file}" ]]; then
                                 # shellcheck disable=SC1090
@@ -1081,9 +1081,9 @@ config_after_install() {
                     read -rp "Choose [1]: " pg_mode
                     pg_mode="${pg_mode:-1}"
                     if [[ "$pg_mode" == "2" ]]; then
-                        while [[ -z "$xui_dsn" ]]; do
-                            read -rp "Enter PostgreSQL DSN (postgres://user:pass@host:port/dbname?sslmode=disable): " xui_dsn
-                            xui_dsn="${xui_dsn// /}"
+                        while [[ -z "$qui_dsn" ]]; do
+                            read -rp "Enter PostgreSQL DSN (postgres://user:pass@host:port/dbname?sslmode=disable): " qui_dsn
+                            qui_dsn="${qui_dsn// /}"
                         done
                         db_label="PostgreSQL (external)"
                     else
@@ -1092,10 +1092,10 @@ config_after_install() {
                         pg_cred_file=$(mktemp 2> /dev/null) || pg_cred_file=$(mktemp -t q-ui-pg-creds.XXXXXXXX)
                         if [[ -z "${pg_cred_file}" ]]; then
                             echo -e "${red}Failed to create temporary credentials file.${plain}"
-                            xui_dsn=""
+                            qui_dsn=""
                             continue
                         fi
-                        if xui_dsn=$(PG_CRED_FILE="${pg_cred_file}" install_postgres_local); then
+                        if qui_dsn=$(PG_CRED_FILE="${pg_cred_file}" install_postgres_local); then
                             pg_local_installed=1
                             if [[ -r "${pg_cred_file}" ]]; then
                                 # shellcheck disable=SC1090
@@ -1121,25 +1121,25 @@ config_after_install() {
                                     ;;
                                 4)
                                     db_choice="1"
-                                    xui_dsn=""
+                                    qui_dsn=""
                                     break
                                     ;;
-                                *) xui_dsn="" ;;
+                                *) qui_dsn="" ;;
                             esac
                         fi
                     fi
                 done
-                if [[ -n "$xui_dsn" ]]; then
-                    install -d -m 755 "$(dirname "$xui_env_file")"
+                if [[ -n "$qui_dsn" ]]; then
+                    install -d -m 755 "$(dirname "$qui_env_file")"
                     umask 077
-                    cat > "$xui_env_file" << EOF
+                    cat > "$qui_env_file" << EOF
 QUI_DB_TYPE=postgres
-QUI_DB_DSN=${xui_dsn}
+QUI_DB_DSN=${qui_dsn}
 EOF
-                    chmod 600 "$xui_env_file"
+                    chmod 600 "$qui_env_file"
                     umask 022
                     export QUI_DB_TYPE=postgres
-                    export QUI_DB_DSN="${xui_dsn}"
+                    export QUI_DB_DSN="${qui_dsn}"
                     ensure_pg_client || echo -e "${yellow}⚠ Could not install pg_dump/pg_restore. In-panel database backup/restore will be unavailable until you install the postgresql-client package.${plain}"
                 fi
             fi
@@ -1163,7 +1163,7 @@ EOF
                 fi
             fi
 
-            ${xui_folder}/q-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
+            ${qui_folder}/q-ui setting -username "${config_username}" -password "${config_password}" -port "${config_port}" -webBasePath "${config_webBasePath}"
 
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
@@ -1177,7 +1177,7 @@ EOF
             prompt_and_setup_ssl "${config_port}" "${config_webBasePath}" "${server_ip}"
 
             # Retrieve the API token for display
-            local config_apiToken=$(${xui_folder}/q-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
+            local config_apiToken=$(${qui_folder}/q-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
 
             # Display final credentials and access information
             echo ""
@@ -1216,14 +1216,14 @@ EOF
                 echo -e "${green}Password:   ${PG_PASS}${plain}"
                 echo -e "${green}Host:       ${PG_HOST}${plain}"
                 echo -e "${green}Port:       ${PG_PORT}${plain}"
-                echo -e "${green}DSN:        ${xui_dsn}${plain}"
-                echo -e "${green}Env file:   ${xui_env_file}${plain}"
+                echo -e "${green}DSN:        ${qui_dsn}${plain}"
+                echo -e "${green}Env file:   ${qui_env_file}${plain}"
                 echo -e "${green}-------------------------------------------${plain}"
                 echo -e "${green}Connect from this server:${plain}"
                 echo -e "  ${blue}sudo -u postgres psql -d ${PG_DB}${plain}      (as the postgres superuser)"
                 echo -e "  ${blue}PGPASSWORD='${PG_PASS}' psql -h ${PG_HOST} -p ${PG_PORT} -U ${PG_USER} -d ${PG_DB}${plain}"
                 echo -e "${green}═══════════════════════════════════════════${plain}"
-                echo -e "${yellow}⚠ The panel reads these credentials from ${xui_env_file}.${plain}"
+                echo -e "${yellow}⚠ The panel reads these credentials from ${qui_env_file}.${plain}"
                 echo -e "${yellow}⚠ Save the password — it is not stored anywhere else in plain text.${plain}"
                 unset PG_USER PG_PASS PG_HOST PG_PORT PG_DB
             fi
@@ -1238,7 +1238,7 @@ EOF
         else
             local config_webBasePath=$(gen_random_string 18)
             echo -e "${yellow}WebBasePath is missing or too short. Generating a new one...${plain}"
-            ${xui_folder}/q-ui setting -webBasePath "${config_webBasePath}"
+            ${qui_folder}/q-ui setting -webBasePath "${config_webBasePath}"
             echo -e "${green}New WebBasePath: ${config_webBasePath}${plain}"
 
             # If the panel is already installed but no certificate is configured, prompt for SSL now
@@ -1262,7 +1262,7 @@ EOF
             local config_password="${QUI_PASSWORD:-$(gen_random_string 10)}"
 
             echo -e "${yellow}Default credentials detected. Security update required...${plain}"
-            ${xui_folder}/q-ui setting -username "${config_username}" -password "${config_password}"
+            ${qui_folder}/q-ui setting -username "${config_username}" -password "${config_password}"
             echo -e "Generated new random login credentials:"
             echo -e "###############################################"
             echo -e "${green}Username: ${config_username}${plain}"
@@ -1271,7 +1271,7 @@ EOF
 
             # Persist a machine-parseable credentials file for cloud-init / MOTD.
             local config_apiToken
-            config_apiToken=$(${xui_folder}/q-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
+            config_apiToken=$(${qui_folder}/q-ui setting -getApiToken true | grep -Eo 'apiToken: .+' | awk '{print $2}')
             : "${SSL_SCHEME:=https}"
             : "${SSL_HOST:=${server_ip}}"
             write_install_result "${config_username}" "${config_password}" "${existing_port}" \
@@ -1282,7 +1282,7 @@ EOF
 
         # Existing install: if no cert configured, prompt user for SSL setup
         # Properly detect empty cert by checking if cert: line exists and has content after it
-        existing_cert=$(${xui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+        existing_cert=$(${qui_folder}/q-ui setting -getCert true | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
         if [[ -z "$existing_cert" ]]; then
             echo ""
             echo -e "${green}═══════════════════════════════════════════${plain}"
@@ -1297,11 +1297,11 @@ EOF
         fi
     fi
 
-    ${xui_folder}/q-ui migrate
+    ${qui_folder}/q-ui migrate
 }
 
 install_q-ui() {
-    cd ${xui_folder%/q-ui}/
+    cd ${qui_folder%/q-ui}/
 
     # Download resources
     if [ $# == 0 ]; then
@@ -1315,7 +1315,10 @@ install_q-ui() {
             fi
         fi
         echo -e "Got q-ui latest version: ${tag_version}, beginning the installation..."
-        curl -4fLR --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 300 -o ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz
+        # --retry-all-errors so a transient 404 (the per-arch asset is still being
+        # uploaded right after a release is published) is retried instead of aborting.
+        # The retry budget (10 x 10s) outlasts a typical release asset-upload window.
+        curl -4fLR --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 15 --max-time 300 -o ${qui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Downloading q-ui failed, please be sure that your server can access GitHub ${plain}"
             exit 1
@@ -1332,7 +1335,7 @@ install_q-ui() {
 
         url="https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz"
         echo -e "Beginning to install q-ui $1"
-        curl -4fLR --retry 5 --retry-delay 3 --connect-timeout 15 --max-time 300 -o ${xui_folder}-linux-$(arch).tar.gz ${url}
+        curl -4fLR --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 15 --max-time 300 -o ${qui_folder}-linux-$(arch).tar.gz ${url}
         if [[ $? -ne 0 ]]; then
             echo -e "${red}Download q-ui $1 failed, please check if the version exists ${plain}"
             exit 1
@@ -1345,7 +1348,7 @@ install_q-ui() {
     fi
 
     # Stop q-ui service and remove old resources
-    if [[ -e ${xui_folder}/ ]]; then
+    if [[ -e ${qui_folder}/ ]]; then
         if [[ $release == "alpine" ]]; then
             rc-service q-ui stop
         else
@@ -1356,7 +1359,7 @@ install_q-ui() {
         # an inbound port with an outdated secret, silently breaking new clients.
         # The freshly installed panel respawns a clean mtg per inbound on start.
         pkill -f 'mtg-linux-[^ ]* run ' > /dev/null 2>&1 || true
-        rm ${xui_folder}/ -rf
+        rm ${qui_folder}/ -rf
     fi
 
     # Extract resources and set permissions
@@ -1418,7 +1421,7 @@ install_q-ui() {
 
         if [ -f "q-ui.service" ]; then
             echo -e "${green}Found q-ui.service in extracted files, installing...${plain}"
-            cp -f q-ui.service ${xui_service}/ > /dev/null 2>&1
+            cp -f q-ui.service ${qui_service}/ > /dev/null 2>&1
             if [[ $? -eq 0 ]]; then
                 service_installed=true
             fi
@@ -1429,7 +1432,7 @@ install_q-ui() {
                 ubuntu | debian | armbian)
                     if [ -f "q-ui.service.debian" ]; then
                         echo -e "${green}Found q-ui.service.debian in extracted files, installing...${plain}"
-                        cp -f q-ui.service.debian ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.debian ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1438,7 +1441,7 @@ install_q-ui() {
                 arch | manjaro | parch)
                     if [ -f "q-ui.service.arch" ]; then
                         echo -e "${green}Found q-ui.service.arch in extracted files, installing...${plain}"
-                        cp -f q-ui.service.arch ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.arch ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1447,7 +1450,7 @@ install_q-ui() {
                 *)
                     if [ -f "q-ui.service.rhel" ]; then
                         echo -e "${green}Found q-ui.service.rhel in extracted files, installing...${plain}"
-                        cp -f q-ui.service.rhel ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.rhel ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1461,13 +1464,13 @@ install_q-ui() {
             echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
             case "${release}" in
                 ubuntu | debian | armbian)
-                    curl -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.debian > /dev/null 2>&1
+                    curl -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.debian > /dev/null 2>&1
                     ;;
                 arch | manjaro | parch)
-                    curl -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.arch > /dev/null 2>&1
+                    curl -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.arch > /dev/null 2>&1
                     ;;
                 *)
-                    curl -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.rhel > /dev/null 2>&1
+                    curl -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.rhel > /dev/null 2>&1
                     ;;
             esac
 
@@ -1480,8 +1483,8 @@ install_q-ui() {
 
         if [ "$service_installed" = true ]; then
             echo -e "${green}Setting up systemd unit...${plain}"
-            chown root:root ${xui_service}/q-ui.service > /dev/null 2>&1
-            chmod 644 ${xui_service}/q-ui.service > /dev/null 2>&1
+            chown root:root ${qui_service}/q-ui.service > /dev/null 2>&1
+            chmod 644 ${qui_service}/q-ui.service > /dev/null 2>&1
             systemctl daemon-reload
             systemctl enable q-ui
             systemctl start q-ui

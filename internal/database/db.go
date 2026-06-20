@@ -107,6 +107,9 @@ func initModels() error {
 	if err := dropLegacyForeignKeys(); err != nil {
 		return err
 	}
+	if err := migrateTenantPartialUniqueIndexes(); err != nil {
+		return err
+	}
 	if err := pruneOrphanedClientInbounds(); err != nil {
 		return err
 	}
@@ -116,6 +119,31 @@ func initModels() error {
 	if IsPostgres() {
 		if err := resyncPostgresSequences(db, models); err != nil {
 			log.Printf("Error resyncing postgres sequences: %v", err)
+			return err
+		}
+	}
+	return nil
+}
+
+// migrateTenantPartialUniqueIndexes replaces the plain UNIQUE indexes on
+// tenants.domain and tenants.api_key_hash with PARTIAL unique indexes that apply
+// only to non-empty values. Both columns default to an empty string for "unset" (no custom
+// domain; API key not yet minted), and a plain unique index treats the empty string as a real
+// value — so only ONE workspace could ever have an empty domain or empty api key,
+// and creating a second workspace failed with a duplicate-key error (the bug that
+// left managers stranded at tenant_id 0). Partial indexes enforce uniqueness only
+// where a value is actually set, which is the intended semantics. Idempotent;
+// runs on both Postgres and SQLite (both support partial indexes + IF EXISTS).
+func migrateTenantPartialUniqueIndexes() error {
+	stmts := []string{
+		`DROP INDEX IF EXISTS idx_tenants_domain`,
+		`DROP INDEX IF EXISTS idx_tenants_api_key_hash`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_domain_present ON tenants (domain) WHERE domain <> ''`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_tenants_api_key_present ON tenants (api_key_hash) WHERE api_key_hash <> ''`,
+	}
+	for _, s := range stmts {
+		if err := db.Exec(s).Error; err != nil {
+			log.Printf("Error migrating tenant partial unique indexes (%q): %v", s, err)
 			return err
 		}
 	}

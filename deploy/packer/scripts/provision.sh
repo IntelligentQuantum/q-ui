@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# provision.sh — install the 3x-ui panel into a golden image (Packer).
+# provision.sh — install the q-ui panel into a golden image (Packer).
 #
 # Self-contained: mirrors install.sh's download/extract logic but DELIBERATELY
 # does NOT run config_after_install and does NOT create a database. The image
@@ -24,15 +24,15 @@ apt-get update
 apt-get install -y --no-install-recommends \
     ca-certificates curl tar tzdata socat openssl cron jq
 
-echo "[provision] resolving 3x-ui version..."
+echo "[provision] resolving q-ui version..."
 if [ "$QUI_VERSION" = "latest" ]; then
     QUI_VERSION=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | jq -r '.tag_name')
 fi
 if [ -z "$QUI_VERSION" ] || [ "$QUI_VERSION" = "null" ]; then
-    echo "[provision] ERROR: could not resolve 3x-ui release tag" >&2
+    echo "[provision] ERROR: could not resolve q-ui release tag" >&2
     exit 1
 fi
-echo "[provision] installing 3x-ui ${QUI_VERSION} (${QUI_ARCH})"
+echo "[provision] installing q-ui ${QUI_VERSION} (${QUI_ARCH})"
 
 tarball="q-ui-linux-${QUI_ARCH}.tar.gz"
 url="https://github.com/${REPO}/releases/download/${QUI_VERSION}/${tarball}"

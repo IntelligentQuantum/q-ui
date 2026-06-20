@@ -2,7 +2,7 @@
 #
 # Lightsail snapshot provisioning user-data (used by build-snapshot.sh).
 #
-# Installs the 3x-ui panel into a build instance but creates NO database and
+# Installs the q-ui panel into a build instance but creates NO database and
 # NO credentials, and enables the first-boot unit. The instance is then snapshot
 # so that every instance launched from the snapshot generates its own unique
 # credentials on first boot (see deploy/firstboot/).
@@ -23,7 +23,7 @@ apt-get install -y --no-install-recommends \
 ARCH=$(dpkg --print-architecture) # amd64 | arm64
 VER=$(curl -fsSL "https://api.github.com/repos/${REPO}/releases/latest" | jq -r .tag_name)
 if [ -z "$VER" ] || [ "$VER" = "null" ]; then
-    echo "failed to resolve 3x-ui version" >&2
+    echo "failed to resolve q-ui version" >&2
     exit 1
 fi
 
@@ -55,5 +55,5 @@ systemctl enable q-ui.service
 rm -f /etc/q-ui/q-ui.db /etc/q-ui/q-ui.db-* /etc/q-ui/.firstboot-done 2> /dev/null || true
 
 # Marker that build-snapshot.sh polls for over SSH.
-touch /var/lib/3xui-provision-done
-echo "[snapshot-userdata] provisioned 3x-ui ${VER} (${ARCH}); no DB created."
+touch /var/lib/q-ui-provision-done
+echo "[snapshot-userdata] provisioned q-ui ${VER} (${ARCH}); no DB created."

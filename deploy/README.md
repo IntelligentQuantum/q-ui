@@ -1,6 +1,6 @@
 # Cloud deployment & golden images
 
-Tooling to ship the 3x-ui panel as a cloud image or via unattended install,
+Tooling to ship the q-ui panel as a cloud image or via unattended install,
 with **per-instance credentials generated on first boot** (never `admin/admin`,
 never a shared session secret). Everything here supports **amd64 and arm64**.
 

@@ -121,6 +121,8 @@ func (a *OrderController) purchase(c *gin.Context) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.store.toasts.foreignWorkspace"))
 		case errors.Is(err, service.ErrProductMisconfigured):
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.store.toasts.productUnavailable"))
+		case errors.Is(err, service.ErrClientEmailInUse):
+			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.store.toasts.configNameInUse"))
 		case errors.Is(err, service.ErrProductUnavailable):
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "fail"))
 		default:

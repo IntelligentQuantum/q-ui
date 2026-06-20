@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# build-snapshot.sh — build a reusable Amazon Lightsail snapshot of 3x-ui.
+# build-snapshot.sh — build a reusable Amazon Lightsail snapshot of q-ui.
 #
 # Flow (mirrors the Packer golden-image model, via the Lightsail API):
 #   1. create an Ubuntu Lightsail instance with snapshot-userdata.sh
@@ -24,7 +24,7 @@
 #   --availability-zone <z> AZ (default: <region>a)
 #   --panel-port <p>        Pin the panel port in the snapshot so you can pre-open
 #                           it in the Lightsail firewall (default: random per instance)
-#   --snapshot-name <n>     Snapshot name (default: 3x-ui-ubuntu-24.04-<timestamp>)
+#   --snapshot-name <n>     Snapshot name (default: q-ui-ubuntu-24.04-<timestamp>)
 #   --keep-instance         Do not delete the build instance afterwards
 set -euo pipefail
 
@@ -38,7 +38,7 @@ KEEP_INSTANCE=0
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 STAMP="$(date +%Y%m%d-%H%M%S)"
-INSTANCE_NAME="3xui-build-${STAMP}"
+INSTANCE_NAME="q-ui-build-${STAMP}"
 KEY_FILE=""
 
 log() { echo "[build-snapshot] $*"; }
@@ -62,7 +62,7 @@ while [ $# -gt 0 ]; do
 done
 
 [ -n "$AZ" ] || AZ="${REGION}a"
-[ -n "$SNAPSHOT_NAME" ] || SNAPSHOT_NAME="3x-ui-ubuntu-24.04-${STAMP}"
+[ -n "$SNAPSHOT_NAME" ] || SNAPSHOT_NAME="q-ui-ubuntu-24.04-${STAMP}"
 
 for cmd in aws jq ssh; do
     command -v "$cmd" > /dev/null 2>&1 || die "'$cmd' is required"
@@ -125,7 +125,7 @@ log "waiting for provisioning to finish (this installs the panel)..."
 ok=0
 for _ in $(seq 1 72); do # ~12 min
     if ssh "${SSH_OPTS[@]}" -i "$KEY_FILE" "ubuntu@${IP}" \
-        'test -f /var/lib/3xui-provision-done' 2> /dev/null; then
+        'test -f /var/lib/q-ui-provision-done' 2> /dev/null; then
         ok=1
         break
     fi
@@ -175,13 +175,13 @@ echo "================================================================"
 echo " Launch an instance from it:"
 echo "   aws lightsail create-instances-from-snapshot \\"
 echo "     --instance-snapshot-name ${SNAPSHOT_NAME} \\"
-echo "     --instance-names my-3xui-1 --bundle-id ${BUNDLE} \\"
+echo "     --instance-names my-q-ui-1 --bundle-id ${BUNDLE} \\"
 echo "     --availability-zone ${AZ} --region ${REGION}"
 if [ -n "$PANEL_PORT" ]; then
     echo
     echo " Then open the panel port (pinned to ${PANEL_PORT}):"
     echo "   aws lightsail open-instance-public-ports --region ${REGION} \\"
-    echo "     --instance-name my-3xui-1 \\"
+    echo "     --instance-name my-q-ui-1 \\"
     echo "     --port-info fromPort=${PANEL_PORT},toPort=${PANEL_PORT},protocol=TCP"
 else
     echo

@@ -56,7 +56,7 @@ docker run --rm \
 
         echo "--- verifying the panel serves HTTP ---"
         cd /usr/local/q-ui
-        ./q-ui > /tmp/xui.log 2>&1 &
+        ./q-ui > /tmp/qui.log 2>&1 &
         xpid=$!
         for _ in $(seq 1 15); do
             code=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -68,7 +68,7 @@ docker run --rm \
         echo "panel HTTP status: ${code:-none}"
         case "${code:-}" in
             200|301|302|307|308) : ;;
-            *) echo "FAIL: panel did not serve (status ${code:-none})"; tail -n 30 /tmp/xui.log; exit 1 ;;
+            *) echo "FAIL: panel did not serve (status ${code:-none})"; tail -n 30 /tmp/qui.log; exit 1 ;;
         esac
 
         echo "SMOKE_PASS: user=$QUI_USERNAME port=$QUI_PANEL_PORT path=$QUI_WEB_BASE_PATH"

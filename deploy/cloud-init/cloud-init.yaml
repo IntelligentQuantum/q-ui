@@ -1,24 +1,24 @@
 #cloud-config
 # ---------------------------------------------------------------------------
-# Generic 3x-ui unattended install via cloud-init user-data.
+# Generic q-ui unattended install via cloud-init user-data.
 #
 # Works on any cloud-init platform: Hetzner, AWS, DigitalOcean, Vultr, GCP,
 # Azure, Oracle. Paste the whole file as the instance "user data".
 #
-# It installs the latest 3x-ui release NON-INTERACTIVELY, generating unique
+# It installs the latest q-ui release NON-INTERACTIVELY, generating unique
 # random credentials per instance. Full credentials are surfaced ONLY on the
 # serial console (owner-only); /etc/motd (world-readable) shows just the access
 # URL + username. Nothing is baked in advance — every instance is unique.
 #
-# Requires the non-interactive install.sh (3x-ui with QUI_NONINTERACTIVE support).
-# Edit the exported QUI_* knobs in /opt/xui-bootstrap.sh below to customise.
+# Requires the non-interactive install.sh (q-ui with QUI_NONINTERACTIVE support).
+# Edit the exported QUI_* knobs in /opt/q-ui-bootstrap.sh below to customise.
 # ---------------------------------------------------------------------------
 
 package_update: true
 package_upgrade: false
 
 write_files:
-  - path: /opt/xui-bootstrap.sh
+  - path: /opt/q-ui-bootstrap.sh
     permissions: '0700'
     owner: root:root
     content: |
@@ -53,7 +53,7 @@ write_files:
       if [ -r /etc/q-ui/install-result.env ]; then
         {
           echo
-          echo "=== 3x-ui panel credentials (generated on first boot) ==="
+          echo "=== q-ui panel credentials (generated on first boot) ==="
           cat /etc/q-ui/install-result.env
           echo "========================================================"
           echo "Change the password after first login."
@@ -63,7 +63,7 @@ write_files:
         . /etc/q-ui/install-result.env
         {
           echo
-          echo "=== 3x-ui panel (generated on first boot) ==="
+          echo "=== q-ui panel (generated on first boot) ==="
           echo "URL:      ${QUI_ACCESS_URL:-unknown}"
           echo "Username: ${QUI_USERNAME:-unknown}"
           echo "Password + API token: sudo cat /etc/q-ui/install-result.env"
@@ -73,6 +73,6 @@ write_files:
       fi
 
 runcmd:
-  - [bash, /opt/xui-bootstrap.sh]
+  - [bash, /opt/q-ui-bootstrap.sh]
 
-final_message: "3x-ui installed — full credentials in /etc/q-ui/install-result.env (sudo); /etc/motd shows the URL + username only."
+final_message: "q-ui installed — full credentials in /etc/q-ui/install-result.env (sudo); /etc/motd shows the URL + username only."

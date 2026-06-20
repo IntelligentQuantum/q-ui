@@ -50,6 +50,19 @@ func ResolveTenant(ts *service.TenantService) gin.HandlerFunc {
 			}
 		default:
 			homeID = user.TenantId
+			// A manager MUST operate inside their own workspace, never tenant 0 (the
+			// admin's global scope). If their tenant_id is unset — a legacy or
+			// half-provisioned row — resolve the workspace they own; if they somehow
+			// own none, fail safe to a sentinel tenant that matches no rows rather
+			// than exposing the admin's tenant-0 data. (Resellers/members legitimately
+			// live in tenant 0 — the original panel — so the guard is manager-only.)
+			if homeID <= model.GlobalTenantId && user.CanonicalRole() == model.RoleManager {
+				if t, err := ts.GetByManagerUserID(user.Id); err == nil {
+					homeID = t.Id
+				} else {
+					homeID = model.NoTenantSentinel
+				}
+			}
 		}
 		tenant.Set(c, homeID, homeGlobal)
 

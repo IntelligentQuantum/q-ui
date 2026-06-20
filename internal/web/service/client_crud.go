@@ -18,6 +18,14 @@ import (
 	"gorm.io/gorm"
 )
 
+// Client CRUD collision errors. Typed so controllers can map them to localized,
+// user-facing messages (a config-name / subId clash shows in the user's language
+// instead of a raw English string). Other validation errors stay common.NewError.
+var (
+	ErrClientEmailInUse = errors.New("email already in use")
+	ErrClientSubIdInUse = errors.New("subId already in use")
+)
+
 func hasForbiddenClientChar(s string) bool {
 	for _, r := range s {
 		if r == '/' || r == '\\' || r == ' ' || r < 0x20 || r == 0x7f {
@@ -79,7 +87,7 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 	emailTaken := !errors.Is(err, gorm.ErrRecordNotFound)
 	if emailTaken {
 		if existing.SubID == "" || existing.SubID != client.SubID {
-			return false, common.NewError("email already in use:", client.Email)
+			return false, ErrClientEmailInUse
 		}
 	}
 
@@ -91,7 +99,7 @@ func (s *ClientService) Create(inboundSvc *InboundService, payload *ClientCreate
 			return false, err
 		}
 		if subTaken > 0 {
-			return false, common.NewError("subId already in use:", client.SubID)
+			return false, ErrClientSubIdInUse
 		}
 	}
 
@@ -299,7 +307,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 			return false, err
 		}
 		if collisionCount > 0 {
-			return false, common.NewError("Duplicate email:", updated.Email)
+			return false, ErrClientEmailInUse
 		}
 		if err := database.GetDB().Model(&model.ClientRecord{}).
 			Where("id = ?", id).
@@ -316,7 +324,7 @@ func (s *ClientService) Update(inboundSvc *InboundService, id int, updated model
 			return false, err
 		}
 		if subCollision > 0 {
-			return false, common.NewError("Duplicate subId:", updated.SubID)
+			return false, ErrClientSubIdInUse
 		}
 	}
 

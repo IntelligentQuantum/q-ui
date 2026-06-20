@@ -1,4 +1,4 @@
-// 3x-ui golden image — one build, two sources:
+// q-ui golden image — one build, two sources:
 //   * amazon-ebs : produces an AWS AMI (Marketplace-scannable)
 //   * qemu       : produces a qcow2 (+ raw) for Hetzner/DO/Vultr/GCP/Azure/Oracle
 //
@@ -23,12 +23,12 @@ packer {
 
 locals {
   build_stamp = formatdate("YYYYMMDD-hhmmss", timestamp())
-  image_name  = "${var.ami_name_prefix}-ubuntu-${var.ubuntu_version}-${var.xui_arch}"
-  is_arm      = var.xui_arch == "arm64"
+  image_name  = "${var.ami_name_prefix}-ubuntu-${var.ubuntu_version}-${var.qui_arch}"
+  is_arm      = var.qui_arch == "arm64"
 
-  # Base images are derived from xui_arch unless explicitly overridden.
-  source_ami_name = var.source_ami_filter_name != "" ? var.source_ami_filter_name : "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${var.xui_arch}-server-*"
-  qemu_iso_url    = var.qemu_iso_url != "" ? var.qemu_iso_url : "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-${var.xui_arch}.img"
+  # Base images are derived from qui_arch unless explicitly overridden.
+  source_ami_name = var.source_ami_filter_name != "" ? var.source_ami_filter_name : "ubuntu/images/hvm-ssd-gp3/ubuntu-noble-24.04-${var.qui_arch}-server-*"
+  qemu_iso_url    = var.qemu_iso_url != "" ? var.qemu_iso_url : "https://cloud-images.ubuntu.com/releases/24.04/release/ubuntu-24.04-server-cloudimg-${var.qui_arch}.img"
 }
 
 source "amazon-ebs" "q-ui" {
@@ -36,8 +36,8 @@ source "amazon-ebs" "q-ui" {
   instance_type = var.instance_type
   ssh_username  = var.ssh_username
 
-  ami_name        = "${local.image_name}-${var.xui_version}-${local.build_stamp}"
-  ami_description = "3x-ui panel on Ubuntu ${var.ubuntu_version}. Per-instance credentials are generated on first boot."
+  ami_name        = "${local.image_name}-${var.qui_version}-${local.build_stamp}"
+  ami_description = "q-ui panel on Ubuntu ${var.ubuntu_version}. Per-instance credentials are generated on first boot."
 
   source_ami_filter {
     filters = {
@@ -58,8 +58,8 @@ source "amazon-ebs" "q-ui" {
 
   tags = {
     Name       = local.image_name
-    Project    = "3x-ui"
-    XuiVersion = var.xui_version
+    Project    = "q-ui"
+    QuiVersion = var.qui_version
     BuildTool  = "packer"
     BaseOS     = "ubuntu-${var.ubuntu_version}"
   }
@@ -114,7 +114,7 @@ source "qemu" "q-ui" {
 }
 
 build {
-  name    = "3x-ui"
+  name    = "q-ui"
   sources = ["source.amazon-ebs.q-ui", "source.qemu.q-ui"]
 
   // Upload the first-boot unit + script so provision.sh can install them.
@@ -132,8 +132,8 @@ build {
 
   provisioner "shell" {
     environment_vars = [
-      "QUI_VERSION=${var.xui_version}",
-      "QUI_ARCH=${var.xui_arch}",
+      "QUI_VERSION=${var.qui_version}",
+      "QUI_ARCH=${var.qui_arch}",
       "DEBIAN_FRONTEND=noninteractive",
     ]
     execute_command = "chmod +x {{ .Path }}; sudo -E bash {{ .Path }}"

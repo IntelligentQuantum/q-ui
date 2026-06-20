@@ -22,6 +22,12 @@ import (
 // Manager workspace. A caller resolved to the global scope sees every tenant.
 const GlobalTenantId = 0
 
+// NoTenantSentinel is the fail-safe tenant id for a non-admin who is supposed to
+// own a workspace but doesn't (a manager whose tenant is missing). Scoped queries
+// (`WHERE tenant_id = -1`) match nothing, so such a caller sees an empty panel
+// rather than aliasing the admin's tenant-0 data. It is never a real row id.
+const NoTenantSentinel = -1
+
 // Tenant is a Manager's isolated workspace. Exactly one Manager owns one tenant.
 type Tenant struct {
 	Id int `json:"id" gorm:"primaryKey;autoIncrement"`
@@ -36,10 +42,16 @@ type Tenant struct {
 	Status        string `json:"status" gorm:"index;default:'active'"` // active | suspended
 	// Domain is an optional custom domain/subdomain that resolves to this tenant's
 	// panel. Unique when set; empty means "reachable only via /panel/<slug>".
-	Domain string `json:"domain" gorm:"uniqueIndex;default:''"`
+	// NOTE: no column-level uniqueIndex — both DBs treat '' as a real value, so a
+	// plain unique index would allow only ONE workspace with an empty domain.
+	// Uniqueness is enforced by a PARTIAL unique index (WHERE domain <> '') created
+	// in migrateTenantPartialUniqueIndexes, plus the app-level check in SetDomain.
+	Domain string `json:"domain" gorm:"default:''"`
 	// ApiKeyHash is the SHA-256 of the tenant's API key (plaintext shown once on
 	// rotation). A Bearer token matching it authenticates as this tenant's manager.
-	ApiKeyHash string `json:"-" gorm:"column:api_key_hash;uniqueIndex;default:''"`
+	// Empty until a key is minted; uniqueness is a PARTIAL unique index (see Domain)
+	// so multiple key-less workspaces can coexist.
+	ApiKeyHash string `json:"-" gorm:"column:api_key_hash;default:''"`
 	// BandwidthQuotaBytes is admin-allocated capacity the manager resells
 	// (0 = unlimited). BandwidthUsedBytes is aggregated from the tenant's client
 	// traffic by a background job.

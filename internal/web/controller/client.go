@@ -317,6 +317,10 @@ func (a *ClientController) create(c *gin.Context) {
 				logger.Warning("failed to refund client-create charge:", refundErr)
 			}
 		}
+		if msg := clientErrorMessage(c, err); msg != "" {
+			pureJsonMsg(c, http.StatusOK, false, msg)
+			return
+		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -325,6 +329,21 @@ func (a *ClientController) create(c *gin.Context) {
 		a.xrayService.SetToNeedRestart()
 	}
 	notifyClientsChanged()
+}
+
+// clientErrorMessage maps a known client-service collision error to a localized,
+// user-facing message, or "" when the error is not one we specially handle (the
+// caller then falls back to the generic "something went wrong"). This is what
+// turns a raw English "email already in use" into the user's language.
+func clientErrorMessage(c *gin.Context, err error) string {
+	switch {
+	case errors.Is(err, service.ErrClientEmailInUse):
+		return I18nWeb(c, "pages.clients.toasts.emailInUse")
+	case errors.Is(err, service.ErrClientSubIdInUse):
+		return I18nWeb(c, "pages.clients.toasts.subIdInUse")
+	default:
+		return ""
+	}
 }
 
 func (a *ClientController) update(c *gin.Context) {
@@ -357,6 +376,10 @@ func (a *ClientController) update(c *gin.Context) {
 	inboundFilter := parseInboundIdsQuery(c.Query("inboundIds"))
 	needRestart, err := a.clientService.UpdateByEmail(&a.inboundService, email, updated, inboundFilter...)
 	if err != nil {
+		if msg := clientErrorMessage(c, err); msg != "" {
+			pureJsonMsg(c, http.StatusOK, false, msg)
+			return
+		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}

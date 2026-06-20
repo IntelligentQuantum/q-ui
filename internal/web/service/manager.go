@@ -8,6 +8,7 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+	"github.com/mhsanaei/3x-ui/v3/internal/logger"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/crypto"
 	"github.com/mhsanaei/3x-ui/v3/internal/util/random"
 
@@ -160,6 +161,49 @@ func (s *ManagerService) EnsureWorkspaceForUser(userID int) (*model.Tenant, erro
 		return nil, err
 	}
 	return tenant, nil
+}
+
+// ReconcileWorkspaces enforces the invariant "every manager owns a workspace and
+// their tenant_id points at it". It loads every user whose role is manager and
+// runs EnsureWorkspaceForUser on each — idempotent, so managers already wired are
+// untouched and only broken rows are repaired.
+//
+// This is the SELF-HEALING migration for existing installs: a user promoted to
+// manager before workspace auto-provisioning existed (or whose promotion-time
+// provisioning failed) would otherwise sit at tenant_id 0, which the tenant
+// middleware resolves to the ADMIN's global tenant — so the manager would see and
+// manage the admin's data. Running this once on every startup fixes such rows
+// without anyone having to recreate the database. Best-effort: a per-manager
+// failure is logged and the rest still run; the first error (if any) is returned.
+func (s *ManagerService) ReconcileWorkspaces() error {
+	var managers []model.User
+	if err := database.GetDB().Where("role = ?", model.RoleManager).Find(&managers).Error; err != nil {
+		return err
+	}
+	var firstErr error
+	repaired := 0
+	for _, m := range managers {
+		// A manager already pointing at a positive tenant they own is the common
+		// case; EnsureWorkspaceForUser is a no-op relink for them. Only rows that
+		// truly lack a workspace get a freshly-provisioned one.
+		hadNoTenant := m.TenantId <= model.GlobalTenantId
+		t, err := s.EnsureWorkspaceForUser(m.Id)
+		if err != nil {
+			logger.Warningf("reconcile workspace for manager %d (%s) failed: %v", m.Id, m.Username, err)
+			if firstErr == nil {
+				firstErr = err
+			}
+			continue
+		}
+		if hadNoTenant && t != nil {
+			repaired++
+			logger.Infof("reconcile: provisioned workspace %d (slug %q) for manager %d (%s)", t.Id, t.Slug, m.Id, m.Username)
+		}
+	}
+	if repaired > 0 {
+		logger.Infof("reconcile: repaired %d manager workspace(s)", repaired)
+	}
+	return firstErr
 }
 
 // SuspendWorkspaceForUser suspends any ACTIVE workspace owned by the user. Called

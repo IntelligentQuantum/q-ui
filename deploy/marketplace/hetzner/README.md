@@ -1,12 +1,12 @@
-# 3x-ui on Hetzner Cloud
+# q-ui on Hetzner Cloud
 
 Hetzner Cloud does **not** have a third-party image marketplace the way AWS does.
-There are two practical ways to ship 3x-ui on Hetzner.
+There are two practical ways to ship q-ui on Hetzner.
 
 ## Option A — cloud-init (recommended, no image build)
 
 Use the generic user-data from [`../../cloud-init/`](../../cloud-init/). It installs
-3x-ui non-interactively and generates unique per-instance credentials.
+q-ui non-interactively and generates unique per-instance credentials.
 
 Web console: **Create Server → Cloud config** → paste
 [`deploy/cloud-init/cloud-init.yaml`](../../cloud-init/cloud-init.yaml).
@@ -15,7 +15,7 @@ CLI:
 
 ```bash
 hcloud server create \
-  --name xui-1 \
+  --name qui-1 \
   --type cx22 \
   --image ubuntu-24.04 \
   --user-data-from-file deploy/cloud-init/cloud-init.yaml
@@ -53,6 +53,6 @@ servers from it. Two ways to get there:
 
 Hetzner's curated apps live in the community repo
 [`github.com/hetznercloud/apps`](https://github.com/hetznercloud/apps): each app
-is essentially a documented cloud-init config plus metadata. To propose 3x-ui as
+is essentially a documented cloud-init config plus metadata. To propose q-ui as
 a Hetzner app, follow that repo's contribution pattern and base the app's
 cloud-config on [`deploy/cloud-init/cloud-init.yaml`](../../cloud-init/cloud-init.yaml).

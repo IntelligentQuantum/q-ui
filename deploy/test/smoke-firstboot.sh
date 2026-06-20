@@ -62,7 +62,7 @@ docker run --rm \
         test -f /etc/q-ui/credentials.txt || { echo "FAIL: credentials.txt missing"; exit 1; }
         perms=$(stat -c %a /etc/q-ui/credentials.txt)
         [ "$perms" = "600" ] || { echo "FAIL: credentials.txt perms=$perms (want 600)"; exit 1; }
-        grep -q "3x-ui" /etc/motd || { echo "FAIL: motd not written"; exit 1; }
+        grep -q "q-ui" /etc/motd || { echo "FAIL: motd not written"; exit 1; }
 
         # shellcheck disable=SC1090
         . /etc/q-ui/credentials.txt

@@ -55,6 +55,24 @@ func TestRegisterCreatesUserWithHashedPassword(t *testing.T) {
 	}
 }
 
+func TestCheckUserIsCaseInsensitiveOnUsername(t *testing.T) {
+	setupUserTestDB(t)
+	s := &UserService{}
+
+	// Account registered with a specific case.
+	if _, err := s.Register(validRegisterInput()); err != nil {
+		t.Fatalf("Register failed: %v", err)
+	}
+
+	// Every case variant of the username must authenticate (login is case-
+	// insensitive: the stored "jane_doe" is reachable as JANE_DOE / Jane_Doe / …).
+	for _, variant := range []string{"jane_doe", "JANE_DOE", "Jane_Doe", "jAnE_dOe"} {
+		if _, err := s.CheckUser(variant, "Sup3rSecret", "", 0); err != nil {
+			t.Fatalf("CheckUser(%q) should succeed (case-insensitive login), got: %v", variant, err)
+		}
+	}
+}
+
 func TestRegisterRejectsDuplicateUsernameCaseInsensitive(t *testing.T) {
 	setupUserTestDB(t)
 	s := &UserService{}

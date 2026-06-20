@@ -1,4 +1,4 @@
-# Publishing 3x-ui to the AWS Marketplace (AMI)
+# Publishing q-ui to the AWS Marketplace (AMI)
 
 This is the checklist for turning the Packer-built AMI into an AWS Marketplace
 listing. It assumes you have already built an AMI with
@@ -23,10 +23,10 @@ cd deploy/packer
 packer init .
 # amd64
 packer build -only='amazon-ebs.q-ui' \
-  -var 'xui_version=vX.Y.Z' -var 'xui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
+  -var 'qui_version=vX.Y.Z' -var 'qui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
 # arm64 (Graviton)
 packer build -only='amazon-ebs.q-ui' \
-  -var 'xui_version=vX.Y.Z' -var 'xui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
+  -var 'qui_version=vX.Y.Z' -var 'qui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
 ```
 
 You can list both AMIs (amd64 + arm64) as architectures of a single Marketplace

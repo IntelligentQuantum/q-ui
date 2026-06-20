@@ -6,8 +6,8 @@ blue='\033[0;34m'
 yellow='\033[0;33m'
 plain='\033[0m'
 
-xui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
-xui_service="${QUI_SERVICE:=/etc/systemd/system}"
+qui_folder="${QUI_MAIN_FOLDER:=/usr/local/q-ui}"
+qui_service="${QUI_SERVICE:=/etc/systemd/system}"
 
 # Don't edit this config
 b_source="${BASH_SOURCE[0]}"
@@ -117,7 +117,7 @@ gen_random_string() {
         | head -c "$length"
 }
 
-xui_env_file_path() {
+qui_env_file_path() {
     case "${release}" in
         ubuntu | debian | armbian)
             echo "/etc/default/q-ui"
@@ -131,9 +131,9 @@ xui_env_file_path() {
     esac
 }
 
-load_xui_env() {
+load_qui_env() {
     local env_file
-    env_file="$(xui_env_file_path)"
+    env_file="$(qui_env_file_path)"
     if [[ -r "$env_file" ]]; then
         set -a
         # shellcheck disable=SC1090
@@ -243,7 +243,7 @@ setup_ssl_certificate() {
     local webKeyFile="/root/cert/${domain}/privkey.pem"
 
     if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-        ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
+        ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile" > /dev/null 2>&1
         echo -e "${green}SSL certificate installed and configured successfully!${plain}"
         return 0
     else
@@ -386,7 +386,7 @@ setup_ip_certificate() {
 
     # Configure panel to use the certificate
     echo -e "${green}Setting certificate paths for the panel...${plain}"
-    ${xui_folder}/q-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
+    ${qui_folder}/q-ui cert -webCert "${certDir}/fullchain.pem" -webCertKey "${certDir}/privkey.pem"
     if [ $? -ne 0 ]; then
         echo -e "${yellow}Warning: Could not set certificate paths automatically.${plain}"
         echo -e "${yellow}You may need to set them manually in the panel settings.${plain}"
@@ -404,8 +404,8 @@ setup_ip_certificate() {
 
 # Comprehensive manual SSL certificate issuance via acme.sh
 ssl_cert_issue() {
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep 'webBasePath:' | awk -F': ' '{print $2}' | tr -d '[:space:]' | sed 's#^/##')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep 'port:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
 
     # check for acme.sh first
     if ! command -v ~/.acme.sh/acme.sh &> /dev/null; then
@@ -564,7 +564,7 @@ ssl_cert_issue() {
         local webKeyFile="/root/cert/${domain}/privkey.pem"
 
         if [[ -f "$webCertFile" && -f "$webKeyFile" ]]; then
-            ${xui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
+            ${qui_folder}/q-ui cert -webCert "$webCertFile" -webCertKey "$webKeyFile"
             echo -e "${green}Certificate paths set for the panel${plain}"
             echo -e "${green}Certificate File: $webCertFile${plain}"
             echo -e "${green}Private Key File: $webKeyFile${plain}"
@@ -706,7 +706,7 @@ prompt_and_setup_ssl() {
             done
 
             # 3.4 Apply Settings via q-ui binary
-            ${xui_folder}/q-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
+            ${qui_folder}/q-ui cert -webCert "$custom_cert" -webCertKey "$custom_key" > /dev/null 2>&1
 
             # Set SSL_HOST for composing Panel URL
             if [[ -n "$custom_domain" ]]; then
@@ -735,7 +735,7 @@ prompt_and_setup_ssl() {
             local bind_local=""
             read -rp "Bind the panel to 127.0.0.1 only? (recommended — forces SSH tunnel / reverse-proxy access) [y/N]: " bind_local
             if [[ "$bind_local" == "y" || "$bind_local" == "Y" ]]; then
-                ${xui_folder}/q-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
+                ${qui_folder}/q-ui setting -listenIP "127.0.0.1" > /dev/null 2>&1
                 SSL_HOST="127.0.0.1"
                 echo -e "${green}✓ Panel bound to 127.0.0.1 only. It is now unreachable from the public internet.${plain}"
                 echo ""
@@ -766,13 +766,13 @@ config_after_update() {
     local panel_needs_restart=0
 
     echo -e "${yellow}q-ui settings:${plain}"
-    ${xui_folder}/q-ui setting -show true
-    ${xui_folder}/q-ui migrate
+    ${qui_folder}/q-ui setting -show true
+    ${qui_folder}/q-ui migrate
 
     # Properly detect empty cert by checking if cert: line exists and has content after it
-    local existing_cert=$(${xui_folder}/q-ui setting -getCert true 2> /dev/null | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
-    local existing_port=$(${xui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
-    local existing_webBasePath=$(${xui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
+    local existing_cert=$(${qui_folder}/q-ui setting -getCert true 2> /dev/null | grep 'cert:' | awk -F': ' '{print $2}' | tr -d '[:space:]')
+    local existing_port=$(${qui_folder}/q-ui setting -show true | grep -Eo 'port: .+' | awk '{print $2}')
+    local existing_webBasePath=$(${qui_folder}/q-ui setting -show true | grep -Eo 'webBasePath: .+' | awk '{print $2}' | sed 's#^/##')
 
     # Get server IP
     local URL_lists=(
@@ -810,7 +810,7 @@ config_after_update() {
     if [[ ${#existing_webBasePath} -lt 4 ]]; then
         echo -e "${yellow}WebBasePath is missing or too short. Generating a new one...${plain}"
         local config_webBasePath=$(gen_random_string 18)
-        ${xui_folder}/q-ui setting -webBasePath "${config_webBasePath}"
+        ${qui_folder}/q-ui setting -webBasePath "${config_webBasePath}"
         existing_webBasePath="${config_webBasePath}"
         panel_needs_restart=1
         echo -e "${green}New WebBasePath: ${config_webBasePath}${plain}"
@@ -855,13 +855,13 @@ config_after_update() {
 }
 
 update_q-ui() {
-    cd ${xui_folder%/q-ui}/
+    cd ${qui_folder%/q-ui}/
 
-    load_xui_env
+    load_qui_env
 
-    if [ -f "${xui_folder}/q-ui" ]; then
-        current_xui_version=$(${xui_folder}/q-ui -v)
-        echo -e "${green}Current q-ui version: ${current_xui_version}${plain}"
+    if [ -f "${qui_folder}/q-ui" ]; then
+        current_qui_version=$(${qui_folder}/q-ui -v)
+        echo -e "${green}Current q-ui version: ${current_qui_version}${plain}"
     else
         _fail "ERROR: Current q-ui version: unknown"
     fi
@@ -877,16 +877,18 @@ update_q-ui() {
         fi
     fi
     echo -e "Got q-ui latest version: ${tag_version}, beginning the installation..."
-    ${curl_bin} -fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
+    # --retry-all-errors so a transient 404 (per-arch asset still uploading right
+    # after a release) is retried instead of aborting; budget outlasts the window.
+    ${curl_bin} -fLRo ${qui_folder}-linux-$(arch).tar.gz --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 15 --max-time 300 https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
     if [[ $? -ne 0 ]]; then
         echo -e "${yellow}Trying to fetch version with IPv4...${plain}"
-        ${curl_bin} -4fLRo ${xui_folder}-linux-$(arch).tar.gz https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
+        ${curl_bin} -4fLRo ${qui_folder}-linux-$(arch).tar.gz --retry 10 --retry-all-errors --retry-delay 10 --connect-timeout 15 --max-time 300 https://github.com/IntelligentQuantum/q-ui/releases/download/${tag_version}/q-ui-linux-$(arch).tar.gz 2> /dev/null
         if [[ $? -ne 0 ]]; then
             _fail "ERROR: Failed to download q-ui, please be sure that your server can access GitHub"
         fi
     fi
 
-    if [[ -e ${xui_folder}/ ]]; then
+    if [[ -e ${qui_folder}/ ]]; then
         echo -e "${green}Stopping q-ui...${plain}"
         if [[ $release == "alpine" ]]; then
             if [ -f "/etc/init.d/q-ui" ]; then
@@ -899,11 +901,11 @@ update_q-ui() {
                 _fail "ERROR: q-ui service unit not installed."
             fi
         else
-            if [ -f "${xui_service}/q-ui.service" ]; then
+            if [ -f "${qui_service}/q-ui.service" ]; then
                 systemctl stop q-ui > /dev/null 2>&1
                 systemctl disable q-ui > /dev/null 2>&1
                 echo -e "${green}Removing old systemd unit version...${plain}"
-                rm ${xui_service}/q-ui.service -f > /dev/null 2>&1
+                rm ${qui_service}/q-ui.service -f > /dev/null 2>&1
                 systemctl daemon-reload > /dev/null 2>&1
             else
                 rm q-ui-linux-$(arch).tar.gz -f > /dev/null 2>&1
@@ -916,18 +918,18 @@ update_q-ui() {
         # The new panel respawns a clean mtg per inbound on next start.
         pkill -f 'mtg-linux-[^ ]* run ' > /dev/null 2>&1 || true
         echo -e "${green}Removing old q-ui version...${plain}"
-        rm ${xui_folder} -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui.service -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui.service.debian -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui.service.arch -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui.service.rhel -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui -f > /dev/null 2>&1
-        rm ${xui_folder}/q-ui.sh -f > /dev/null 2>&1
+        rm ${qui_folder} -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui.service -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui.service.debian -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui.service.arch -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui.service.rhel -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui -f > /dev/null 2>&1
+        rm ${qui_folder}/q-ui.sh -f > /dev/null 2>&1
         echo -e "${green}Removing old xray version...${plain}"
-        rm ${xui_folder}/bin/xray-linux-amd64 -f > /dev/null 2>&1
+        rm ${qui_folder}/bin/xray-linux-amd64 -f > /dev/null 2>&1
         echo -e "${green}Removing old README and LICENSE file...${plain}"
-        rm ${xui_folder}/bin/README.md -f > /dev/null 2>&1
-        rm ${xui_folder}/bin/LICENSE -f > /dev/null 2>&1
+        rm ${qui_folder}/bin/README.md -f > /dev/null 2>&1
+        rm ${qui_folder}/bin/LICENSE -f > /dev/null 2>&1
     else
         rm q-ui-linux-$(arch).tar.gz -f > /dev/null 2>&1
         _fail "ERROR: q-ui not installed."
@@ -957,16 +959,16 @@ update_q-ui() {
         fi
     fi
 
-    chmod +x ${xui_folder}/q-ui.sh > /dev/null 2>&1
+    chmod +x ${qui_folder}/q-ui.sh > /dev/null 2>&1
     chmod +x /usr/bin/q-ui > /dev/null 2>&1
     mkdir -p /var/log/q-ui > /dev/null 2>&1
 
     echo -e "${green}Changing owner...${plain}"
-    chown -R root:root ${xui_folder} > /dev/null 2>&1
+    chown -R root:root ${qui_folder} > /dev/null 2>&1
 
-    if [ -f "${xui_folder}/bin/config.json" ]; then
+    if [ -f "${qui_folder}/bin/config.json" ]; then
         echo -e "${green}Changing on config file permissions...${plain}"
-        chmod 640 ${xui_folder}/bin/config.json > /dev/null 2>&1
+        chmod 640 ${qui_folder}/bin/config.json > /dev/null 2>&1
     fi
 
     if [[ $release == "alpine" ]]; then
@@ -985,7 +987,7 @@ update_q-ui() {
     else
         if [ -f "q-ui.service" ]; then
             echo -e "${green}Installing systemd unit...${plain}"
-            cp -f q-ui.service ${xui_service}/ > /dev/null 2>&1
+            cp -f q-ui.service ${qui_service}/ > /dev/null 2>&1
             if [[ $? -ne 0 ]]; then
                 echo -e "${red}Failed to copy q-ui.service${plain}"
                 exit 1
@@ -996,7 +998,7 @@ update_q-ui() {
                 ubuntu | debian | armbian)
                     if [ -f "q-ui.service.debian" ]; then
                         echo -e "${green}Installing debian-like systemd unit...${plain}"
-                        cp -f q-ui.service.debian ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.debian ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1005,7 +1007,7 @@ update_q-ui() {
                 arch | manjaro | parch)
                     if [ -f "q-ui.service.arch" ]; then
                         echo -e "${green}Installing arch-like systemd unit...${plain}"
-                        cp -f q-ui.service.arch ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.arch ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1014,7 +1016,7 @@ update_q-ui() {
                 *)
                     if [ -f "q-ui.service.rhel" ]; then
                         echo -e "${green}Installing rhel-like systemd unit...${plain}"
-                        cp -f q-ui.service.rhel ${xui_service}/q-ui.service > /dev/null 2>&1
+                        cp -f q-ui.service.rhel ${qui_service}/q-ui.service > /dev/null 2>&1
                         if [[ $? -eq 0 ]]; then
                             service_installed=true
                         fi
@@ -1027,13 +1029,13 @@ update_q-ui() {
                 echo -e "${yellow}Service files not found in tar.gz, downloading from GitHub...${plain}"
                 case "${release}" in
                     ubuntu | debian | armbian)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.debian > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.debian > /dev/null 2>&1
                         ;;
                     arch | manjaro | parch)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.arch > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.arch > /dev/null 2>&1
                         ;;
                     *)
-                        ${curl_bin} -4fLRo ${xui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.rhel > /dev/null 2>&1
+                        ${curl_bin} -4fLRo ${qui_service}/q-ui.service https://raw.githubusercontent.com/IntelligentQuantum/q-ui/main/q-ui.service.rhel > /dev/null 2>&1
                         ;;
                 esac
 
@@ -1043,8 +1045,8 @@ update_q-ui() {
                 fi
             fi
         fi
-        chown root:root ${xui_service}/q-ui.service > /dev/null 2>&1
-        chmod 644 ${xui_service}/q-ui.service > /dev/null 2>&1
+        chown root:root ${qui_service}/q-ui.service > /dev/null 2>&1
+        chmod 644 ${qui_service}/q-ui.service > /dev/null 2>&1
         systemctl daemon-reload > /dev/null 2>&1
         systemctl enable q-ui > /dev/null 2>&1
         systemctl start q-ui > /dev/null 2>&1

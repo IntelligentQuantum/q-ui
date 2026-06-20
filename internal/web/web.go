@@ -461,6 +461,14 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 	}
 	service.StartTrafficWriter()
 
+	// Self-heal tenancy data on startup: make sure every manager owns a workspace
+	// and points at it. Repairs installs where a user became a manager before
+	// workspace auto-provisioning existed (such a manager would otherwise alias the
+	// admin's global tenant). Idempotent and best-effort — never blocks startup.
+	if err := (&service.ManagerService{}).ReconcileWorkspaces(); err != nil {
+		logger.Warning("manager workspace reconcile on startup:", err)
+	}
+
 	s.cron = cron.New(cron.WithLocation(loc), cron.WithSeconds())
 	s.cron.Start()
 

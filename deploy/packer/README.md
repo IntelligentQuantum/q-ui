@@ -1,6 +1,6 @@
-# 3x-ui golden image (Packer)
+# q-ui golden image (Packer)
 
-Builds a cloud image with the 3x-ui panel pre-installed but **not configured**:
+Builds a cloud image with the q-ui panel pre-installed but **not configured**:
 the image ships with **no database and no credentials**, and generates a unique
 admin account on first boot. This is the **primary** path for AWS Marketplace
 and any reusable image.
@@ -12,11 +12,11 @@ Two sources, one build:
 | `amazon-ebs` | AWS AMI | AWS / Marketplace |
 | `qemu` | `qcow2` (+ `raw`) | Hetzner, DigitalOcean, Vultr, GCP, Azure, Oracle, bare metal |
 
-Both sources build for **`amd64` and `arm64`** (select with `-var xui_arch=...`).
+Both sources build for **`amd64` and `arm64`** (select with `-var qui_arch=...`).
 
 ## Why no baked DB
 
-3x-ui seeds a hardcoded `admin/admin` user and generates its session secret +
+q-ui seeds a hardcoded `admin/admin` user and generates its session secret +
 panel GUID the first time it starts. If an image shipped an initialized
 `q-ui.db`, **every clone would share the same credentials and secret**. So the
 build deliberately:
@@ -51,22 +51,22 @@ Build a specific release (recommended) or `latest`:
 
 ```bash
 # amd64 qcow2 (no cloud account needed)
-packer build -only='qemu.q-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=amd64' .
+packer build -only='qemu.q-ui' -var 'qui_version=v3.3.1' -var 'qui_arch=amd64' .
 
 # arm64 qcow2 (run on an arm64 host for native KVM)
-packer build -only='qemu.q-ui' -var 'xui_version=v3.3.1' -var 'xui_arch=arm64' .
+packer build -only='qemu.q-ui' -var 'qui_version=v3.3.1' -var 'qui_arch=arm64' .
 
 # amd64 AWS AMI
 packer build -only='amazon-ebs.q-ui' \
-  -var 'xui_version=v3.3.1' -var 'xui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
+  -var 'qui_version=v3.3.1' -var 'qui_arch=amd64' -var 'instance_type=t3.small' -var 'region=eu-central-1' .
 
 # arm64 AWS AMI (Graviton)
 packer build -only='amazon-ebs.q-ui' \
-  -var 'xui_version=v3.3.1' -var 'xui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
+  -var 'qui_version=v3.3.1' -var 'qui_arch=arm64' -var 'instance_type=t4g.small' -var 'region=eu-central-1' .
 ```
 
 Outputs (per arch):
-- `output-qemu/3x-ui-ubuntu-24.04-<arch>.qcow2` and `.raw`
+- `output-qemu/q-ui-ubuntu-24.04-<arch>.qcow2` and `.raw`
 - the AMI id (also recorded in `packer-manifest.json`)
 
 If `/dev/kvm` is unavailable, add `-var 'qemu_accelerator=tcg'` (much slower).
@@ -77,8 +77,8 @@ See [`variables.pkr.hcl`](variables.pkr.hcl) for the full list.
 
 | Variable | Default | Notes |
 | --- | --- | --- |
-| `xui_version` | `latest` | Release tag to install, e.g. `v3.3.1` |
-| `xui_arch` | `amd64` | `amd64` or `arm64` (derives the base AMI / cloud image) |
+| `qui_version` | `latest` | Release tag to install, e.g. `v3.3.1` |
+| `qui_arch` | `amd64` | `amd64` or `arm64` (derives the base AMI / cloud image) |
 | `region` | `eu-central-1` | AWS region (amazon-ebs) |
 | `instance_type` | `t3.small` | EC2 build instance — must match the arch (`t4g.small` for arm64) |
 | `qemu_accelerator` | `kvm` | `kvm` or `tcg` |
@@ -109,7 +109,7 @@ building the AMI when AWS credentials are configured.
 ## A note on host firewalls
 
 `scripts/harden.sh` intentionally does **not** enable a restrictive host
-firewall. 3x-ui opens Xray inbound ports on admin-chosen ports at runtime, which
+firewall. q-ui opens Xray inbound ports on admin-chosen ports at runtime, which
 a host firewall would block. Use your cloud provider's security groups/firewall
 instead, and open the panel port + your inbound ports there. If you still want a
 host firewall, add `ufw` rules in `harden.sh` allowing SSH, the panel port and

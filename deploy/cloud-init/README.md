@@ -1,7 +1,7 @@
-# 3x-ui via cloud-init (generic, no golden image)
+# q-ui via cloud-init (generic, no golden image)
 
 This is the **secondary** deployment path: a single [`cloud-init.yaml`](cloud-init.yaml)
-user-data file that installs 3x-ui non-interactively on a fresh Ubuntu/Debian
+user-data file that installs q-ui non-interactively on a fresh Ubuntu/Debian
 VM and generates **unique random credentials per instance**. Use it when you do
 not want to build a golden image — it works on any cloud-init platform.
 
@@ -11,7 +11,7 @@ not want to build a golden image — it works on any cloud-init platform.
 ## How it works
 
 1. The VM boots a stock Ubuntu/Debian cloud image.
-2. cloud-init writes and runs `/opt/xui-bootstrap.sh`, which exports
+2. cloud-init writes and runs `/opt/q-ui-bootstrap.sh`, which exports
    `QUI_NONINTERACTIVE=1` and pipes the project's `install.sh` into `bash`.
 3. `install.sh` runs end-to-end with **zero prompts**, picking secure random
    values for any credential you didn't pin.
@@ -57,7 +57,7 @@ Edit the `export QUI_*` lines inside the `write_files` block of
 - **DigitalOcean** — *Create Droplet → Advanced options → Add Initialization
   scripts (user data)*: paste the file. Or `doctl compute droplet create --user-data-file cloud-init.yaml ...`
 - **Vultr** — *Deploy → Additional Features → Cloud-Init User-Data*: paste the file.
-- **Google Cloud (GCE)** — `gcloud compute instances create xui \
+- **Google Cloud (GCE)** — `gcloud compute instances create qui \
   --image-family ubuntu-2404-lts-amd64 --image-project ubuntu-os-cloud \
   --metadata-from-file user-data=cloud-init.yaml`
 - **Azure** — `az vm create --image Ubuntu2404 --custom-data cloud-init.yaml ...`

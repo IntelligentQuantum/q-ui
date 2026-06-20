@@ -1,6 +1,6 @@
-# 3x-ui on Amazon Lightsail
+# q-ui on Amazon Lightsail
 
-Two self-service ways to run 3x-ui on Lightsail, both producing **unique
+Two self-service ways to run q-ui on Lightsail, both producing **unique
 per-instance credentials** (never `admin/admin`, never a shared secret).
 
 > **Reality check.** The Lightsail *blueprint* list (WordPress, LAMP, GitLab…)
@@ -29,7 +29,7 @@ CLI equivalent:
 
 ```bash
 aws lightsail create-instances \
-  --instance-names my-3xui \
+  --instance-names my-q-ui \
   --availability-zone eu-central-1a \
   --blueprint-id ubuntu_24_04 \
   --bundle-id small_3_0 \
@@ -62,8 +62,8 @@ Launch instances from the snapshot:
 
 ```bash
 aws lightsail create-instances-from-snapshot \
-  --instance-snapshot-name 3x-ui-ubuntu-24.04-<stamp> \
-  --instance-names my-3xui-1 --bundle-id small_3_0 \
+  --instance-snapshot-name q-ui-ubuntu-24.04-<stamp> \
+  --instance-names my-q-ui-1 --bundle-id small_3_0 \
   --availability-zone eu-central-1a --region eu-central-1
 ```
 
@@ -86,7 +86,7 @@ panel runs on a different port, so you must open it:
 - CLI:
   ```bash
   aws lightsail open-instance-public-ports --region eu-central-1 \
-    --instance-name my-3xui \
+    --instance-name my-q-ui \
     --port-info fromPort=54321,toPort=54321,protocol=TCP
   ```
 

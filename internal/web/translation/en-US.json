@@ -618,7 +618,8 @@
       },
       "toasts": {
         "foreignWorkspace": "This balance belongs to a different workspace. Register or sign in on this workspace to buy here.",
-        "productUnavailable": "This product is temporarily unavailable. Please try another plan or contact support."
+        "productUnavailable": "This product is temporarily unavailable. Please try another plan or contact support.",
+        "configNameInUse": "This config name is already taken. Please choose another."
       }
     },
     "orders": {
@@ -1495,7 +1496,9 @@
         "delDepleted": "{count} depleted clients deleted",
         "insufficientBalance": "Insufficient balance",
         "forbidden": "You do not have permission to access this resource.",
-        "bandwidthExhausted": "Workspace bandwidth quota exhausted — ask the admin to recharge"
+        "bandwidthExhausted": "Workspace bandwidth quota exhausted — ask the admin to recharge",
+        "emailInUse": "This name is already in use — choose another.",
+        "subIdInUse": "This subscription ID is already in use — choose another."
       },
       "costPreview": "This client costs {cost}. Balance after purchase: {after}.",
       "costInsufficient": "Your balance is not enough to create this client. Please top up first."
