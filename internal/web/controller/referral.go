@@ -42,8 +42,12 @@ func (a *ReferralController) initRouter(g *gin.RouterGroup) {
 	ref.GET("/me", a.me)
 
 	// A reseller's customer roster (the users they referred). customer.view-gated;
-	// the service confines results to the caller's own referrals.
-	g.GET("/customers", middleware.RequirePermission(model.PermCustomerView), a.customers)
+	// the service confines results to the caller's own referrals. Registered as a
+	// sub-group (like the other commerce routes) rather than g.GET so it follows
+	// the codebase's grouping convention.
+	customers := g.Group("/customers")
+	customers.Use(middleware.RequirePermission(model.PermCustomerView))
+	customers.GET("", a.customers)
 
 	admin := ref.Group("")
 	admin.Use(middleware.RequireAdmin())
