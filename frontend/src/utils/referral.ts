@@ -105,22 +105,3 @@ export function getStoredReferralCode(): string | undefined
 {
     return readRaw()?.referralCode ?? undefined;
 }
-
-/** The full stored record (code + timestamps), or null. */
-export function getStoredReferral(): StoredReferral | null
-{
-    return readRaw();
-}
-
-/** Clear the stored referral (e.g. after a successful, attributed sign-up). */
-export function clearStoredReferral(): void
-{
-    try
-    {
-        window.localStorage.removeItem(STORAGE_KEY);
-    }
-    catch
-    {
-    /* ignore */
-    }
-}

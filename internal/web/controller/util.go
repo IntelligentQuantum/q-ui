@@ -167,7 +167,10 @@ func jsonMsgObj(c *gin.Context, msg string, obj any, err error) {
 		m.Success = false
 		ctx := requestErrorContext(c)
 		fail := I18nWeb(c, "fail")
-		errStr := err.Error()
+		// Localize the raw error text into the request locale (falls back to the
+		// trimmed English when the message isn't a known one). The server log keeps
+		// the original English err for debugging.
+		errStr := localizeServerError(c, err)
 		if errStr != "" {
 			m.Msg = msg + " (" + errStr + ")"
 			logger.Warningf("%s %s %s: %v", ctx, msg, fail, err)

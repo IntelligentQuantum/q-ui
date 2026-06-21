@@ -112,7 +112,7 @@ export default function ClientInfoModal({
         return IntlUtil.formatDate(ts, datepicker);
     };
     const dateLabel = (ts?: number) => (!ts || ts <= 0 ? '-' : IntlUtil.formatDate(ts, datepicker));
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const [links, setLinks] = useState<string[]>([]);
     const [clientIps, setClientIps] = useState<string[]>([]);
     const [ipsLoading, setIpsLoading] = useState(false);
@@ -292,7 +292,6 @@ export default function ClientInfoModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={() => onOpenChange(false)}

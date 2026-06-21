@@ -121,12 +121,13 @@ export default function WorkspaceSettingsPage()
       }
     >
       <div className="flex flex-col gap-4">
-        {/* The workspace's prepaid pool = the manager's own balance. Every sale on
-            this workspace draws it down, so a manager can see how much is left. */}
+        {/* The workspace TREASURY — prepaid capital this workspace sells from,
+            separate from the manager's personal account balance. Sales accrue into
+            it and provisioning costs draw it down, so a manager sees what's left. */}
         <StatCard
           icon={<Wallet className="h-5 w-5" aria-hidden />}
           label={t('pages.managers.workspaceBalance')}
-          value={formatMoney(me?.balance ?? 0)}
+          value={formatMoney(me?.workspaceBalance ?? 0)}
         />
 
         <Card className="flex flex-col gap-4 p-4 sm:p-5">

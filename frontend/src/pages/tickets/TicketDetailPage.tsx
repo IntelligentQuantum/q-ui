@@ -40,6 +40,7 @@ const PRIORITIES = ['low', 'normal', 'high', 'urgent'];
 interface DetailData { ticket: Ticket; messages: TicketMessage[]; canManage: boolean; }
 interface Staff { id: number; username: string; role: string; }
 interface Category { id: number; name: string; }
+interface TicketAuditEntry { id: number; actorName: string; action: string; oldValue: string; newValue: string; createdAt: number; }
 
 function initials(name: string): string
 {
@@ -94,6 +95,17 @@ export default function TicketDetailPage()
             return msg?.success ? ((msg.obj as Category[]) ?? []) : [];
         },
         enabled: isStaff
+    });
+    // Staff-only activity/audit trail (who did what). The backend already exposes
+    // /tickets/:id/audit (staff-gated + tenant-confined); this surfaces it.
+    const auditQuery = useQuery({
+        queryKey: ['tickets', 'audit', ticketId],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get(`/panel/api/tickets/${ ticketId }/audit`, undefined, { silent: true });
+            return msg?.success ? ((msg.obj as TicketAuditEntry[]) ?? []) : [];
+        },
+        enabled: isStaff && ticketId > 0
     });
 
     const refresh = () =>
@@ -375,6 +387,27 @@ export default function TicketDetailPage()
                   )}
                 </CardContent>
               </Card>
+
+              {/* Activity / audit trail (staff-only; data from /tickets/:id/audit) */}
+              {(auditQuery.data?.length ?? 0) > 0 && (
+                <Card>
+                  <CardContent className="flex flex-col gap-2 p-4">
+                    <h3 className="text-sm font-semibold text-foreground">{t('pages.ticketDetail.activity')}</h3>
+                    <ul className="flex flex-col gap-2">
+                      {auditQuery.data!.map((e) => (
+                        <li key={e.id} className="text-xs text-muted-foreground">
+                          <span className="font-medium text-foreground">{e.actorName || '—'}</span>{' '}
+                          {t(`pages.ticketDetail.action_${ e.action }`, { defaultValue: e.action })}
+                          {e.oldValue && e.newValue
+                              ? <span> · {e.oldValue} → {e.newValue}</span>
+                              : null}
+                          <span className="block text-[11px] opacity-70">{new Date(e.createdAt).toLocaleString()}</span>
+                        </li>
+                      ))}
+                    </ul>
+                  </CardContent>
+                </Card>
+              )}
             </aside>
           )}
         </div>

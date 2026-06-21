@@ -307,7 +307,7 @@ export default function ClientBulkAddModal({
 }: ClientBulkAddModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const { bulkCreate } = useClients();
     const groupListId = useId();
 
@@ -469,7 +469,6 @@ export default function ClientBulkAddModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={() => onOpenChange(false)}

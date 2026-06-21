@@ -48,6 +48,9 @@ interface ManagerRow {
   tenant: Tenant;
   manager: { id: number; username: string; email: string; balance: number } | null;
   userCount: number;
+  // Workspace TREASURY balance (the capital the workspace sells from), distinct
+  // from manager.balance (the manager's personal account balance).
+  workspaceBalance: number;
 }
 
 interface WorkspaceOverview {
@@ -394,9 +397,9 @@ export default function ManagersPage()
         {
             key: 'balance',
             header: t('pages.managers.workspaceBalance'),
-            accessor: (row) => row.manager?.balance ?? 0,
+            accessor: (row) => row.workspaceBalance ?? 0,
             sortable: true,
-            cell: (row) => <span className="tabular-nums font-medium">{formatMoney(row.manager?.balance ?? 0)}</span>
+            cell: (row) => <span className="tabular-nums font-medium">{formatMoney(row.workspaceBalance ?? 0)}</span>
         },
         {
             key: 'bandwidth',
@@ -543,10 +546,10 @@ export default function ManagersPage()
           }
         >
           <div className="flex flex-col gap-4">
-            {chargeTarget?.manager ? (
+            {chargeTarget ? (
               <div className="flex items-center justify-between rounded-lg border border-border bg-surface-sunken px-3 py-2 text-sm">
                 <span className="text-muted-foreground">{t('pages.managers.currentBalance')}</span>
-                <span className="font-semibold tabular-nums">{formatMoney(chargeTarget.manager.balance)}</span>
+                <span className="font-semibold tabular-nums">{formatMoney(chargeTarget.workspaceBalance)}</span>
               </div>
             ) : null}
             <Field label={t('pages.users.operation')}>

@@ -62,7 +62,7 @@ const TFA_INITIAL: TfaState = {
 export default function SecurityTab({ allSetting, updateSetting }: SecurityTabProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
 
     const [activeTab, setActiveTab] = useState('1');
     const [tfa, setTfa] = useState<TfaState>(TFA_INITIAL);
@@ -299,7 +299,6 @@ export default function SecurityTab({ allSetting, updateSetting }: SecurityTabPr
 
     return (
     <>
-      {messageContextHolder}
       <div className="flex flex-col gap-4">
         <Tabs
           value={activeTab}

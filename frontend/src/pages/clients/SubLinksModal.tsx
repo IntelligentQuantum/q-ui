@@ -41,7 +41,7 @@ export default function SubLinksModal({
 }: SubLinksModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
 
     const enabled = !!subSettings?.enable && !!subSettings?.subURI;
     const jsonEnabled = !!subSettings?.subJsonEnable && !!subSettings?.subJsonURI;
@@ -106,7 +106,6 @@ export default function SubLinksModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={() => onOpenChange(false)}

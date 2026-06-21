@@ -23,6 +23,8 @@ const OrdersPage = lazy(() => import('@/pages/orders/OrdersPage'));
 const ProductsPage = lazy(() => import('@/pages/products/ProductsPage'));
 const ServicesPage = lazy(() => import('@/pages/services/ServicesPage'));
 const ReferralPage = lazy(() => import('@/pages/referral/ReferralPage'));
+const MyCustomersPage = lazy(() => import('@/pages/customers/MyCustomersPage'));
+const AdminReferralsPage = lazy(() => import('@/pages/referral/AdminReferralsPage'));
 const ManualDepositPage = lazy(() => import('@/pages/wallet/ManualDepositPage'));
 const AdminManualDepositsPage = lazy(() => import('@/pages/admin/ManualDepositsPage'));
 const TicketsPage = lazy(() => import('@/pages/tickets/TicketsPage'));
@@ -61,6 +63,8 @@ const panelChildren: RouteObject[] = [
     { path: 'products', element: withSuspense(<ProductsPage />) },
     { path: 'services', element: withSuspense(<ServicesPage />) },
     { path: 'referral', element: withSuspense(<ReferralPage />) },
+    { path: 'customers', element: withSuspense(<MyCustomersPage />) },
+    { path: 'admin-referrals', element: withSuspense(<AdminReferralsPage />) },
     { path: 'manual-deposit', element: withSuspense(<ManualDepositPage />) },
     { path: 'manual-deposits', element: withSuspense(<AdminManualDepositsPage />) },
     { path: 'tickets', element: withSuspense(<TicketsPage />) },
@@ -78,8 +82,11 @@ const routes: RouteObject[] = [
     // slug), and strips it for the RBAC gate.
     { path: 'manager/:tenantSlug', element: <PanelLayout />, children: panelChildren },
     // Standalone design-system gallery — intentionally OUTSIDE PanelLayout so it
-    // renders without the auth/RBAC gate. Dev/review aid for the theme rebuild.
-    { path: 'theme-preview', element: withSuspense(<ThemePreviewPage />) }
+    // renders without the auth/RBAC gate. DEV-only review aid for the theme rebuild;
+    // never mounted in a production build so it can't be reached publicly.
+    ...(import.meta.env.DEV
+        ? [{ path: 'theme-preview', element: withSuspense(<ThemePreviewPage />) }]
+        : [])
 ];
 
 function computeBasename()

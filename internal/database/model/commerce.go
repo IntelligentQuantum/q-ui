@@ -121,7 +121,6 @@ func (Order) TableName() string { return "orders" }
 // Order status constants.
 const (
 	OrderPending   = "pending"
-	OrderPaid      = "paid"
 	OrderCompleted = "completed"
 	OrderCancelled = "cancelled"
 )

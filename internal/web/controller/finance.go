@@ -201,7 +201,19 @@ func (a *FinanceController) exportOrders(c *gin.Context) {
 }
 
 func (a *FinanceController) exportDeposits(c *gin.Context) {
-	sendCSV(c, "deposits.csv", a.financeService.ExportDepositsCSV(tenant.HomeScopeStrict(c)))
+	userId, _ := strconv.Atoi(c.Query("userId"))
+	from, _ := strconv.ParseInt(c.Query("from"), 10, 64)
+	to, _ := strconv.ParseInt(c.Query("to"), 10, 64)
+	f := service.FinanceDepositFilter{
+		Method: c.Query("method"),
+		Status: c.Query("status"),
+		Role:   c.Query("role"),
+		UserId: userId,
+		Search: c.Query("search"),
+		From:   from,
+		To:     to,
+	}
+	sendCSV(c, "deposits.csv", a.financeService.ExportDepositsCSV(f, tenant.HomeScopeStrict(c)))
 }
 
 func (a *FinanceController) exportUsers(c *gin.Context) {

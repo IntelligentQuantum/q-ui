@@ -72,7 +72,7 @@ export default function QrPanel({
 }: QrPanelProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const qrRef = useRef<HTMLDivElement | null>(null);
 
     async function copy()
@@ -126,7 +126,6 @@ export default function QrPanel({
 
     return (
     <div className="mb-2.5 flex flex-col gap-1.5 rounded-md border border-border p-2.5">
-      {messageContextHolder}
       <div className="flex flex-wrap items-center gap-1.5">
         <Badge variant="success">{remark}</Badge>
         <Tooltip content={t('copy')}>

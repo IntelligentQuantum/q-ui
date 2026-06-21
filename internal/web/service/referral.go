@@ -35,6 +35,33 @@ func (s *ReferralService) NormalizeCode(code string) string {
 	return strings.ToUpper(strings.TrimSpace(code))
 }
 
+// ReferredCustomer is one row in a reseller's customer roster (the "My Customers"
+// page). Read-only, safe fields only.
+type ReferredCustomer struct {
+	Id        int    `json:"id"`
+	Username  string `json:"username"`
+	Role      string `json:"role"`
+	Balance   int64  `json:"balance"`
+	CreatedAt int64  `json:"createdAt"`
+}
+
+// ListReferredCustomers returns the users a reseller brought in
+// (referred_by_user_id == resellerId), newest-first. The predicate inherently
+// confines results to the caller's own referrals, so no extra scope is needed.
+func (s *ReferralService) ListReferredCustomers(resellerId int) ([]ReferredCustomer, error) {
+	var rows []ReferredCustomer
+	if err := database.GetDB().Model(&model.User{}).
+		Select("id, username, role, balance, created_at").
+		Where("referred_by_user_id = ?", resellerId).
+		Order("created_at DESC").Scan(&rows).Error; err != nil {
+		return nil, err
+	}
+	for i := range rows {
+		rows[i].Role = model.NormalizeRole(rows[i].Role)
+	}
+	return rows, nil
+}
+
 // ValidateCodeFormat reports whether a (normalized) code matches the allowed
 // shape. Validation is intentionally cheap and total — no DB access.
 func (s *ReferralService) ValidateCodeFormat(code string) bool {
@@ -213,6 +240,45 @@ func (s *ReferralService) generateUniqueCode(user *model.User) (string, error) {
 		}
 	}
 	return "", errors.New("could not generate a unique referral code")
+}
+
+// ResellerReferral is one row in the admin referral-management table: a reseller
+// with their code, enabled flag, and headline stats.
+type ResellerReferral struct {
+	Id             int    `json:"id"`
+	Username       string `json:"username"`
+	Code           string `json:"code"`
+	Enabled        bool   `json:"enabled"`
+	TotalReferrals int64  `json:"totalReferrals"`
+	PurchasedUsers int64  `json:"purchasedUsers"`
+	Revenue        int64  `json:"revenue"`
+}
+
+// ListResellers returns every reseller with their referral code/enabled flag and
+// headline stats, for the admin referral-management page. Stats are computed per
+// reseller (bounded — resellers are few relative to customers).
+func (s *ReferralService) ListResellers() ([]ResellerReferral, error) {
+	var users []model.User
+	if err := database.GetDB().
+		Where("role IN ?", []string{model.RoleReseller, model.RoleUser, model.RoleModerator}).
+		Order("username asc").Find(&users).Error; err != nil {
+		return nil, err
+	}
+	out := make([]ResellerReferral, 0, len(users))
+	for i := range users {
+		u := users[i]
+		st, _ := s.Stats(u.Id)
+		out = append(out, ResellerReferral{
+			Id:             u.Id,
+			Username:       u.Username,
+			Code:           s.NormalizeCode(u.ReferralCode),
+			Enabled:        u.ReferralEnabled,
+			TotalReferrals: st.TotalReferrals,
+			PurchasedUsers: st.PurchasedUsers,
+			Revenue:        st.Revenue,
+		})
+	}
+	return out, nil
 }
 
 // ReferralStats is the reseller/admin report payload.

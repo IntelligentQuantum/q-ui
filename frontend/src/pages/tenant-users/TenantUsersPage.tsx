@@ -40,6 +40,7 @@ interface TenantUser {
   phone: string;
   email: string;
   balance: number;
+  costPerGbOverride: number;
 }
 
 interface UserFormValues {
@@ -49,6 +50,7 @@ interface UserFormValues {
   phone?: string;
   email?: string;
   role: string;
+  costPerGbOverride?: number;
 }
 
 const ROLE_BADGE: Record<string, BadgeVariant> = { reseller: 'neutral', member: 'success' };
@@ -138,13 +140,13 @@ export default function TenantUsersPage()
     function openCreate()
     {
         setEditing(null);
-        reset({ username: '', password: '', fullName: '', phone: '', email: '', role: 'member' });
+        reset({ username: '', password: '', fullName: '', phone: '', email: '', role: 'member', costPerGbOverride: 0 });
         setModalOpen(true);
     }
     function openEdit(row: TenantUser)
     {
         setEditing(row);
-        reset({ username: row.username, password: '', fullName: row.fullName, phone: row.phone, email: row.email, role: normalizeRole(row.role) });
+        reset({ username: row.username, password: '', fullName: row.fullName, phone: row.phone, email: row.email, role: normalizeRole(row.role), costPerGbOverride: row.costPerGbOverride });
         setModalOpen(true);
     }
     const submit = handleSubmit((values) => saveMut.mutateAsync(values));
@@ -297,12 +299,19 @@ export default function TenantUsersPage()
           <Field label={t('fullName')} htmlFor="tu-fullName">
             <Input id="tu-fullName" autoComplete="off" {...register('fullName')} />
           </Field>
+          <Field label={t('phoneNumber')} htmlFor="tu-phone">
+            <Input id="tu-phone" autoComplete="off" {...register('phone')} />
+          </Field>
           <Field label={t('emailAddress')} htmlFor="tu-email">
             <Input id="tu-email" autoComplete="off" {...register('email')} />
           </Field>
           <Field label={t('pages.users.role')} htmlFor="tu-role">
             <Controller control={control} name="role" rules={{ required: true }}
               render={({ field }) => <Select id="tu-role" value={field.value} onChange={field.onChange} options={roleOptions} />} />
+          </Field>
+          <Field label={t('pages.users.costPerGb')} htmlFor="tu-costPerGb">
+            <Input id="tu-costPerGb" type="number" min={0} placeholder={t('pages.users.costPerGbDefault')}
+              {...register('costPerGbOverride', { valueAsNumber: true, min: 0 })} />
           </Field>
         </form>
       </Modal>

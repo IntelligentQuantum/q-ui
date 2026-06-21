@@ -56,7 +56,10 @@ type ManagerView struct {
 	Tenant    *model.Tenant `json:"tenant"`
 	Manager   *model.User   `json:"manager"`
 	UserCount int64         `json:"userCount"`
-	ApiKey    string        `json:"apiKey,omitempty"`
+	// WorkspaceBalance is the workspace TREASURY balance (the capital it sells
+	// from), distinct from Manager.Balance (the manager's personal account).
+	WorkspaceBalance int64  `json:"workspaceBalance"`
+	ApiKey           string `json:"apiKey,omitempty"`
 }
 
 // Create provisions a workspace: a manager user (role=manager), its tenant, and
@@ -293,6 +296,7 @@ func (s *ManagerService) List() ([]*ManagerView, error) {
 		var n int64
 		db.Model(model.User{}).Where("tenant_id = ?", t.Id).Count(&n)
 		view.UserCount = n
+		view.WorkspaceBalance, _ = (&WorkspaceWalletService{}).GetTreasuryBalance(t.Id)
 		out = append(out, view)
 	}
 	return out, nil
@@ -317,6 +321,7 @@ func (s *ManagerService) Get(tenantID int) (*ManagerView, error) {
 	var n int64
 	db.Model(model.User{}).Where("tenant_id = ?", t.Id).Count(&n)
 	view.UserCount = n
+	view.WorkspaceBalance, _ = (&WorkspaceWalletService{}).GetTreasuryBalance(t.Id)
 	return view, nil
 }
 
@@ -332,7 +337,11 @@ type WorkspaceOverview struct {
 	Revenue         int64         `json:"revenue"` // sum of completed orders' amount
 	PendingDeposits int64         `json:"pendingDeposits"`
 	OpenTickets     int64         `json:"openTickets"`
-	ManagerBalance  int64         `json:"managerBalance"`
+	// ManagerBalance is the manager's PERSONAL account balance; WorkspaceBalance is
+	// the workspace TREASURY (the prepaid capital the workspace actually sells from).
+	// They are deliberately separate — workspace funds never live in a personal wallet.
+	ManagerBalance   int64 `json:"managerBalance"`
+	WorkspaceBalance int64 `json:"workspaceBalance"`
 }
 
 // Overview aggregates per-workspace stats for the given tenant. Every count is
@@ -351,6 +360,9 @@ func (s *ManagerService) Overview(tenantID int) (*WorkspaceOverview, error) {
 		mgr.Password = ""
 		out.Manager = &mgr
 		out.ManagerBalance = mgr.Balance
+	}
+	if bal, err := (&WorkspaceWalletService{}).GetTreasuryBalance(tenantID); err == nil {
+		out.WorkspaceBalance = bal
 	}
 	db.Model(model.User{}).Where("tenant_id = ?", tenantID).Count(&out.UserCount)
 	db.Model(model.Product{}).Where("tenant_id = ?", tenantID).Count(&out.ProductCount)

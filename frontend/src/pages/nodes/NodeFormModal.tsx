@@ -91,7 +91,7 @@ export default function NodeFormModal({
 }: NodeFormModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
 
     const [submitting, setSubmitting] = useState(false);
     const [testing, setTesting] = useState(false);
@@ -264,7 +264,6 @@ export default function NodeFormModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={close}

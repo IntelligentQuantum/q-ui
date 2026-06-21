@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronLeft, ChevronRight, LayoutDashboard, Plus } from 'lucide-react';
 
@@ -48,7 +48,10 @@ export default function TicketsPage()
     }, [messageApi]);
     const queryClient = useQueryClient();
 
-    const [filter, setFilter] = useState('all');
+    // Honor a ?filter= deep-link (the SupportDashboard stat cards navigate here
+    // with one), so drilling into "unassigned"/"urgent"/"closed" actually filters.
+    const [searchParams] = useSearchParams();
+    const [filter, setFilter] = useState(searchParams.get('filter') || 'all');
     const [search, setSearch] = useState('');
     const [page, setPage] = useState(0);
     const [now] = useState(() => Date.now());

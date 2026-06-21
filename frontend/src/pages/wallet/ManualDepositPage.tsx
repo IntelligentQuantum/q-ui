@@ -348,7 +348,6 @@ export default function ManualDepositPage()
                   <Input
                     id="dep-amount"
                     inputMode="numeric"
-                    required
                     className={cn('rounded-e-none')}
                     value={amount ? formatNumber(amount) : ''}
                     onChange={(e) => setAmount(Number(e.target.value.replace(/[^\d]/g, '')) || 0)}
@@ -364,7 +363,6 @@ export default function ManualDepositPage()
                 <Input
                   id="dep-tracking"
                   dir="ltr"
-                  required
                   placeholder={t('pages.manualDeposit.trackingPlaceholder')}
                   value={tracking}
                   onChange={(e) => setTracking(e.target.value)}
@@ -382,7 +380,6 @@ export default function ManualDepositPage()
               <Label htmlFor="dep-desc">{t('pages.manualDeposit.descriptionLabel')}</Label>
               <Textarea
                 id="dep-desc"
-                required
                 placeholder={t('pages.manualDeposit.descriptionPlaceholder')}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}

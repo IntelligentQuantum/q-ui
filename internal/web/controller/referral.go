@@ -41,8 +41,13 @@ func (a *ReferralController) initRouter(g *gin.RouterGroup) {
 	ref.Use(middleware.RequirePermission(model.PermCustomerView))
 	ref.GET("/me", a.me)
 
+	// A reseller's customer roster (the users they referred). customer.view-gated;
+	// the service confines results to the caller's own referrals.
+	g.GET("/customers", middleware.RequirePermission(model.PermCustomerView), a.customers)
+
 	admin := ref.Group("")
 	admin.Use(middleware.RequireAdmin())
+	admin.GET("/resellers", a.resellers)
 	admin.POST("/code", a.setCode)
 	admin.POST("/enabled", a.setEnabled)
 	admin.GET("/stats", a.statsFor)
@@ -91,6 +96,31 @@ func (a *ReferralController) me(c *gin.Context) {
 		"commissionPercent": percent,
 		"commissionEarned":  commissionEarned,
 	}, nil)
+}
+
+// customers returns the caller's referred-customer roster.
+func (a *ReferralController) customers(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	rows, err := a.referralService.ListReferredCustomers(user.Id)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "fail"), err)
+		return
+	}
+	jsonObj(c, rows, nil)
+}
+
+// resellers lists every reseller with their referral code + stats (admin only).
+func (a *ReferralController) resellers(c *gin.Context) {
+	rows, err := a.referralService.ListResellers()
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "fail"), err)
+		return
+	}
+	jsonObj(c, rows, nil)
 }
 
 type referralCodeForm struct {

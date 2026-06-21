@@ -27,8 +27,9 @@ var (
 // reuses the canonical UserService validation/creation so there is no duplicated
 // logic — it only adds the tenant + role guards.
 type TenantUserService struct {
-	userService   UserService
-	walletService WalletService
+	userService     UserService
+	walletService   WalletService
+	treasuryService WorkspaceWalletService
 }
 
 // tenantManageableRole reports whether a role is one a manager may assign/manage:
@@ -124,30 +125,82 @@ func (s *TenantUserService) Delete(id int, scope model.Scope) error {
 	return s.userService.DeleteUser(id)
 }
 
-// AdjustBalance applies a wallet op (add/deduct/set) to a customer's balance,
-// but only for a member/reseller inside the manager's own tenant. The ledger
-// entry is tenant-stamped by the wallet service, so it shows up in the manager's
-// (tenant-scoped) finance reports. Returns the new balance.
+// AdjustBalance applies a wallet op (add/deduct/set) to a customer's balance, only
+// for a member/reseller inside the manager's own tenant. In a real workspace the
+// change is funded by (or returned to) the workspace TREASURY in the SAME
+// transaction — so a manager can never mint customer credit from nowhere and the
+// books stay balanced. The admin/global scope (tenant 0) has no treasury and keeps
+// the plain single-ledger behaviour. Returns the customer's new balance.
 func (s *TenantUserService) AdjustBalance(id int, op string, amount int64, desc, actor string, scope model.Scope) (int64, error) {
 	if _, err := s.loadInScope(id, scope); err != nil {
 		return 0, err
 	}
+	if amount < 0 {
+		return 0, ErrInvalidAmount
+	}
+	if op != "add" && op != "deduct" && op != "set" {
+		return 0, ErrInvalidBalanceOp
+	}
 	if desc == "" {
 		desc = "workspace adjustment"
 	}
-	var err error
-	switch op {
-	case "add":
-		_, err = s.walletService.CreditWithMeta(id, amount, desc, TxMeta{Source: model.TxSourceAdminCredit, Actor: actor})
-	case "deduct":
-		_, err = s.walletService.DebitWithMeta(id, amount, desc, TxMeta{Source: model.TxSourceAdminDebit, Actor: actor})
-	case "set":
-		_, err = s.walletService.SetBalanceWithMeta(id, amount, desc, TxMeta{Source: model.TxSourceAdminSet, Actor: actor})
-	default:
-		return 0, ErrInvalidBalanceOp
-	}
+	tenantID := scope.OwnerTenantID()
+	useTreasury := tenantID > model.GlobalTenantId
+
+	err := s.walletService.withRetry(func(tx *gorm.DB) error {
+		var u model.User
+		if e := tx.Where("id = ?", id).First(&u).Error; e != nil {
+			return e
+		}
+		var delta int64
+		switch op {
+		case "add":
+			delta = amount
+		case "deduct":
+			delta = -amount
+		case "set":
+			delta = amount - u.Balance
+		}
+		if delta == 0 {
+			return nil
+		}
+		custType := model.TxCredit
+		if delta < 0 {
+			custType = model.TxDebit
+		}
+		if _, e := s.walletService.applyDelta(tx, id, delta, custType, desc, TxMeta{Source: adjustSource(op, delta), Actor: actor}); e != nil {
+			return e
+		}
+		if useTreasury {
+			// Treasury moves OPPOSITE the customer: gifting credit costs the
+			// workspace, deducting returns funds to it. Allowed to go transiently
+			// negative so a manager can always correct a customer balance even if the
+			// workspace revenue was already withdrawn (visible and reconcilable).
+			tDelta := -delta
+			tType := model.TxCredit
+			if tDelta < 0 {
+				tType = model.TxDebit
+			}
+			if _, e := s.treasuryService.applyTreasuryDelta(tx, tenantID, tDelta, tType, desc, TxMeta{Source: model.WsSourceCustomerAdjust, Actor: actor}, id, true); e != nil {
+				return e
+			}
+		}
+		return nil
+	})
 	if err != nil {
 		return 0, err
 	}
 	return s.walletService.GetBalance(id)
+}
+
+// adjustSource maps a tenant-user balance op + computed delta to the canonical
+// per-user ledger source.
+func adjustSource(op string, delta int64) string {
+	if op == "set" {
+		return model.TxSourceAdminSet
+	}
+	if delta < 0 {
+		return model.TxSourceAdminDebit
+	}
+	return model.TxSourceAdminCredit
 }

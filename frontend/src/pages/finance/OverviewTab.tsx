@@ -8,6 +8,7 @@ import {
 
 import { HttpUtil } from '@/utils';
 import { useCurrency } from '@/hooks/useCurrency';
+import { useMe } from '@/hooks/useMe';
 import { Alert, Card, CardContent, CardHeader, CardTitle, StatCard, Spinner } from '@/components/ui';
 import Sparkline from '@/components/viz/Sparkline';
 
@@ -83,6 +84,7 @@ export default function OverviewTab()
         }
     });
 
+    const { me } = useMe();
     const points = series.data ?? [];
     const labels = useMemo(() => points.map((p) => p.date.slice(5)), [points]);
     const moneyAxis = (v: number) => compact(v);
@@ -109,6 +111,19 @@ export default function OverviewTab()
         { k: 'sales', label: t('pages.finance.productSales'), v: d?.totalProductSales, icon: <ShoppingCart className="h-5 w-5" aria-hidden /> },
         { k: 'spend', label: t('pages.finance.totalSpend'), v: d?.totalSpend, icon: <Banknote className="h-5 w-5 text-warning" aria-hidden /> }
     ];
+
+    // Manager: surface the workspace TREASURY (the capital the workspace sells
+    // from, from /me.workspaceBalance) — distinct from customer wallet balances.
+    // Admin has no treasury so this is manager-only.
+    if (me?.isManager)
+    {
+        moneyCards.unshift({
+            k: 'treasury',
+            label: t('pages.managers.workspaceBalance'),
+            v: me.workspaceBalance,
+            icon: <Wallet className="h-5 w-5 text-success" aria-hidden />
+        });
+    }
 
     const countCards = [
         { k: 'users', label: t('pages.finance.totalUsers'), v: d?.totalUsers, icon: <Users className="h-5 w-5" aria-hidden /> },

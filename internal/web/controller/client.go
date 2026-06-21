@@ -280,7 +280,7 @@ func (a *ClientController) create(c *gin.Context) {
 	// failed creation never leaves the user out of pocket and an unpaid client
 	// is never created.
 	var charged int64
-	var chargedManager int
+	var chargedTenant int
 	if !user.IsAdmin() {
 		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
 		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
@@ -291,8 +291,8 @@ func (a *ClientController) create(c *gin.Context) {
 		}
 		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
 		if cost > 0 {
-			// Workspace pool: a customer's client costs draw down both the customer
-			// and their manager; both must have enough balance.
+			// The customer pays from their account balance; the cost accrues to their
+			// workspace's treasury (revenue), never the manager's personal wallet.
 			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "client create: "+payload.Client.Email,
 				service.TxMeta{Source: model.TxSourcePurchase})
 			if derr != nil {
@@ -304,15 +304,15 @@ func (a *ClientController) create(c *gin.Context) {
 				return
 			}
 			charged = cost
-			chargedManager = mid
+			chargedTenant = mid
 		}
 	}
 
 	needRestart, err := a.clientService.Create(&a.inboundService, &payload)
 	if err != nil {
 		if charged > 0 {
-			// Refund the reservation (buyer + manager pool); creation never happened.
-			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedManager, charged, "refund (create failed): "+payload.Client.Email,
+			// Refund the reservation (buyer + workspace treasury); creation never happened.
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund client-create charge:", refundErr)
 			}
@@ -638,7 +638,7 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	// creation). Sequenced as debit -> reset -> refund-on-failure so a failed
 	// reset never leaves the owner out of pocket. Admins reset for free.
 	var charged int64
-	var chargedManager int
+	var chargedTenant int
 	if user != nil && !user.IsAdmin() {
 		base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
 		perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
@@ -648,7 +648,7 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 		}
 		cost := service.ComputeClientCost(base, perGB, quota)
 		if cost > 0 {
-			// Workspace pool: a customer's reset also draws their manager's balance.
+			// The customer's reset cost accrues to their workspace's treasury.
 			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "reset traffic: "+email,
 				service.TxMeta{Source: model.TxSourcePurchase})
 			if derr != nil {
@@ -660,14 +660,14 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 				return
 			}
 			charged = cost
-			chargedManager = mid
+			chargedTenant = mid
 		}
 	}
 
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
 	if err != nil {
 		if charged > 0 {
-			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedManager, charged, "refund (reset failed): "+email,
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (reset failed): "+email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund reset-traffic charge:", refundErr)
 			}

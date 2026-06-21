@@ -68,7 +68,7 @@ export default function NordModal({
 }: NordModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const [authTab, setAuthTab] = useState('token');
     const [loading, setLoading] = useState(false);
     const [nordData, setNordData] = useState<NordData | null>(null);
@@ -322,7 +322,6 @@ export default function NordModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal open={open} title="NordVPN NordLynx" onClose={onClose}>
         {nordData == null ? (
           <div className="flex flex-col gap-4">

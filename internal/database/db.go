@@ -56,8 +56,13 @@ const (
 	defaultPassword = "admin"
 )
 
-func initModels() error {
-	models := []any{
+// allModels is the single, FK-ordered list of every persistent model. It is the
+// one source of truth for AutoMigrate (initModels) AND the cross-DB data migration
+// (migrationModels), so a newly added model can never be migrated by the panel yet
+// silently dropped by `migrate-db --dsn` (the bug that previously lost all tenant
+// data). Add new top-level models here and BOTH paths pick them up.
+func allModels() []any {
+	return []any{
 		&model.User{},
 		&model.Inbound{},
 		&model.OutboundTraffics{},
@@ -93,7 +98,13 @@ func initModels() error {
 		&model.OutboundSubscription{},
 		&model.Tenant{},
 		&model.TenantSetting{},
+		&model.WorkspaceWallet{},
+		&model.WorkspaceTransaction{},
 	}
+}
+
+func initModels() error {
+	models := allModels()
 	for _, mdl := range models {
 		if err := db.AutoMigrate(mdl); err != nil {
 			if isIgnorableDuplicateColumnErr(err, mdl) {
@@ -108,6 +119,9 @@ func initModels() error {
 		return err
 	}
 	if err := migrateTenantPartialUniqueIndexes(); err != nil {
+		return err
+	}
+	if err := migrateProvisionWorkspaceWallets(); err != nil {
 		return err
 	}
 	if err := pruneOrphanedClientInbounds(); err != nil {
@@ -146,6 +160,24 @@ func migrateTenantPartialUniqueIndexes() error {
 			log.Printf("Error migrating tenant partial unique indexes (%q): %v", s, err)
 			return err
 		}
+	}
+	return nil
+}
+
+// migrateProvisionWorkspaceWallets ensures every real tenant (id <> 0) has a
+// treasury wallet row, so the workspace-balance ledger has a balance-of-record
+// from day one and the service's lazy-create path is effectively never hit.
+// Idempotent: inserts only the missing rows. Runs on both SQLite and Postgres.
+func migrateProvisionWorkspaceWallets() error {
+	res := db.Exec(`INSERT INTO workspace_wallets (tenant_id, balance, status, created_at, updated_at)
+		SELECT t.id, 0, 'active', 0, 0 FROM tenants t
+		WHERE t.id <> 0 AND NOT EXISTS (SELECT 1 FROM workspace_wallets w WHERE w.tenant_id = t.id)`)
+	if res.Error != nil {
+		log.Printf("Error provisioning workspace wallets: %v", res.Error)
+		return res.Error
+	}
+	if res.RowsAffected > 0 {
+		log.Printf("Provisioned %d workspace treasury wallet(s)", res.RowsAffected)
 	}
 	return nil
 }

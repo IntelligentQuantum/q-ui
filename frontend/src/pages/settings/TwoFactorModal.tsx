@@ -31,7 +31,7 @@ export default function TwoFactorModal({
 }: TwoFactorModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const [enteredCode, setEnteredCode] = useState('');
     const [qrValue, setQrValue] = useState('');
     const totpRef = useRef<OTPAuth.TOTP | null>(null);
@@ -112,7 +112,6 @@ export default function TwoFactorModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={onCancel}

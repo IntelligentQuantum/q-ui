@@ -878,8 +878,12 @@ func (s *FinanceService) ExportOrdersCSV(scope model.Scope) []byte {
 	return csvBytes([]string{"id", "user_id", "product_id", "product_name", "amount", "status", "client_email", "created_at"}, rows)
 }
 
-func (s *FinanceService) ExportDepositsCSV(scope model.Scope) []byte {
-	all, _, _ := s.DepositsFeed(FinanceDepositFilter{Limit: 200}, scope)
+func (s *FinanceService) ExportDepositsCSV(f FinanceDepositFilter, scope model.Scope) []byte {
+	// Honor the caller's active filters (method/status/search/range) so the export
+	// matches what they're looking at, not the whole table.
+	f.Limit = 200
+	f.Offset = 0
+	all, _, _ := s.DepositsFeed(f, scope)
 	rows := make([][]string, 0, len(all))
 	for _, d := range all {
 		rows = append(rows, []string{

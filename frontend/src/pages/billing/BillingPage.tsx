@@ -42,6 +42,15 @@ interface Payment {
   createdAt: number;
 }
 
+interface Transaction {
+  id: number;
+  amount: number;
+  type: string; // "credit" | "debit"
+  description: string;
+  source: string;
+  createdAt: number;
+}
+
 interface CryptoBucket {
   key: string;
   amount: number;
@@ -62,6 +71,12 @@ const STATUS_BADGE: Record<string, BadgeVariant> = {
     paid: 'success',
     failed: 'danger'
 };
+
+async function fetchTransactions(): Promise<Transaction[]>
+{
+    const msg = await HttpUtil.get('/panel/api/billing/transactions', undefined, { silent: true });
+    return msg?.success ? ((msg.obj as Transaction[]) ?? []) : [];
+}
 
 async function fetchPayments(): Promise<Payment[]>
 {
@@ -102,6 +117,7 @@ export default function BillingPage()
     const [cryptoAmount, setCryptoAmount] = useState<number>(QUICK_AMOUNTS[1]);
 
     const paymentsQuery = useQuery({ queryKey: ['billing', 'payments'], queryFn: fetchPayments });
+    const txQuery = useQuery({ queryKey: ['billing', 'transactions'], queryFn: fetchTransactions });
 
     const zarinpalOn = !!me?.zarinpalEnable;
     const plisioOn = !!me?.plisioEnable;
@@ -270,6 +286,36 @@ export default function BillingPage()
             key: 'createdAt',
             header: t('pages.users.txDate'),
             cell: (row) => IntlUtil.formatDate(row.createdAt)
+        }
+    ];
+
+    // Wallet ledger (credits + debits) for the current user — the "where did my
+    // balance go" view. Source/description come straight from the ledger entry.
+    const txColumns: Column<Transaction>[] = [
+        { key: 'createdAt', header: t('pages.users.txDate'), cell: (row) => IntlUtil.formatDate(row.createdAt) },
+        {
+            key: 'type',
+            header: t('pages.users.txType'),
+            cell: (row) => (
+        <Badge variant={row.type === 'credit' ? 'success' : 'warning'}>
+          {t(`pages.billing.tx_${ row.type }`, { defaultValue: row.type })}
+        </Badge>
+            )
+        },
+        {
+            key: 'amount',
+            header: t('pages.billing.amount'),
+            cell: (row) => (
+        <span className={`tabular-nums ${ row.type === 'credit' ? 'text-success' : 'text-warning' }`}>
+          {row.type === 'credit' ? '+' : '−'}{formatMoney(row.amount)}
+        </span>
+            )
+        },
+        {
+            key: 'description',
+            header: t('pages.billing.descLabel'),
+            className: 'hidden sm:table-cell',
+            cell: (row) => row.description
         }
     ];
 
@@ -504,6 +550,22 @@ export default function BillingPage()
                     data={paymentsQuery.data ?? []}
                     rowKey={(row) => String(row.id)}
                     loading={paymentsQuery.isFetching}
+                    pageSize={10}
+                  />
+                </CardContent>
+              </Card>
+
+              {/* Wallet ledger: every credit and debit on the caller's balance */}
+              <Card>
+                <CardHeader className="p-4 sm:p-5">
+                  <CardTitle>{t('pages.billing.transactions')}</CardTitle>
+                </CardHeader>
+                <CardContent className="p-4 pt-0 sm:p-5 sm:pt-0">
+                  <Table<Transaction>
+                    columns={txColumns}
+                    data={txQuery.data ?? []}
+                    rowKey={(row) => String(row.id)}
+                    loading={txQuery.isFetching}
                     pageSize={10}
                   />
                 </CardContent>

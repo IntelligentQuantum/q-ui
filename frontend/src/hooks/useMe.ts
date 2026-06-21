@@ -14,7 +14,6 @@ export type Permission =
   | 'user.manage'
   | 'balance.manage'
   | 'stats.view_all'
-  | 'transaction.view_all'
   | 'deposit.manage'
   | 'finance.view_all'
   | 'ticket.create'
@@ -53,6 +52,9 @@ export interface MeInfo {
   brandFavicon: string;
   brandTheme: string;
   balance: number;
+  // Workspace TREASURY balance (managers only; 0 otherwise) — the capital the
+  // workspace sells from, distinct from the personal account `balance` above.
+  workspaceBalance: number;
   clientCost: number;
   clientCostPerGB: number;
   zarinpalEnable: boolean;
@@ -111,6 +113,7 @@ async function fetchMe(): Promise<MeInfo>
         brandFavicon: String(o.brandFavicon ?? ''),
         brandTheme: String(o.brandTheme ?? ''),
         balance: Number(o.balance) || 0,
+        workspaceBalance: Number(o.workspaceBalance) || 0,
         clientCost: Number(o.clientCost) || 0,
         clientCostPerGB: Number(o.clientCostPerGB) || 0,
         zarinpalEnable: Boolean(o.zarinpalEnable),

@@ -36,7 +36,6 @@ import {
     ShoppingCart,
     Tags,
     Ticket,
-    TrendingUp,
     Upload,
     User,
     Users,
@@ -75,7 +74,7 @@ const MANAGER_PERMS: ReadonlySet<string> = new Set([
 ]);
 
 type IconName =
-  | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'reports' | 'profile'
+  | 'dashboard' | 'inbound' | 'team' | 'groups' | 'users' | 'profile'
   | 'billing' | 'setting' | 'tool' | 'cluster' | 'logout' | 'apidocs' | 'store'
   | 'orders' | 'products' | 'services' | 'referral' | 'manualDeposit' | 'manualDeposits'
   | 'tickets' | 'support' | 'finance' | 'managers' | 'workspace' | 'home';
@@ -86,7 +85,6 @@ const iconByName: Record<IconName, LucideIcon> = {
     team: Users,
     groups: Tags,
     users: IdCard,
-    reports: TrendingUp,
     profile: User,
     billing: Wallet,
     setting: Settings,
@@ -249,8 +247,12 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         push(has('product.purchase') && !realAdmin, '/store', 'store', 'menu.store');
         push(has('product.purchase') && !realAdmin, '/services', 'services', 'menu.services');
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // own orders / oversight
-        // Referral dashboard: resellers (own link/stats) and admins (manage).
-        push(Boolean(me?.isReseller || me?.isAdmin || me?.isManager) && onOwnStore, '/referral', 'referral', 'menu.referral');
+        push(Boolean(me?.isReseller) && onOwnStore, '/customers', 'team', 'menu.customers'); // reseller — referred customers
+        // Referral dashboard: a reseller's own link/stats (members/managers don't
+        // get a code, so it's reseller-only — admins use the management page below).
+        push(Boolean(me?.isReseller) && onOwnStore, '/referral', 'referral', 'menu.referral');
+        // Admin referral management: set/enable reseller codes + view stats.
+        push(Boolean(me?.isAdmin), '/admin-referrals', 'referral', 'menu.adminReferrals');
         // Manual card-to-card deposit review queue (admin).
         push(mng('deposit.manage'), '/manual-deposits', 'manualDeposits', 'menu.manualDeposits');
 

@@ -25,6 +25,7 @@ type APIController struct {
 	settingService       service.SettingService
 	userService          service.UserService
 	walletService        service.WalletService
+	treasuryService      service.WorkspaceWalletService
 	tenantService        service.TenantService
 	tenantSettingService service.TenantSettingService
 	apiTokenService      panel.ApiTokenService
@@ -165,6 +166,15 @@ func (a *APIController) me(c *gin.Context) {
 		return
 	}
 	balance, _ := a.walletService.GetBalance(user.Id)
+	// Workspace treasury balance — the capital a manager's workspace sells from,
+	// distinct from the manager's personal account balance above. Managers only;
+	// customers must never see their workspace's treasury.
+	workspaceBalance := int64(0)
+	if user.IsManager() && user.TenantId != model.GlobalTenantId {
+		if bal, err := a.treasuryService.GetTreasuryBalance(user.TenantId); err == nil {
+			workspaceBalance = bal
+		}
+	}
 	// Per-role pricing: report the cost for THIS user's role so the SPA's
 	// purchase/create preview matches what the backend will actually charge.
 	cost, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
@@ -215,22 +225,23 @@ func (a *APIController) me(c *gin.Context) {
 		// capability set the backend will enforce, so the SPA never has to
 		// hard-code role->menu logic. isAdmin/isModerator/isReseller/isMember
 		// are convenience flags. The backend enforces every one independently.
-		"role":            user.CanonicalRole(),
-		"permissions":     user.Permissions(),
-		"isAdmin":         user.IsAdmin(),
-		"isReseller":      user.IsReseller(),
-		"isMember":        user.IsMember(),
-		"isManager":       user.IsManager(),
-		"tenantId":        user.TenantId,
-		"tenantSlug":      tenantSlug,
-		"brandLogo":       brandLogo,
-		"brandFavicon":    brandFavicon,
-		"brandTheme":      brandTheme,
-		"balance":         balance,
-		"clientCost":      cost,
-		"clientCostPerGB": costPerGB,
-		"zarinpalEnable":  zarinpalEnable,
-		"currency":        currency,
+		"role":             user.CanonicalRole(),
+		"permissions":      user.Permissions(),
+		"isAdmin":          user.IsAdmin(),
+		"isReseller":       user.IsReseller(),
+		"isMember":         user.IsMember(),
+		"isManager":        user.IsManager(),
+		"tenantId":         user.TenantId,
+		"tenantSlug":       tenantSlug,
+		"brandLogo":        brandLogo,
+		"brandFavicon":     brandFavicon,
+		"brandTheme":       brandTheme,
+		"balance":          balance,
+		"workspaceBalance": workspaceBalance,
+		"clientCost":       cost,
+		"clientCostPerGB":  costPerGB,
+		"zarinpalEnable":   zarinpalEnable,
+		"currency":         currency,
 		// Plisio crypto top-up + configurable deposit bonus, so the SPA can show
 		// the crypto option and preview the bonus without extra round-trips.
 		"plisioEnable":          plisioEnable,

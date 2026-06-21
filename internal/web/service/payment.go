@@ -113,8 +113,10 @@ func (s *PaymentService) MarkFailed(authority string) error {
 		Update("status", model.PaymentFailed).Error
 }
 
-// ListForUser returns a user's payment history, newest first.
-func (s *PaymentService) ListForUser(userId, limit, offset int) ([]model.Payment, error) {
+// ListForUser returns a user's payment history, newest first. Tenant-scoped in
+// addition to the user filter so the primitive stays safe if ever reused with a
+// non-self id.
+func (s *PaymentService) ListForUser(userId, limit, offset int, scope model.Scope) ([]model.Payment, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -122,7 +124,7 @@ func (s *PaymentService) ListForUser(userId, limit, offset int) ([]model.Payment
 		offset = 0
 	}
 	var rows []model.Payment
-	err := database.GetDB().Where("user_id = ?", userId).
+	err := scope.Apply(database.GetDB()).Where("user_id = ?", userId).
 		Order("id desc").Limit(limit).Offset(offset).Find(&rows).Error
 	return rows, err
 }
@@ -148,15 +150,18 @@ type CryptoReport struct {
 // CryptoReport aggregates confirmed (paid) crypto deposits for the admin
 // dashboard: grand totals, breakdown by currency and by buyer role, and the
 // most recent deposits.
-func (s *PaymentService) CryptoReport(gateway string, recentLimit int) (*CryptoReport, error) {
+func (s *PaymentService) CryptoReport(gateway string, recentLimit int, scope model.Scope) (*CryptoReport, error) {
 	db := database.GetDB()
 	if recentLimit <= 0 || recentLimit > 200 {
 		recentLimit = 20
 	}
 	rep := &CryptoReport{ByCurrency: []CryptoBucket{}, ByRole: []CryptoBucket{}, Recent: []model.Payment{}}
 
+	// Tenant-scoped: admin (tenant 0) and any future per-manager caller see only
+	// their own workspace's crypto deposits, never the whole platform's. The
+	// qualified column keeps the JOIN-to-users query (by-role) unambiguous.
 	base := func() *gorm.DB {
-		return db.Model(&model.Payment{}).Where("gateway = ? AND status = ?", gateway, model.PaymentPaid)
+		return scope.ApplyCol(db.Model(&model.Payment{}).Where("gateway = ? AND status = ?", gateway, model.PaymentPaid), "payments.tenant_id")
 	}
 
 	var totals struct {

@@ -416,7 +416,7 @@ export default function ClientFormModal({
 }: ClientFormModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const { me } = useMe();
     // The Clients page is admin + moderator only. Managers (moderators) get a
     // simplified form: the advanced fields below (UUID, reverse tag, group, …) are
@@ -750,7 +750,6 @@ export default function ClientFormModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal
         open={open}
         onClose={close}

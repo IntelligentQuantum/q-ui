@@ -304,8 +304,10 @@ func (s *DepositService) CreateRequest(userId int, in DepositInput, scope model.
 	}
 	tracking := strings.TrimSpace(in.TrackingNumber)
 	if tracking != "" {
+		// Dedup WITHIN the workspace only — a tracking number used in another tenant
+		// must not block this one (cross-tenant denial / existence oracle).
 		var count int64
-		if err := database.GetDB().Model(&model.ManualDepositRequest{}).
+		if err := scope.Apply(database.GetDB().Model(&model.ManualDepositRequest{})).
 			Where("tracking_number = ?", tracking).Count(&count).Error; err != nil {
 			return nil, err
 		}
@@ -342,8 +344,10 @@ func (s *DepositService) CreateRequest(userId int, in DepositInput, scope model.
 	return req, nil
 }
 
-// ListForUser returns a user's own deposit requests, newest first.
-func (s *DepositService) ListForUser(userId, limit, offset int) ([]model.ManualDepositRequest, error) {
+// ListForUser returns a user's own deposit requests, newest first. Tenant-scoped
+// in addition to the user filter so the primitive stays safe if ever reused with
+// a non-self id.
+func (s *DepositService) ListForUser(userId, limit, offset int, scope model.Scope) ([]model.ManualDepositRequest, error) {
 	if limit <= 0 || limit > 200 {
 		limit = 50
 	}
@@ -351,7 +355,7 @@ func (s *DepositService) ListForUser(userId, limit, offset int) ([]model.ManualD
 		offset = 0
 	}
 	var rows []model.ManualDepositRequest
-	err := database.GetDB().Where("user_id = ?", userId).
+	err := scope.Apply(database.GetDB()).Where("user_id = ?", userId).
 		Order("id desc").Limit(limit).Offset(offset).Find(&rows).Error
 	return rows, err
 }
@@ -529,14 +533,4 @@ func (s *DepositService) Reject(adminId, id int, reason string, scope model.Scop
 		)
 	}
 	return req, gerr
-}
-
-// GetOwner returns the user id that owns the given deposit request, for the
-// receipt-access ownership check.
-func (s *DepositService) GetOwner(id int, scope model.Scope) (int, error) {
-	req, err := s.Get(id, scope)
-	if err != nil {
-		return 0, err
-	}
-	return req.UserId, nil
 }

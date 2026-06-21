@@ -11,52 +11,22 @@ import (
 	"strings"
 	"time"
 
-	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
-	"github.com/mhsanaei/3x-ui/v3/internal/xray"
-
 	"gorm.io/driver/postgres"
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
 
-// migrationModels is the FK-aware order in which tables are created and copied
-// during `q-ui migrate-db --dsn` (SQLite → PostgreSQL data migration) and in
-// related tests.
-//
-// Important: When adding a new top-level model (like OutboundSubscription),
-// you must add it here **in addition to** the list in internal/database/db.go:initModels().
-// This list is used for:
-//   - Creating the destination schema during cross-DB migration
-//   - Truncating tables
-//   - Copying data row-by-row
-//   - Resyncing Postgres sequences after bulk insert
-//
-// DumpSQLite / RestoreSQLite are schema-introspective (they read sqlite_master)
-// so they do not need manual updates.
+// migrationModels is the FK-aware list of tables created and copied during
+// `q-ui migrate-db --dsn` (SQLite → PostgreSQL data migration) and related tests.
+// It is derived from allModels() — the SAME source AutoMigrate uses — so every
+// persistent model is migrated and none can be silently dropped (the bug that
+// previously lost tenants, settings, tickets, payments and more). This list is
+// used for creating the destination schema, truncating tables, copying rows, and
+// resyncing Postgres sequences. DumpSQLite / RestoreSQLite are schema-
+// introspective (they read sqlite_master) and need no updates.
 func migrationModels() []any {
-	return []any{
-		&model.User{},
-		&model.Setting{},
-		&model.HistoryOfSeeders{},
-		&model.Node{},
-		&model.ApiToken{},
-		&model.Inbound{},
-		&xray.ClientTraffic{},
-		&model.OutboundTraffics{},
-		&model.InboundClientIps{},
-		&model.ClientRecord{},
-		&model.ClientInbound{},
-		&model.ClientExternalLink{},
-		&model.InboundFallback{},
-		&model.NodeClientTraffic{},
-		&model.Transaction{},
-		&model.Payment{},
-		&model.Product{},
-		&model.Order{},
-		&model.NodeClientIp{},
-		&model.OutboundSubscription{},
-	}
+	return allModels()
 }
 
 // MigrateData copies every row from the configured SQLite file at srcPath into

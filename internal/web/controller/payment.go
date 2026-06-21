@@ -10,6 +10,7 @@ import (
 	"github.com/mhsanaei/3x-ui/v3/internal/web/middleware"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/service"
 	"github.com/mhsanaei/3x-ui/v3/internal/web/session"
+	"github.com/mhsanaei/3x-ui/v3/internal/web/tenant"
 
 	"github.com/gin-gonic/gin"
 )
@@ -40,6 +41,9 @@ func (a *PaymentController) initRouter(g *gin.RouterGroup) {
 	billing.GET("/zarinpal/callback", a.zarinpalCallback)
 	billing.POST("/plisio/request", a.plisioRequest)
 	billing.GET("/payments", a.listPayments)
+	// The caller's own wallet ledger (credits AND debits) — every buyer holds
+	// balance.view_own; the query is confined to the caller's own user id.
+	billing.GET("/transactions", middleware.RequirePermission(model.PermBalanceViewOwn), a.listTransactions)
 	// Admin reporting over confirmed crypto deposits.
 	billing.GET("/crypto/report", middleware.RequireAdmin(), a.cryptoReport)
 }
@@ -153,7 +157,7 @@ func (a *PaymentController) plisioRequest(c *gin.Context) {
 // cryptoReport returns aggregate statistics over confirmed crypto deposits
 // (admin only — gated at the route).
 func (a *PaymentController) cryptoReport(c *gin.Context) {
-	rep, err := a.paymentService.CryptoReport("plisio", 20)
+	rep, err := a.paymentService.CryptoReport("plisio", 20, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -232,7 +236,24 @@ func (a *PaymentController) listPayments(c *gin.Context) {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	rows, err := a.paymentService.ListForUser(user.Id, 50, 0)
+	rows, err := a.paymentService.ListForUser(user.Id, 50, 0, tenant.HomeScopeStrict(c))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "fail"), err)
+		return
+	}
+	jsonObj(c, rows, nil)
+}
+
+// listTransactions returns the caller's own wallet ledger (credits and debits),
+// newest-first. Scoped to the caller's user id, so a buyer sees only their own
+// history — the missing "where did my balance go" view for members/resellers.
+func (a *PaymentController) listTransactions(c *gin.Context) {
+	user := session.GetLoginUser(c)
+	if user == nil {
+		c.AbortWithStatus(http.StatusUnauthorized)
+		return
+	}
+	rows, err := a.walletService.ListTransactions(&user.Id, 100, 0)
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return

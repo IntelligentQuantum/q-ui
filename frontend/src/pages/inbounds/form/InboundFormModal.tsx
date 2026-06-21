@@ -125,7 +125,7 @@ export default function InboundFormModal({
 }: InboundFormModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const methods = useForm<InboundFormValues>({ defaultValues: buildAddModeValues() });
     const { watch, getValues, setValue, reset, trigger, control } = methods;
     const [saving, setSaving] = useState(false);
@@ -742,7 +742,6 @@ export default function InboundFormModal({
 
     return (
     <>
-      {messageContextHolder}
       <FormProvider {...methods}>
         <Modal
           open={open}

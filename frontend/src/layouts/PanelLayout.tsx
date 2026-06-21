@@ -40,9 +40,9 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/workspace-payments':
             return has('tenant.payments'); // manager — own gateways
         case '/clients':
-            return has('client.manage'); // admin, moderator
+            return has('client.manage'); // admin + manager
         case '/products':
-            return has('product.manage'); // admin, moderator
+            return has('product.manage'); // admin + manager
         case '/store':
         case '/billing':
         case '/manual-deposit':
@@ -52,15 +52,21 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/tickets':
             return has('ticket.view_own'); // every role with tickets
         case '/support':
-            return has('ticket.manage'); // support staff — moderator/admin
+            return has('ticket.manage'); // support staff — admin + manager
         case '/finance':
-            return has('finance.view_all'); // admin + read-only moderator
+            return has('finance.view_all'); // admin + manager
         case '/orders':
             return has('order.view_own'); // everyone with order visibility
         case '/services':
             return has('product.purchase'); // admin, reseller, member — own configs
         case '/profile':
             return true; // every authenticated user
+        case '/referral':
+            return has('customer.view'); // reseller (+admin) — referral dashboard
+        case '/customers':
+            return has('customer.view'); // reseller — referred-customer roster
+        case '/admin-referrals':
+            return has('user.manage'); // admin only — manage reseller referral codes
         default:
             return true; // unknown path: let the router handle it
     }

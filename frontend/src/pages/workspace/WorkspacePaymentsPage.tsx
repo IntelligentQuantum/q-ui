@@ -92,6 +92,28 @@ export default function WorkspacePaymentsPage()
     const set = <K extends keyof PaymentSettings>(k: K, v: PaymentSettings[K]) =>
         setDraft((d) => (d ? { ...d, [k]: v } : d));
 
+    // Guard: enabling a gateway with no credential is a silent no-op server-side
+    // (an empty merchant id / secret key reads as "disabled"), so the switch would
+    // claim to be on while the gateway is off. Block the save and tell the manager.
+    const save = () =>
+    {
+        if (!draft)
+        {
+            return;
+        }
+        if (draft.zarinpalEnable && !draft.zarinpalMerchantId.trim())
+        {
+            messageApi.error(t('pages.workspacePayments.toasts.merchantRequired'));
+            return;
+        }
+        if (draft.plisioEnable && !draft.plisioSecretKey.trim())
+        {
+            messageApi.error(t('pages.workspacePayments.toasts.secretRequired'));
+            return;
+        }
+        saveMut.mutateAsync(draft);
+    };
+
     if (query.isLoading || !draft)
     {
         return (
@@ -113,7 +135,7 @@ export default function WorkspacePaymentsPage()
     <PageShell
       name="workspace-payments-page"
       actions={
-        <Button onClick={() => saveMut.mutateAsync(draft)} loading={saveMut.isPending}>
+        <Button onClick={save} loading={saveMut.isPending}>
           <Save className="h-4 w-4" aria-hidden />
           {t('save')}
         </Button>

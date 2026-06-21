@@ -90,7 +90,7 @@ export default function WarpModal({
 }: WarpModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const [loading, setLoading] = useState(false);
     const [warpData, setWarpData] = useState<WarpData | null>(null);
     const [warpConfig, setWarpConfig] = useState<WarpConfig | null>(null);
@@ -275,7 +275,6 @@ export default function WarpModal({
 
     return (
     <>
-      {messageContextHolder}
       <Modal open={open} title="Cloudflare WARP" onClose={onClose}>
         {!hasWarp ? (
           <Button loading={loading} onClick={register}>

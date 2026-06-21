@@ -77,12 +77,20 @@ func (s *OrderService) payReferralCommission(buyer *model.User, order *model.Ord
 
 // workspaceCanBuy enforces per-workspace wallets: a customer (member/reseller)
 // may only buy on THEIR OWN workspace's storefront, because their balance is
-// separate per workspace and is not usable on another workspace's store. Admins
-// and managers are exempt — a manager legitimately buys from the admin store to
-// resell. Returns ErrForeignWorkspace when a customer targets a foreign store.
+// separate per workspace and is not usable on another workspace's store. Admin is
+// exempt. A manager may buy on their OWN workspace or the global/admin store (to
+// resell), but NOT on another manager's storefront — otherwise a manager could
+// pollute an unrelated workspace's orders/treasury by spoofing the X-Workspace
+// header. Returns ErrForeignWorkspace when the target store is not allowed.
 func workspaceCanBuy(buyer *model.User, view model.Scope) error {
-	if buyer.IsAdmin() || buyer.IsManager() {
+	if buyer.IsAdmin() {
 		return nil
+	}
+	if buyer.IsManager() {
+		if view.TenantID == buyer.TenantId || view.TenantID == model.GlobalTenantId {
+			return nil
+		}
+		return ErrForeignWorkspace
 	}
 	if view.TenantID != buyer.TenantId {
 		return ErrForeignWorkspace
@@ -126,10 +134,10 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 	}
 
 	var charged int64
-	var chargedManager int
+	var chargedTenant int
 	if product.Price > 0 {
-		// Workspace pool: buying from a manager's storefront also draws down that
-		// manager's balance, so the storefront's pool must be funded too.
+		// Sale revenue accrues to the storefront workspace's treasury (not the
+		// manager's personal wallet); the buyer pays from their account balance.
 		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id),
 			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username})
@@ -137,7 +145,7 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 			return nil, derr // ErrInsufficientBalance bubbles up to the controller
 		}
 		charged = product.Price
-		chargedManager = mid
+		chargedTenant = mid
 	}
 
 	order := &model.Order{
@@ -149,7 +157,7 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 		Status:      model.OrderPending,
 	}
 	if err := database.GetDB().Create(order).Error; err != nil {
-		s.refund(buyer.Id, chargedManager, charged, product)
+		s.refund(buyer.Id, chargedTenant, charged, product)
 		return nil, err
 	}
 
@@ -157,7 +165,7 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 	if len(product.InboundIds) > 0 {
 		email, provErr := s.provision(buyer, product, order.Id, name, view.TenantID)
 		if provErr != nil {
-			s.refund(buyer.Id, chargedManager, charged, product)
+			s.refund(buyer.Id, chargedTenant, charged, product)
 			_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 				Update("status", model.OrderCancelled).Error
 			return nil, provErr
@@ -206,16 +214,23 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 		logger.Warningf("renew: product %d (%q) targets missing inbound(s) %v — renew blocked", product.Id, product.Name, miss)
 		return nil, ErrProductMisconfigured
 	}
-	owner, err := s.clientService.GetOwnerByEmail(email)
+	owner, ownerTenant, err := s.clientService.GetClientScopeByEmail(email)
 	if err != nil {
 		return nil, ErrServiceNotFound
 	}
-	if !buyer.IsAdmin() && owner != buyer.Id {
+	// Authorize the renew/change-plan: admin (any config), the owner themselves, or
+	// a manager acting within their OWN workspace (client.manage is tenant-scoped,
+	// so a manager can renew their customers' configs but never another tenant's).
+	switch {
+	case buyer.IsAdmin():
+	case buyer.IsManager() && ownerTenant == buyer.TenantId:
+	case owner == buyer.Id:
+	default:
 		return nil, ErrServiceForbidden
 	}
 
 	var charged int64
-	var chargedManager int
+	var chargedTenant int
 	if product.Price > 0 {
 		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id),
@@ -224,7 +239,7 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 			return nil, derr
 		}
 		charged = product.Price
-		chargedManager = mid
+		chargedTenant = mid
 	}
 
 	order := &model.Order{
@@ -237,12 +252,12 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 		ClientEmail: email,
 	}
 	if err := database.GetDB().Create(order).Error; err != nil {
-		s.refund(buyer.Id, chargedManager, charged, product)
+		s.refund(buyer.Id, chargedTenant, charged, product)
 		return nil, err
 	}
 
 	if err := s.applyPlan(email, product); err != nil {
-		s.refund(buyer.Id, chargedManager, charged, product)
+		s.refund(buyer.Id, chargedTenant, charged, product)
 		_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 			Update("status", model.OrderCancelled).Error
 		return nil, err
@@ -364,16 +379,17 @@ func (s *OrderService) subURIBase(host string) string {
 	return base + subPath
 }
 
-func (s *OrderService) refund(userId, managerId int, amount int64, product *model.Product) {
+func (s *OrderService) refund(userId, sellerTenantID int, amount int64, product *model.Product) {
 	if amount <= 0 {
 		return
 	}
-	// Symmetric to DebitWorkspacePurchase: refund the buyer AND the workspace
-	// manager (when one was charged), so a failed order never leaves either short.
-	if err := s.walletService.RefundWorkspacePurchase(userId, managerId, amount,
+	// Symmetric to DebitWorkspacePurchase: refund the buyer AND debit the
+	// workspace treasury (when the sale credited one), so a failed order never
+	// leaves the buyer short nor the workspace over-credited.
+	if err := s.walletService.RefundWorkspacePurchase(userId, sellerTenantID, amount,
 		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id),
 		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
-		logger.Errorf("order: refund of %d to user %d (manager %d) failed (manual reconciliation needed): %v", amount, userId, managerId, err)
+		logger.Errorf("order: refund of %d to user %d (tenant %d) failed (manual reconciliation needed): %v", amount, userId, sellerTenantID, err)
 	}
 }
 
@@ -445,20 +461,6 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 	return payload.Client.Email, nil
 }
 
-// SyncProductInbounds re-aligns every config already provisioned from a product
-// to the product's updated inbound set: each client created by a past purchase
-// of this product is attached to the newly-added inbounds and detached from the
-// removed ones — the same per-client inbound management the Clients page offers.
-// Best-effort per client (one failure is logged and skipped, not fatal).
-// SyncProductInbounds re-syncs every already-sold config to a product's inbound
-// change. It now delegates to the centralized SyncService (diff-based attach/
-// detach with retry + audit + node convergence). Kept for back-compat callers;
-// the product controller calls SyncService directly so it can record the actor.
-func (s *OrderService) SyncProductInbounds(productId int, added, removed []int) (bool, error) {
-	report, err := (&SyncService{}).ReconcileProductClients("system", productId, added, removed)
-	return report.NeedRestart, err
-}
-
 // randSecret returns a random hex token (a UUID with dashes stripped) used to
 // seed per-client secrets (subId / trojan & shadowsocks password / hysteria
 // auth) on a provisioned config.
@@ -490,9 +492,6 @@ func buildClientEmail(username string, orderId int) string {
 	return fmt.Sprintf("%s-o%d-%s", u, orderId, token)
 }
 
-// ListOrders returns orders newest-first. When userId is non-nil results are
-// scoped to that user (the ownership filter for resellers/members); nil returns
-// every order (admin / moderator view).
 // OrderView is an order enriched with the buyer's identity so the orders list can
 // show WHO each order belongs to (username/email), not just the config name.
 type OrderView struct {
@@ -501,7 +500,22 @@ type OrderView struct {
 	UserEmail string `json:"userEmail"`
 }
 
-func (s *OrderService) ListOrders(userId *int, limit, offset int, scope model.Scope) ([]OrderView, error) {
+// VisibleOrderUserIds returns the user ids a caller without order.view_all but
+// WITH customer.view (a reseller) may see orders for: their own id plus their
+// referred customers (referred_by_user_id == caller). So a reseller oversees the
+// orders of the customers they brought in, not just their own purchases.
+func (s *OrderService) VisibleOrderUserIds(callerId int) []int {
+	ids := []int{callerId}
+	var referred []int
+	database.GetDB().Model(&model.User{}).
+		Where("referred_by_user_id = ?", callerId).Pluck("id", &referred)
+	return append(ids, referred...)
+}
+
+// ListOrders returns orders newest-first. A nil/empty userIds returns every order
+// in scope (admin / order.view_all); a non-empty userIds restricts to those buyers
+// (a member sees only their own id; a reseller sees own + referred customers).
+func (s *OrderService) ListOrders(userIds []int, limit, offset int, scope model.Scope) ([]OrderView, error) {
 	if limit <= 0 || limit > 500 {
 		limit = 100
 	}
@@ -515,8 +529,8 @@ func (s *OrderService) ListOrders(userId *int, limit, offset int, scope model.Sc
 		Select("o.*, u.username AS username, u.email AS user_email").
 		Joins("LEFT JOIN users u ON u.id = o.user_id"), "o.tenant_id").
 		Order("o.id DESC").Limit(limit).Offset(offset)
-	if userId != nil {
-		q = q.Where("o.user_id = ?", *userId)
+	if len(userIds) > 0 {
+		q = q.Where("o.user_id IN ?", userIds)
 	}
 	var orders []OrderView
 	if err := q.Scan(&orders).Error; err != nil {

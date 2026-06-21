@@ -64,7 +64,7 @@ interface OutboundFormModalProps {
 export default function OutboundFormModal({ open, outbound: outboundProp, existingTags, onClose, onConfirm }: OutboundFormModalProps)
 {
     const { t } = useTranslation();
-    const [messageApi, messageContextHolder] = message.useMessage();
+    const [messageApi] = message.useMessage();
     const methods = useForm<OutboundFormValues>({ defaultValues: buildAddModeValues() });
     const { watch, getValues, setValue, reset, register, trigger } = methods;
     // The stream cascades build loose objects (the AntD original used untyped
@@ -367,7 +367,6 @@ export default function OutboundFormModal({ open, outbound: outboundProp, existi
 
     return (
     <>
-      {messageContextHolder}
       <FormProvider {...methods}>
         <Modal
           open={open}

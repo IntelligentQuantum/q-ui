@@ -18,8 +18,9 @@ import (
 // the admin role holds, so a manager can never reach these endpoints.
 type ManagerController struct {
 	BaseController
-	managerService service.ManagerService
-	walletService  service.WalletService
+	managerService  service.ManagerService
+	walletService   service.WalletService
+	treasuryService service.WorkspaceWalletService
 }
 
 // NewManagerController registers the /admin/managers routes on the API group.
@@ -136,10 +137,11 @@ func (a *ManagerController) overview(c *gin.Context) {
 	jsonObj(c, view, nil)
 }
 
-// adjustBalance tops up / adjusts a workspace's balance (the manager user's
-// balance, which IS the workspace's prepaid pool — every sale on the workspace
-// also draws it down). Admin-only, from the original panel's Managers page, so a
-// manager can be funded to sell. Mirrors the Users page balance operations.
+// adjustBalance tops up / adjusts a workspace's TREASURY balance — the workspace's
+// prepaid capital that its sales accrue into and draw down, kept physically
+// separate from the manager's personal account balance. Admin-only, from the
+// original panel's Managers page, so a workspace can be funded to sell. Mirrors
+// the Users page balance operations.
 func (a *ManagerController) adjustBalance(c *gin.Context) {
 	id, err := strconv.Atoi(c.Param("id"))
 	if err != nil {
@@ -168,27 +170,29 @@ func (a *ManagerController) adjustBalance(c *gin.Context) {
 	if self := session.GetLoginUser(c); self != nil {
 		actor = self.Username
 	}
-	mgrID := view.Manager.Id
+	// The route :id is the tenant id; fund the workspace TREASURY (not the
+	// manager's personal account balance), which is what the workspace sells from.
+	tenantID := id
 	switch form.Op {
 	case "add":
-		_, err = a.walletService.CreditWithMeta(mgrID, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminCredit, Actor: actor})
+		err = a.treasuryService.CreditTreasury(tenantID, form.Amount, desc, service.TxMeta{Source: model.WsSourceTopup, Actor: actor})
 	case "deduct":
-		_, err = a.walletService.DebitWithMeta(mgrID, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminDebit, Actor: actor})
+		err = a.treasuryService.DebitTreasury(tenantID, form.Amount, desc, service.TxMeta{Source: model.WsSourceTopup, Actor: actor})
 	case "set":
-		_, err = a.walletService.SetBalanceWithMeta(mgrID, form.Amount, desc, service.TxMeta{Source: model.TxSourceAdminSet, Actor: actor})
+		err = a.treasuryService.SetTreasury(tenantID, form.Amount, desc, service.TxMeta{Source: model.WsSourceAdjust, Actor: actor})
 	default:
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.users.toasts.invalidOp"))
 		return
 	}
 	if err != nil {
-		if errors.Is(err, service.ErrInsufficientBalance) {
+		if errors.Is(err, service.ErrInsufficientBalance) || errors.Is(err, service.ErrInsufficientTreasury) {
 			pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
 			return
 		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
-	bal, _ := a.walletService.GetBalance(mgrID)
+	bal, _ := a.treasuryService.GetTreasuryBalance(tenantID)
 	jsonObj(c, gin.H{"balance": bal}, nil)
 }
 

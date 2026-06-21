@@ -89,43 +89,30 @@ func (s *WalletService) applyDelta(tx *gorm.DB, userId int, delta int64, txType,
 	return rec, nil
 }
 
-// tenantManagerID returns the manager of `sellerTenantID` whose balance ALSO
-// funds a purchase from that storefront, unless the buyer IS that manager (or the
-// storefront is the global/admin store). 0 = no second charge. This models the
-// manager's balance as the workspace's prepaid resource pool — every sale on a
-// manager's storefront draws down both the buyer and that manager.
-func (s *WalletService) tenantManagerID(sellerTenantID, buyerID int) int {
-	if sellerTenantID == model.GlobalTenantId {
-		return 0
-	}
-	var t model.Tenant
-	if err := database.GetDB().Select("manager_user_id").Where("id = ?", sellerTenantID).First(&t).Error; err != nil {
-		return 0
-	}
-	if t.ManagerUserId == buyerID {
-		return 0
-	}
-	return t.ManagerUserId
-}
-
-// DebitWorkspacePurchase debits the buyer for `amount` and, when buying from a
-// Manager storefront (sellerTenantID), debits that manager for the same amount in
-// the SAME transaction — so a purchase needs BOTH the buyer and the storefront's
-// pool to have enough balance, and either being short aborts the whole purchase
-// (ErrInsufficientBalance). Returns the manager id charged (0 if none) so the
-// caller can refund symmetrically if a later step (e.g. provisioning) fails.
+// DebitWorkspacePurchase debits the BUYER's personal account balance for `amount`
+// and, when buying from a Manager storefront (sellerTenantID > 0), CREDITS that
+// workspace's treasury by the same amount in the SAME transaction — so storefront
+// revenue accrues to the workspace balance, never the manager's personal wallet,
+// and both legs commit (or roll back) together. Returns the tenant id whose
+// treasury was credited (0 = the global/admin store, no treasury leg) so the
+// caller can reverse symmetrically with RefundWorkspacePurchase if a later step
+// (e.g. provisioning) fails.
 func (s *WalletService) DebitWorkspacePurchase(buyer *model.User, sellerTenantID int, amount int64, desc string, meta TxMeta) (int, error) {
 	if amount <= 0 {
 		return 0, ErrInvalidAmount
 	}
-	managerID := s.tenantManagerID(sellerTenantID, buyer.Id)
+	treasury := WorkspaceWalletService{}
+	creditTenant := 0
+	if sellerTenantID > model.GlobalTenantId {
+		creditTenant = sellerTenantID
+	}
 	err := s.withRetry(func(tx *gorm.DB) error {
 		if _, e := s.applyDelta(tx, buyer.Id, -amount, model.TxDebit, desc, meta); e != nil {
 			return e
 		}
-		if managerID != 0 {
-			mMeta := TxMeta{Source: meta.Source, RefId: meta.RefId, Actor: buyer.Username}
-			if _, e := s.applyDelta(tx, managerID, -amount, model.TxDebit, desc+" — workspace pool", mMeta); e != nil {
+		if creditTenant != 0 {
+			tMeta := TxMeta{Source: model.WsSourceSale, RefId: meta.RefId, Actor: buyer.Username}
+			if _, e := treasury.applyTreasuryDelta(tx, creditTenant, amount, model.TxCredit, desc, tMeta, buyer.Id, false); e != nil {
 				return e
 			}
 		}
@@ -134,22 +121,27 @@ func (s *WalletService) DebitWorkspacePurchase(buyer *model.User, sellerTenantID
 	if err != nil {
 		return 0, err
 	}
-	return managerID, nil
+	return creditTenant, nil
 }
 
-// RefundWorkspacePurchase reverses DebitWorkspacePurchase: credits the buyer and,
-// when managerID != 0, the workspace manager. Best-effort (used on the
-// failure/rollback path); failures are surfaced to the caller's logger.
-func (s *WalletService) RefundWorkspacePurchase(buyerID, managerID int, amount int64, desc string, meta TxMeta) error {
+// RefundWorkspacePurchase reverses DebitWorkspacePurchase: credits the buyer back
+// and, when sellerTenantID > 0, debits that workspace's treasury in the same
+// transaction. The treasury leg is allowed to go transiently negative so the buyer
+// is ALWAYS made whole even if the workspace already withdrew the revenue (a
+// negative treasury is visible and reconcilable). Best-effort on the failure path;
+// failures surface to the caller's logger.
+func (s *WalletService) RefundWorkspacePurchase(buyerID, sellerTenantID int, amount int64, desc string, meta TxMeta) error {
 	if amount <= 0 {
 		return nil
 	}
+	treasury := WorkspaceWalletService{}
 	return s.withRetry(func(tx *gorm.DB) error {
 		if _, e := s.applyDelta(tx, buyerID, amount, model.TxCredit, desc, meta); e != nil {
 			return e
 		}
-		if managerID != 0 {
-			if _, e := s.applyDelta(tx, managerID, amount, model.TxCredit, desc+" — workspace pool", meta); e != nil {
+		if sellerTenantID > model.GlobalTenantId {
+			tMeta := TxMeta{Source: model.WsSourceRefund, RefId: meta.RefId, Actor: meta.Actor}
+			if _, e := treasury.applyTreasuryDelta(tx, sellerTenantID, -amount, model.TxDebit, desc, tMeta, buyerID, true); e != nil {
 				return e
 			}
 		}

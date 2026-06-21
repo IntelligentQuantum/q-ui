@@ -40,18 +40,23 @@ func (a *OrderController) initRouter(g *gin.RouterGroup) {
 	orders.POST("/renew", middleware.RequirePermission(model.PermProductPurchase), a.renew)
 }
 
-// list returns orders. Callers with order.view_all see everything; everyone
-// else is scoped to their own orders (ownership filter on user_id).
+// list returns orders. order.view_all (admin/manager) sees every order in scope;
+// a reseller (customer.view) sees their own AND their referred customers' orders;
+// everyone else is scoped to their own orders only.
 func (a *OrderController) list(c *gin.Context) {
 	user := session.GetLoginUser(c)
 	if user == nil {
 		c.AbortWithStatus(http.StatusUnauthorized)
 		return
 	}
-	var userFilter *int
-	if !user.Can(model.PermOrderViewAll) {
-		id := user.Id
-		userFilter = &id
+	var userFilter []int
+	switch {
+	case user.Can(model.PermOrderViewAll):
+		userFilter = nil // every order in tenant scope
+	case user.Can(model.PermCustomerView):
+		userFilter = a.orderService.VisibleOrderUserIds(user.Id) // own + referred customers
+	default:
+		userFilter = []int{user.Id} // own only
 	}
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))

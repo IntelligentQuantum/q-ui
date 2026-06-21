@@ -19,21 +19,6 @@ var GlobalScope = Scope{TenantID: GlobalTenantId, Global: true}
 // TenantOnly builds a scope confined to a single tenant (never global).
 func TenantOnly(tenantID int) Scope { return Scope{TenantID: tenantID, Global: false} }
 
-// ScopeForUser derives a user's effective scope from their identity alone (no
-// request context): admins get the global scope; everyone else is confined to
-// their own tenant. Use this for internal/service-to-service calls where the
-// acting user is known but the gin context isn't threaded through (e.g. order
-// provisioning). A nil user fails safe to the restrictive tenant-0 scope.
-func ScopeForUser(u *User) Scope {
-	if u == nil {
-		return TenantOnly(GlobalTenantId)
-	}
-	if u.IsAdmin() {
-		return GlobalScope
-	}
-	return TenantOnly(u.TenantId)
-}
-
 // Apply restricts a query to the scope's tenant (no-op when Global). Use as
 // `s.Apply(db).Where(...)` or `db.Scopes(...)` equivalently.
 func (s Scope) Apply(db *gorm.DB) *gorm.DB {

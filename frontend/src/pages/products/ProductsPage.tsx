@@ -378,7 +378,7 @@ export default function ProductsPage()
             <Input
               id="prod-name"
               aria-invalid={!!errors.name}
-              {...register('name', { required: t('pages.settings.security.apiTokenNameRequired') })}
+              {...register('name', { required: t('pages.products.nameRequired') })}
             />
           </Field>
 
@@ -392,7 +392,7 @@ export default function ProductsPage()
               type="number"
               min={0}
               aria-invalid={!!errors.price}
-              {...register('price', { required: true, valueAsNumber: true, min: 0 })}
+              {...register('price', { required: t('pages.products.priceRequired'), valueAsNumber: true, min: { value: 0, message: t('pages.products.priceRequired') } })}
             />
           </Field>
 

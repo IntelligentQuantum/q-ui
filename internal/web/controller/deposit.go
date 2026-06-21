@@ -88,7 +88,7 @@ func (a *DepositController) listMine(c *gin.Context) {
 	}
 	limit, _ := strconv.Atoi(c.Query("limit"))
 	offset, _ := strconv.Atoi(c.Query("offset"))
-	rows, err := a.depositService.ListForUser(user.Id, limit, offset)
+	rows, err := a.depositService.ListForUser(user.Id, limit, offset, tenant.HomeScopeStrict(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return

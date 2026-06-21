@@ -13,7 +13,6 @@ const (
 	PermUserManage    Permission = "user.manage"    // create/edit/delete users, assign roles, manage mods/resellers
 	PermBalanceManage Permission = "balance.manage" // adjust OTHER users' balances
 	PermStatsViewAll  Permission = "stats.view_all"
-	PermTxnViewAll    Permission = "transaction.view_all"
 	PermDepositManage Permission = "deposit.manage"   // review/approve/reject manual deposits + manage payment cards
 	PermFinanceView   Permission = "finance.view_all" // finance control center: dashboards, analytics, ledger, exports
 
@@ -52,7 +51,7 @@ var rolePermissions = map[string]map[Permission]bool{
 	// Manager: runs a full workspace, but EVERY permission below is confined to
 	// the manager's own tenant by the tenant middleware + TenantScope. Manager is
 	// intentionally NOT granted infra.manage, user.manage (system role mgmt),
-	// stats.view_all, transaction.view_all, or manager.admin — and the
+	// stats.view_all or manager.admin — and the
 	// tenant.users guard prevents creating/promoting manager/admin accounts.
 	RoleManager: {
 		PermProductManage:   true,
@@ -134,22 +133,10 @@ func (u *User) Permissions() []Permission {
 // allPermissions is the full ordered list, used to give admin every permission
 // and to keep Permissions() output deterministic.
 var allPermissions = []Permission{
-	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll, PermTxnViewAll,
+	PermInfraManage, PermUserManage, PermBalanceManage, PermStatsViewAll,
 	PermDepositManage, PermFinanceView,
 	PermTicketCreate, PermTicketViewOwn, PermTicketManage, PermTicketAdmin,
 	PermProductManage, PermProductView, PermProductPurchase,
 	PermClientManage, PermCustomerView, PermOrderViewAll, PermOrderViewOwn, PermBalanceViewOwn,
 	PermTenantSettings, PermTenantPayments, PermTenantUsers, PermManagerAdmin,
-}
-
-// IsValidRole reports whether s is one of the four canonical roles. The legacy
-// "user" and "moderator" aliases are accepted too, since NormalizeRole folds
-// both into reseller.
-func IsValidRole(s string) bool {
-	switch s {
-	case RoleAdmin, RoleManager, RoleReseller, RoleMember, RoleUser, RoleModerator:
-		return true
-	default:
-		return false
-	}
 }

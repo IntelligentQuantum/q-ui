@@ -81,13 +81,29 @@ func canManageTickets(c *gin.Context) bool {
 }
 
 // canAccessTicket returns true when the user may view the ticket: staff always,
-// otherwise only the owner.
+// otherwise only the owner. Cross-tenant confinement for staff is enforced by
+// ticketReadScope (the ticket is fetched within the staff's own workspace), so a
+// manager can never reach another tenant's ticket here.
 func (a *TicketController) canAccessTicket(c *gin.Context, t *model.Ticket) bool {
 	u := session.GetLoginUser(c)
 	if u == nil {
 		return false
 	}
 	return u.Can(model.PermTicketManage) || t.UserId == u.Id
+}
+
+// ticketReadScope is the scope for READING a ticket (get/list/reply/reopen/
+// attachment). Staff are confined to their OWN workspace (HomeScopeStrict — own
+// tenant for a manager, tenant 0 for admin), exactly like the staff mutations
+// (assign/transfer/status/...), so a manager cannot read another workspace's
+// tickets, internal notes or attachments by spoofing the X-Workspace header. A
+// requester reads on the storefront they are viewing (ViewScope); the owner check
+// in canAccessTicket then confines them to their own tickets.
+func ticketReadScope(c *gin.Context) model.Scope {
+	if canManageTickets(c) {
+		return tenant.HomeScopeStrict(c)
+	}
+	return tenant.ViewScope(c)
 }
 
 // ---------------------------------------------------------------------------
@@ -211,7 +227,7 @@ func (a *TicketController) list(c *gin.Context) {
 		Search:     c.Query("search"),
 		Limit:      limit,
 		Offset:     offset,
-	}, tenant.ViewScope(c))
+	}, ticketReadScope(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "fail"), err)
 		return
@@ -221,7 +237,7 @@ func (a *TicketController) list(c *gin.Context) {
 
 func (a *TicketController) get(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
-	scope := tenant.ViewScope(c)
+	scope := ticketReadScope(c)
 	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -345,7 +361,7 @@ func (a *TicketController) reply(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	scope := tenant.ViewScope(c)
+	scope := ticketReadScope(c)
 	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -387,7 +403,7 @@ func (a *TicketController) reopen(c *gin.Context) {
 		return
 	}
 	id, _ := strconv.Atoi(c.Param("id"))
-	scope := tenant.ViewScope(c)
+	scope := ticketReadScope(c)
 	ticket, err := a.ticketService.Get(id, scope)
 	if err != nil {
 		c.AbortWithStatus(http.StatusNotFound)
@@ -420,7 +436,7 @@ func (a *TicketController) reopen(c *gin.Context) {
 func (a *TicketController) attachment(c *gin.Context) {
 	id, _ := strconv.Atoi(c.Param("id"))
 	aid, _ := strconv.Atoi(c.Param("aid"))
-	att, ticket, err := a.ticketService.GetAttachment(aid, tenant.ViewScope(c))
+	att, ticket, err := a.ticketService.GetAttachment(aid, ticketReadScope(c))
 	if err != nil || att.TicketId != id {
 		c.AbortWithStatus(http.StatusNotFound)
 		return
@@ -467,6 +483,10 @@ func (a *TicketController) assign(c *gin.Context) {
 		return
 	}
 	if err := a.ticketService.Assign(id, form.AssignedTo, actor.Id, actor.Username, tenant.HomeScopeStrict(c)); err != nil {
+		if m := ticketError(c, err); m != "" {
+			pureJsonMsg(c, http.StatusOK, false, m)
+			return
+		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}
@@ -561,6 +581,8 @@ func ticketError(c *gin.Context, err error) string {
 		return I18nWeb(c, "pages.tickets.toasts.notFound")
 	case errors.Is(err, service.ErrTicketCategoryInUse):
 		return I18nWeb(c, "pages.ticketAdmin.toasts.categoryInUse")
+	case errors.Is(err, service.ErrTicketAssignee):
+		return I18nWeb(c, "pages.tickets.toasts.invalidAssignee")
 	default:
 		return ticketAttachmentError(c, err)
 	}

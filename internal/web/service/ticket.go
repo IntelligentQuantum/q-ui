@@ -31,6 +31,7 @@ var (
 	ErrAttachmentTooLarge  = errors.New("attachment too large")
 	ErrAttachmentEmpty     = errors.New("empty attachment")
 	ErrTicketCategoryInUse = errors.New("category has tickets")
+	ErrTicketAssignee      = errors.New("invalid assignee")
 )
 
 // Limits.
@@ -269,6 +270,28 @@ func (s *TicketService) staffUserIds(tenantID int) []int {
 	return ids
 }
 
+// validateAssignee ensures an assign/transfer target is a real support agent
+// (admin/manager) WITHIN the ticket's workspace, so a ticket can't be routed to a
+// member, a deactivated/nonexistent id, or a user in another tenant. id<=0 means
+// "unassign" and is always allowed.
+func (s *TicketService) validateAssignee(assigneeId int, ticket *model.Ticket) error {
+	if assigneeId <= 0 {
+		return nil
+	}
+	var u model.User
+	if err := database.GetDB().Select("id, role, tenant_id").
+		Where("id = ?", assigneeId).First(&u).Error; err != nil {
+		return ErrTicketAssignee
+	}
+	if u.TenantId != ticket.TenantId {
+		return ErrTicketAssignee
+	}
+	if role := model.NormalizeRole(u.Role); role != model.RoleAdmin && role != model.RoleManager {
+		return ErrTicketAssignee
+	}
+	return nil
+}
+
 type userInfo struct {
 	Id       int
 	Username string
@@ -301,7 +324,10 @@ func (s *TicketService) notifyMentions(body string, ticket *model.Ticket, actorN
 		names = append(names, m[1])
 	}
 	var ids []int
-	database.GetDB().Model(&model.User{}).Where("username IN ?", names).Pluck("id", &ids)
+	// Scope to the ticket's workspace so an @mention can never ping or enumerate a
+	// username in another tenant.
+	database.GetDB().Model(&model.User{}).
+		Where("username IN ? AND tenant_id = ?", names, ticket.TenantId).Pluck("id", &ids)
 	if len(ids) == 0 {
 		return
 	}
@@ -688,6 +714,9 @@ func (s *TicketService) Assign(ticketId, assigneeId, actorId int, actorName stri
 	if err != nil {
 		return err
 	}
+	if err := s.validateAssignee(assigneeId, ticket); err != nil {
+		return err
+	}
 	now := nowMilli()
 	if err := database.GetDB().Model(&model.Ticket{}).Where("id = ?", ticketId).
 		Updates(map[string]any{"assigned_to": assigneeId, "assigned_by": actorId, "assigned_at": now}).Error; err != nil {
@@ -718,6 +747,9 @@ func (s *TicketService) Transfer(ticketId, newCategoryId, newAssignee, actorId i
 		s.audit(nil, ticketId, actorId, actorName, model.TicketActionTransfer, itoa(ticket.CategoryId), itoa(newCategoryId))
 	}
 	if newAssignee != ticket.AssignedTo {
+		if err := s.validateAssignee(newAssignee, ticket); err != nil {
+			return err
+		}
 		updates["assigned_to"] = newAssignee
 		updates["assigned_by"] = actorId
 		updates["assigned_at"] = nowMilli()
