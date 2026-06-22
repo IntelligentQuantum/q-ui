@@ -24,7 +24,6 @@ export class AllSetting
     public tgBotChatId = '';
     public tgRunTime = '@daily';
     public tgBotBackup = false;
-    public tgBotLoginNotify = true;
     public tgCpu = 80;
     public tgLang = 'en-US';
     public tgEnabledEvents = '';

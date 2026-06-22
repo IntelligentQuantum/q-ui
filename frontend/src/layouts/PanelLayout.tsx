@@ -44,6 +44,7 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/products':
             return has('product.manage'); // admin + manager
         case '/store':
+            return has('product.purchase') && !me.isManager; // managers manage products, not the storefront
         case '/billing':
         case '/manual-deposit':
             return has('product.purchase'); // admin, reseller, member

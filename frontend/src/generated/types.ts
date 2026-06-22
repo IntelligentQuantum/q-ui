@@ -42,6 +42,7 @@ export interface AllSetting {
   ldapVlessField: string;
   pageSize: number;
   panelOutbound: string;
+  panelProxy: string;
   panelTitle: string;
   plisioEnable: boolean;
   plisioSandbox: boolean;
@@ -167,6 +168,7 @@ export interface AllSettingView {
   ldapVlessField: string;
   pageSize: number;
   panelOutbound: string;
+  panelProxy: string;
   panelTitle: string;
   plisioEnable: boolean;
   plisioSandbox: boolean;

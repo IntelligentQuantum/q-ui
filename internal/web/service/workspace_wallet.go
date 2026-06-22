@@ -25,10 +25,12 @@ var (
 //
 // Standalone ops (admin top-up, settlement, manual adjust) use the public
 // Credit/Debit/Set methods. CROSS-LEDGER transfers (a sale that moves money from a
-// buyer's User.Balance into the treasury, or a customer credit funded by the
-// treasury) apply the treasury leg via applyTreasuryDelta INSIDE the same DB
-// transaction as the user-balance leg — see WalletService.DebitWorkspacePurchase
-// and TenantUserService.AdjustBalance — so a transfer is all-or-nothing.
+// buyer's User.Balance into the treasury, and its refund) apply the treasury leg via
+// applyTreasuryDelta INSIDE the same DB transaction as the user-balance leg — see
+// WalletService.DebitWorkspacePurchase / RefundWorkspacePurchase — so a transfer is
+// all-or-nothing. Funding a customer's prepaid wallet (TenantUserService.AdjustBalance)
+// deliberately does NOT touch the treasury: the workspace earns its margin when the
+// customer spends, not when their wallet is topped up.
 type WorkspaceWalletService struct{}
 
 // GuardTenant rejects the global/admin scope: the treasury is a per-workspace
@@ -161,6 +163,24 @@ func (s *WorkspaceWalletService) DebitTreasury(tenantID int, amount int64, desc 
 	}
 	return s.withRetry(func(tx *gorm.DB) error {
 		_, e := s.applyTreasuryDelta(tx, tenantID, -amount, model.TxDebit, desc, meta, 0, false)
+		return e
+	})
+}
+
+// DebitCostOfGoods debits a workspace treasury for the bandwidth cost-of-goods of
+// a sale. Unlike DebitTreasury it is ALLOWED to drive the balance negative: a
+// loss-leader product (priced below cost) must never block a customer's purchase —
+// the manager simply runs a treasury deficit they owe the admin, which is visible
+// and reconcilable.
+func (s *WorkspaceWalletService) DebitCostOfGoods(tenantID int, amount int64, desc string, meta TxMeta) error {
+	if err := s.GuardTenant(tenantID); err != nil {
+		return err
+	}
+	if amount <= 0 {
+		return ErrInvalidAmount
+	}
+	return s.withRetry(func(tx *gorm.DB) error {
+		_, e := s.applyTreasuryDelta(tx, tenantID, -amount, model.TxDebit, desc, meta, 0, true)
 		return e
 	})
 }

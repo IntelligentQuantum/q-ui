@@ -65,7 +65,6 @@ const (
 	WsSourceRefund         = "ws_refund"          // reversal of a sale (order/provisioning failed)
 	WsSourceQuotaBuy       = "ws_quota_buy"       // manager bought bandwidth/quota from admin
 	WsSourceSettlement     = "ws_settlement"      // payout to the manager / externally
-	WsSourceTopup          = "ws_topup"           // admin funded the treasury
-	WsSourceAdjust         = "ws_adjust"          // admin manual adjustment (set)
-	WsSourceCustomerAdjust = "ws_customer_adjust" // manager credited/charged a customer's wallet
+	WsSourceTopup      = "ws_topup"      // admin funded the treasury
+	WsSourceAdjust     = "ws_adjust"     // admin manual adjustment (set)
 )

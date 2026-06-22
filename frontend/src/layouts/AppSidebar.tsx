@@ -244,7 +244,10 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         push(mng('product.manage'), '/products', 'products', 'menu.products');   // admin, moderator — own catalog
         // Personal buyer items: useful to resellers/members/managers, redundant for
         // the real admin (who manages the catalog + clients directly).
-        push(has('product.purchase') && !realAdmin, '/store', 'store', 'menu.store');
+        // Managers manage their catalog via the Products page; the storefront /store
+        // (which lists all of a workspace's products for buying) is for customers, so
+        // it's hidden from the workspace owner.
+        push(has('product.purchase') && !realAdmin && !me?.isManager, '/store', 'store', 'menu.store');
         push(has('product.purchase') && !realAdmin, '/services', 'services', 'menu.services');
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // own orders / oversight
         push(Boolean(me?.isReseller) && onOwnStore, '/customers', 'team', 'menu.customers'); // reseller — referred customers
@@ -594,7 +597,9 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
           aria-expanded={!collapsed}
           onClick={toggleCollapsed}
         >
-          {collapsed ? <ChevronsRight className="h-4 w-4" /> : <ChevronsLeft className="h-4 w-4" />}
+          {/* rtl:rotate-180 — in RTL the sidebar is on the right, so the collapse/
+              expand arrow must point the opposite physical direction. */}
+          {collapsed ? <ChevronsRight className="h-4 w-4 rtl:rotate-180" /> : <ChevronsLeft className="h-4 w-4 rtl:rotate-180" />}
         </button>
       </aside>
 

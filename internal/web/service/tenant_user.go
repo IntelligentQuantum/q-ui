@@ -27,9 +27,8 @@ var (
 // reuses the canonical UserService validation/creation so there is no duplicated
 // logic — it only adds the tenant + role guards.
 type TenantUserService struct {
-	userService     UserService
-	walletService   WalletService
-	treasuryService WorkspaceWalletService
+	userService   UserService
+	walletService WalletService
 }
 
 // tenantManageableRole reports whether a role is one a manager may assign/manage:
@@ -126,11 +125,13 @@ func (s *TenantUserService) Delete(id int, scope model.Scope) error {
 }
 
 // AdjustBalance applies a wallet op (add/deduct/set) to a customer's balance, only
-// for a member/reseller inside the manager's own tenant. In a real workspace the
-// change is funded by (or returned to) the workspace TREASURY in the SAME
-// transaction — so a manager can never mint customer credit from nowhere and the
-// books stay balanced. The admin/global scope (tenant 0) has no treasury and keeps
-// the plain single-ledger behaviour. Returns the customer's new balance.
+// for a member/reseller inside the manager's own tenant. It funds the customer's
+// PREPAID wallet only and never moves the workspace treasury — exactly like
+// approving a customer's deposit (DepositService.Approve): topping a customer up
+// records that they paid, it is not a cost to the manager. The workspace earns its
+// margin later, when the customer SPENDS — the sale credits the treasury with the
+// full price and the cost-of-goods debits it (see WalletService.DebitWorkspacePurchase
+// and OrderService.chargeManagerCostOfGoods). Returns the customer's new balance.
 func (s *TenantUserService) AdjustBalance(id int, op string, amount int64, desc, actor string, scope model.Scope) (int64, error) {
 	if _, err := s.loadInScope(id, scope); err != nil {
 		return 0, err
@@ -144,8 +145,6 @@ func (s *TenantUserService) AdjustBalance(id int, op string, amount int64, desc,
 	if desc == "" {
 		desc = "workspace adjustment"
 	}
-	tenantID := scope.OwnerTenantID()
-	useTreasury := tenantID > model.GlobalTenantId
 
 	err := s.walletService.withRetry(func(tx *gorm.DB) error {
 		var u model.User
@@ -168,24 +167,8 @@ func (s *TenantUserService) AdjustBalance(id int, op string, amount int64, desc,
 		if delta < 0 {
 			custType = model.TxDebit
 		}
-		if _, e := s.walletService.applyDelta(tx, id, delta, custType, desc, TxMeta{Source: adjustSource(op, delta), Actor: actor}); e != nil {
-			return e
-		}
-		if useTreasury {
-			// Treasury moves OPPOSITE the customer: gifting credit costs the
-			// workspace, deducting returns funds to it. Allowed to go transiently
-			// negative so a manager can always correct a customer balance even if the
-			// workspace revenue was already withdrawn (visible and reconcilable).
-			tDelta := -delta
-			tType := model.TxCredit
-			if tDelta < 0 {
-				tType = model.TxDebit
-			}
-			if _, e := s.treasuryService.applyTreasuryDelta(tx, tenantID, tDelta, tType, desc, TxMeta{Source: model.WsSourceCustomerAdjust, Actor: actor}, id, true); e != nil {
-				return e
-			}
-		}
-		return nil
+		_, e := s.walletService.applyDelta(tx, id, delta, custType, desc, TxMeta{Source: adjustSource(op, delta), Actor: actor})
+		return e
 	})
 	if err != nil {
 		return 0, err

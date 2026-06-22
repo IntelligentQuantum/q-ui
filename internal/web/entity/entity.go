@@ -30,6 +30,7 @@ type AllSetting struct {
 	PanelTitle        string `json:"panelTitle" form:"panelTitle"`                                   // Configurable brand/title shown on login, register and sidebar
 	SessionMaxAge     int    `json:"sessionMaxAge" form:"sessionMaxAge" validate:"gte=1,lte=525600"` // Session maximum age in minutes (cap at one year)
 	TrustedProxyCIDRs string `json:"trustedProxyCIDRs" form:"trustedProxyCIDRs"`                     // Trusted reverse proxy IPs/CIDRs for forwarded headers
+	PanelProxy        string `json:"panelProxy" form:"panelProxy"`                                   // Optional outbound proxy URL (socks5://|http://) the panel routes its own outgoing HTTP through (self-update, GitHub release checks, geo downloads)
 	PanelOutbound     string `json:"panelOutbound" form:"panelOutbound"`                             // Xray outbound tag for the panel's own outbound HTTP (update checks/downloads, Telegram, geo updates, outbound-subscription fetches)
 
 	// UI settings

@@ -127,11 +127,6 @@ export default function TelegramTab({ allSetting, updateSetting }: TelegramTabPr
               <Switch checked={allSetting.tgBotBackup} onCheckedChange={(v) => updateSetting({ tgBotBackup: v })} />
             </div>
           </SettingRow>
-          <SettingRow title={t('pages.settings.tgNotifyLogin')} description={t('pages.settings.tgNotifyLoginDesc')}>
-            <div className="flex lg:justify-end">
-              <Switch checked={allSetting.tgBotLoginNotify} onCheckedChange={(v) => updateSetting({ tgBotLoginNotify: v })} />
-            </div>
-          </SettingRow>
           <SettingRow title={t('pages.settings.tgNotifyCpu')} description={t('pages.settings.tgNotifyCpuDesc')}>
             <Input type="number" min={0} max={100} value={allSetting.tgCpu}
               onChange={(e) => updateSetting({ tgCpu: Number(e.target.value) || 0 })} />

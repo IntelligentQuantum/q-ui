@@ -373,12 +373,6 @@ func runSeeders(isUsersEmpty bool) error {
 		}
 	}
 
-	if !slices.Contains(seedersHistory, "LegacyProxySettingsCleanup") {
-		if err := clearLegacyProxySettings(); err != nil {
-			return err
-		}
-	}
-
 	if !slices.Contains(seedersHistory, "LegacyUserToReseller") {
 		if err := migrateLegacyUserRole(); err != nil {
 			return err
@@ -423,18 +417,6 @@ func migrateLegacyUserRole() error {
 			return err
 		}
 		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyUserToReseller"}).Error
-	})
-}
-
-// clearLegacyProxySettings drops the deprecated panelProxy/tgBotProxy rows so a
-// stale tgBotProxy no longer masks the panelOutbound egress fallback.
-func clearLegacyProxySettings() error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Where("key IN ?", []string{"panelProxy", "tgBotProxy"}).
-			Delete(&model.Setting{}).Error; err != nil {
-			return err
-		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyProxySettingsCleanup"}).Error
 	})
 }
 

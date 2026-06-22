@@ -178,6 +178,8 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 		Updates(map[string]any{"status": order.Status, "client_email": order.ClientEmail}).Error; err != nil {
 		logger.Warningf("order %d provisioned but final status update failed: %v", order.Id, err)
 	}
+	// Charge the workspace manager the bandwidth cost-of-goods (per-GB × product GB).
+	s.chargeManagerCostOfGoods(view.TenantID, product.TrafficLimit, product.Name, product.Id)
 	// Reward the referring reseller (if any) once the purchase is complete.
 	s.payReferralCommission(buyer, order)
 	return order, nil
@@ -265,6 +267,8 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 	order.Status = model.OrderCompleted
 	_ = database.GetDB().Model(&model.Order{}).Where("id = ?", order.Id).
 		Update("status", model.OrderCompleted).Error
+	// Charge the workspace manager the bandwidth cost-of-goods for the renewed quota.
+	s.chargeManagerCostOfGoods(view.TenantID, product.TrafficLimit, product.Name, product.Id)
 	// Change-plan / renew may target a product with a DIFFERENT inbound set than
 	// the config currently sits on. Converge the config onto the new product's
 	// inbounds (additive + idempotent; node push handled by AttachByEmail) so a
@@ -390,6 +394,40 @@ func (s *OrderService) refund(userId, sellerTenantID int, amount int64, product 
 		fmt.Sprintf("refund (order failed): %s (#%d)", product.Name, product.Id),
 		TxMeta{Source: model.TxSourceRefund, RefId: fmt.Sprintf("%d", product.Id)}); err != nil {
 		logger.Errorf("order: refund of %d to user %d (tenant %d) failed (manual reconciliation needed): %v", amount, userId, sellerTenantID, err)
+	}
+}
+
+// chargeManagerCostOfGoods debits the workspace MANAGER's treasury for the
+// bandwidth cost-of-goods of a sold product: managerPerGB × productGB, using the
+// manager's per-user override if set, else the manager-tier per-GB rate. The buyer
+// pays the retail Price (credited to the treasury); this debit is what the manager
+// owes the admin for the bandwidth, so the manager keeps Price − cost as margin.
+// Only for a real workspace (tenant > 0) — the admin's own store has no cost. The
+// debit is allowed to go negative so a below-cost price never blocks a sale.
+func (s *OrderService) chargeManagerCostOfGoods(sellerTenantID int, trafficLimit int64, productName string, productId int) {
+	if sellerTenantID <= model.GlobalTenantId {
+		return
+	}
+	var t model.Tenant
+	if err := database.GetDB().Select("manager_user_id").Where("id = ?", sellerTenantID).First(&t).Error; err != nil {
+		return
+	}
+	mgr := model.User{}
+	if err := database.GetDB().Select("role, cost_per_gb_override").Where("id = ?", t.ManagerUserId).First(&mgr).Error; err != nil {
+		return
+	}
+	perGB, _ := s.settingService.GetClientCostPerGBForRole(mgr.CanonicalRole())
+	if mgr.CostPerGBOverride > 0 {
+		perGB = mgr.CostPerGBOverride
+	}
+	cost := ComputeClientCost(0, perGB, trafficLimit)
+	if cost <= 0 {
+		return
+	}
+	if err := (&WorkspaceWalletService{}).DebitCostOfGoods(sellerTenantID, cost,
+		fmt.Sprintf("cost of goods: %s (#%d)", productName, productId),
+		TxMeta{Source: model.WsSourceQuotaBuy, RefId: fmt.Sprintf("%d", productId), Actor: "system"}); err != nil {
+		logger.Errorf("order: cost-of-goods debit %d for tenant %d (product %d) failed (manual reconciliation): %v", cost, sellerTenantID, productId, err)
 	}
 }
 

@@ -143,6 +143,10 @@ export const SCHEMAS: Record<string, unknown> = {
         "description": "Xray outbound tag for the panel's own outbound HTTP (update checks/downloads, Telegram, geo updates, outbound-subscription fetches)",
         "type": "string"
       },
+      "panelProxy": {
+        "description": "Optional outbound proxy URL (socks5://|http://) the panel routes its own outgoing HTTP through (self-update, GitHub release checks, geo downloads)",
+        "type": "string"
+      },
       "panelTitle": {
         "description": "Configurable brand/title shown on login, register and sidebar",
         "type": "string"
@@ -518,6 +522,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelOutbound",
+      "panelProxy",
       "panelTitle",
       "plisioEnable",
       "plisioSandbox",
@@ -765,6 +770,10 @@ export const SCHEMAS: Record<string, unknown> = {
       },
       "panelOutbound": {
         "description": "Xray outbound tag for the panel's own outbound HTTP (update checks/downloads, Telegram, geo updates, outbound-subscription fetches)",
+        "type": "string"
+      },
+      "panelProxy": {
+        "description": "Optional outbound proxy URL (socks5://|http://) the panel routes its own outgoing HTTP through (self-update, GitHub release checks, geo downloads)",
         "type": "string"
       },
       "panelTitle": {
@@ -1150,6 +1159,7 @@ export const SCHEMAS: Record<string, unknown> = {
       "ldapVlessField",
       "pageSize",
       "panelOutbound",
+      "panelProxy",
       "panelTitle",
       "plisioEnable",
       "plisioSandbox",

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next';
 import { StatCard, SearchInput } from '@/components/ui';
 
 import { HttpUtil } from '@/utils';
+import { useCurrency } from '@/hooks/useCurrency';
 import { getMessage } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
 import {
@@ -110,10 +111,23 @@ export default function ProductsPage()
         handleSubmit,
         reset,
         control,
+        watch,
         formState: { errors }
     } = useForm<ProductForm>({
         defaultValues: { name: '', description: '', price: 0, trafficLimit: 0, durationDays: 0, audience: 'all', inboundIds: [], status: 'active' }
     });
+
+    // Live cost-of-goods + margin preview for the product form. Shown only when a
+    // per-GB cost applies to the current user (managers; admins have no cost-of-goods,
+    // so clientCostPerGB is 0). The manager pays this bandwidth cost on each sale;
+    // the buyer pays the Price, so margin = Price − cost.
+    const { format: money, clientCostPerGB } = useCurrency();
+    const previewBytes = Number(watch('trafficLimit')) || 0;
+    const previewPrice = Number(watch('price')) || 0;
+    const previewGb = previewBytes / (1024 ** 3);
+    const previewCost = clientCostPerGB > 0 && previewGb > 0 ? Math.round(previewGb * clientCostPerGB) : 0;
+    const previewMargin = previewPrice - previewCost;
+    const previewGbLabel = previewGb % 1 === 0 ? String(previewGb) : previewGb.toFixed(2);
 
     const { data: products, isLoading, isError, refetch } = useQuery({
         queryKey: ['products', 'manage', tenantSlug ?? ''],
@@ -399,6 +413,22 @@ export default function ProductsPage()
           <Field label={t('pages.products.trafficLimitBytes')} htmlFor="prod-traffic">
             <Input id="prod-traffic" type="number" min={0} {...register('trafficLimit', { valueAsNumber: true, min: 0 })} />
           </Field>
+
+          {clientCostPerGB > 0 && (
+          <div className="flex flex-col gap-1.5 rounded-lg border border-border bg-surface-sunken p-3 text-sm">
+            {previewGb > 0 ? (
+              <div className="flex items-center justify-between text-muted-foreground">
+                <span>{t('pages.products.costPreview.bandwidth', { gb: previewGbLabel })}</span>
+                <span className="tabular-nums text-warning">−{money(previewCost)}</span>
+              </div>
+            ) : null}
+            <div className="flex items-center justify-between font-medium">
+              <span>{t('pages.products.costPreview.margin')}</span>
+              <span className={previewMargin >= 0 ? 'tabular-nums text-success' : 'tabular-nums text-danger'}>{money(previewMargin)}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">{t('pages.products.costPreview.note', { rate: money(clientCostPerGB) })}</span>
+          </div>
+          )}
 
           <Field label={t('pages.products.durationDays')} htmlFor="prod-duration">
             <Input id="prod-duration" type="number" min={0} {...register('durationDays', { valueAsNumber: true, min: 0 })} />
