@@ -1,6 +1,7 @@
 package service
 
 import (
+	"strconv"
 	"strings"
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
@@ -31,6 +32,15 @@ const (
 	tsZarinpalCurrency = "zarinpalCurrency"
 	tsPlisioEnable     = "plisioEnable"
 	tsPlisioSecretKey  = "plisioSecretKey"
+
+	// Per-workspace pricing (manager-editable under tenant.settings): the credits a
+	// non-admin in this workspace is charged to create / reset a client. Unset keys
+	// fall back to the global per-role rate, so a fresh workspace inherits sensible
+	// values until the manager sets its own (a manager prices their own moderators).
+	tsClientCost            = "clientCost"
+	tsClientCostPerGB       = "clientCostPerGB"
+	tsResetTrafficCost      = "resetTrafficCost"
+	tsResetTrafficCostPerGB = "resetTrafficCostPerGB"
 )
 
 // TenantSettingService reads/writes per-tenant configuration in the
@@ -86,6 +96,18 @@ func boolStr(b bool) string {
 		return "true"
 	}
 	return "false"
+}
+
+// mapIntOr returns the parsed int for a PRESENT key (even "0", so a manager can
+// deliberately set a cost to zero), falling back to `fallback` when the key is
+// absent or unparseable.
+func mapIntOr(m map[string]string, key string, fallback int) int {
+	if v, ok := m[key]; ok {
+		if n, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+			return n
+		}
+	}
+	return fallback
 }
 
 // Get assembles a tenant's effective settings (overrides layered over global
@@ -215,6 +237,89 @@ func (s *TenantSettingService) UpdatePayment(tenantID int, v TenantPaymentSettin
 		}
 		return nil
 	})
+}
+
+// TenantPricingView is the manager-editable per-workspace pricing: the credits a
+// non-admin in this workspace pays to create or reset a client. These override the
+// global per-role rates for the workspace, so a manager prices their own moderators.
+type TenantPricingView struct {
+	ClientCost            int `json:"clientCost"`
+	ClientCostPerGB       int `json:"clientCostPerGB"`
+	ResetTrafficCost      int `json:"resetTrafficCost"`
+	ResetTrafficCostPerGB int `json:"resetTrafficCostPerGB"`
+}
+
+// GetPricing returns a workspace's effective pricing — its own overrides where set,
+// otherwise the global per-role defaults (shown as the starting point so a fresh
+// workspace reflects current rates rather than zero).
+func (s *TenantSettingService) GetPricing(tenantID int) (*TenantPricingView, error) {
+	cBase, cPerGB := s.EffectiveClientCost(tenantID, model.RoleModerator)
+	rBase, rPerGB := s.EffectiveResetCost(tenantID, model.RoleModerator)
+	return &TenantPricingView{
+		ClientCost:            cBase,
+		ClientCostPerGB:       cPerGB,
+		ResetTrafficCost:      rBase,
+		ResetTrafficCostPerGB: rPerGB,
+	}, nil
+}
+
+// UpdatePricing upserts a workspace's pricing. The global tenant (admin) is a
+// no-op here — its pricing lives in the global settings (admin-only).
+func (s *TenantSettingService) UpdatePricing(tenantID int, v TenantPricingView) error {
+	if tenantID == model.GlobalTenantId {
+		return nil
+	}
+	clamp := func(n int) string {
+		if n < 0 {
+			n = 0
+		}
+		return strconv.Itoa(n)
+	}
+	kv := map[string]string{
+		tsClientCost:            clamp(v.ClientCost),
+		tsClientCostPerGB:       clamp(v.ClientCostPerGB),
+		tsResetTrafficCost:      clamp(v.ResetTrafficCost),
+		tsResetTrafficCostPerGB: clamp(v.ResetTrafficCostPerGB),
+	}
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		for key, val := range kv {
+			if err := s.upsert(tx, tenantID, key, val); err != nil {
+				return err
+			}
+		}
+		return nil
+	})
+}
+
+// EffectiveClientCost returns the (base, perGB) credits charged to a non-admin in
+// tenantID for CREATING a client: the workspace's own pricing where set, else the
+// global per-role rate. The global tenant (0) always uses the global rate.
+func (s *TenantSettingService) EffectiveClientCost(tenantID int, role string) (base, perGB int) {
+	base, _ = s.settingService.GetClientCostForRole(role)
+	perGB, _ = s.settingService.GetClientCostPerGBForRole(role)
+	if tenantID == model.GlobalTenantId {
+		return base, perGB
+	}
+	m, err := s.raw(tenantID)
+	if err != nil {
+		return base, perGB
+	}
+	return mapIntOr(m, tsClientCost, base), mapIntOr(m, tsClientCostPerGB, perGB)
+}
+
+// EffectiveResetCost is EffectiveClientCost's counterpart for RESETTING a client's
+// traffic quota.
+func (s *TenantSettingService) EffectiveResetCost(tenantID int, role string) (base, perGB int) {
+	base, _ = s.settingService.GetResetTrafficCostForRole(role)
+	perGB, _ = s.settingService.GetResetTrafficCostPerGBForRole(role)
+	if tenantID == model.GlobalTenantId {
+		return base, perGB
+	}
+	m, err := s.raw(tenantID)
+	if err != nil {
+		return base, perGB
+	}
+	return mapIntOr(m, tsResetTrafficCost, base), mapIntOr(m, tsResetTrafficCostPerGB, perGB)
 }
 
 // ZarinpalConfig resolves the effective ZarinPal config for a tenant. The global

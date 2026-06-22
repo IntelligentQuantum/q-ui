@@ -532,8 +532,8 @@ func (s *UserService) AdminUpdateUser(id int, in AdminUserInput) (*model.User, e
 				return ErrEmailTaken
 			}
 		}
-		// Guard: never demote the last admin.
-		if existing.IsAdmin() && newRole == model.RoleUser {
+		// Guard: never demote the last admin (to any non-admin role).
+		if existing.IsAdmin() && newRole != model.RoleAdmin {
 			admins, err := s.countAdminsTx(tx)
 			if err != nil {
 				return err

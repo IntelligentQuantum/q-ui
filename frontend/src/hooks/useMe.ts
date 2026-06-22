@@ -5,7 +5,7 @@ import { HttpUtil } from '@/utils';
 // Role names mirror the backend's canonical roles (database/model: admin,
 // manager, moderator, reseller, member). The backend is the source of truth;
 // these are only used to drive presentation.
-export type Role = 'admin' | 'manager' | 'reseller' | 'member';
+export type Role = 'admin' | 'manager' | 'moderator' | 'reseller' | 'member';
 
 // Permission strings mirror database/model/rbac.go. Keep in sync with the
 // backend matrix; the backend independently enforces every one.
@@ -41,6 +41,7 @@ export interface MeInfo {
   permissions: Permission[];
   isAdmin: boolean;
   isManager: boolean;
+  isModerator: boolean;
   isReseller: boolean;
   isMember: boolean;
   // Multi-tenancy: the user's home workspace. tenantId 0 = global/admin scope
@@ -77,13 +78,10 @@ function normalizeRole(role: unknown): Role
     {
         case 'admin':
         case 'manager':
+        case 'moderator':
         case 'reseller':
         case 'member':
             return role as Role;
-        case 'moderator':
-            return 'reseller'; // legacy alias — moderator role removed
-        case 'user':
-            return 'reseller'; // legacy alias
         default:
             return 'member';
     }
@@ -105,6 +103,7 @@ async function fetchMe(): Promise<MeInfo>
         permissions: Array.isArray(o.permissions) ? (o.permissions as Permission[]) : [],
         isAdmin: Boolean(o.isAdmin),
         isManager: Boolean(o.isManager),
+        isModerator: Boolean(o.isModerator),
         isReseller: Boolean(o.isReseller),
         isMember: Boolean(o.isMember),
         tenantId: Number(o.tenantId) || 0,

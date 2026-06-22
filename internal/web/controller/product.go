@@ -41,9 +41,30 @@ func (a *ProductController) initRouter(g *gin.RouterGroup) {
 	manage := products.Group("")
 	manage.Use(middleware.RequirePermission(model.PermProductManage))
 	manage.POST("", a.create)
+	// Static "/reorder" coexists with the param "/:id" route below (Gin matches the
+	// static segment first — same pattern as orders' /renew vs /:id).
+	manage.POST("/reorder", a.reorder)
 	manage.POST("/:id", a.update)
 	manage.POST("/:id/del", a.delete)
 	manage.POST("/:id/status", a.setStatus)
+}
+
+// reorder applies a new catalog display order from an ordered list of product ids.
+// Scoped to the caller's own storefront so a manager only reorders their own
+// catalog; the new order drives both the management list and the buyer store.
+func (a *ProductController) reorder(c *gin.Context) {
+	var form struct {
+		Ids []int `json:"ids"`
+	}
+	if err := c.ShouldBindJSON(&form); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if err := a.productService.ReorderProducts(form.Ids, tenant.ScopeFrom(c)); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "success"), nil)
 }
 
 // list returns the catalog. Catalog managers (admin/moderator) get every

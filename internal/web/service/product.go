@@ -6,6 +6,8 @@ import (
 
 	"github.com/mhsanaei/3x-ui/v3/internal/database"
 	"github.com/mhsanaei/3x-ui/v3/internal/database/model"
+
+	"gorm.io/gorm"
 )
 
 // Errors returned by ProductService.
@@ -79,7 +81,9 @@ func validateProductInput(in ProductInput) error {
 // so a reseller/member only sees products targeted at them.
 func (s *ProductService) List(activeOnly bool, audience string, scope model.Scope) ([]model.Product, error) {
 	var products []model.Product
-	q := scope.Apply(database.GetDB().Model(&model.Product{})).Order("id DESC")
+	// Manual display order first (admin/manager arranges the catalog & store via
+	// ReorderProducts); newest-first as the tiebreaker for un-ordered products.
+	q := scope.Apply(database.GetDB().Model(&model.Product{})).Order("display_order ASC, id DESC")
 	if activeOnly {
 		q = q.Where("status = ?", model.ProductActive)
 	}
@@ -149,6 +153,21 @@ func (s *ProductService) Update(id int, in ProductInput, scope model.Scope) (*mo
 		return nil, err
 	}
 	return s.Get(id, scope)
+}
+
+// ReorderProducts applies a new catalog display order from an ordered list of
+// product ids (within the caller's tenant — a foreign id simply matches no row,
+// so a manager can only reorder their own workspace's catalog).
+func (s *ProductService) ReorderProducts(ids []int, scope model.Scope) error {
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		for order, id := range ids {
+			if err := scope.Apply(tx.Model(&model.Product{})).Where("id = ?", id).
+				Update("display_order", order).Error; err != nil {
+				return err
+			}
+		}
+		return nil
+	})
 }
 
 // SetStatus activates or deactivates a product without touching other fields.

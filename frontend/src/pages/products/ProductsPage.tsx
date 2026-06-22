@@ -3,7 +3,7 @@ import type { ReactNode } from 'react';
 import { useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useForm, Controller } from 'react-hook-form';
-import { LayoutGrid, CircleCheck, CircleX, Plus } from 'lucide-react';
+import { LayoutGrid, CircleCheck, CircleX, Plus, ArrowUp, ArrowDown } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { StatCard, SearchInput } from '@/components/ui';
 
@@ -45,6 +45,7 @@ interface Product {
   audience: string;
   inboundIds: number[];
   status: string;
+  displayOrder: number;
 }
 
 interface InboundOption {
@@ -197,6 +198,38 @@ export default function ProductsPage()
 
     const invalidate = () => qc.invalidateQueries({ queryKey: ['products'] });
 
+    // Catalog ordering: the up/down arrows persist a new display order that drives
+    // BOTH this management list and the buyer-facing store. Reordering acts on the
+    // full server order, so it is only enabled when no search/status filter is
+    // narrowing the visible rows (a partial view has no meaningful adjacent row).
+    const canReorder = !q.trim() && !statusFilter;
+    const reorderMut = useMutation({
+        mutationFn: (ids: number[]) => HttpUtil.post('/panel/api/products/reorder', { ids }, { ...JSON_HEADERS, silent: true }),
+        onSuccess: (msg) =>
+        {
+            if (msg.success)
+            {
+                invalidate();
+            }
+            else
+            {
+                getMessage().error(msg.msg || t('somethingWentWrong'));
+            }
+        }
+    });
+    const move = (p: Product, dir: -1 | 1) =>
+    {
+        const idx = list.findIndex((x) => x.id === p.id);
+        const target = idx + dir;
+        if (idx < 0 || target < 0 || target >= list.length)
+        {
+            return;
+        }
+        const next = [...list];
+        [next[idx], next[target]] = [next[target], next[idx]];
+        reorderMut.mutate(next.map((x) => x.id));
+    };
+
     const save = useMutation({
         mutationFn: async (values: ProductForm) =>
         {
@@ -277,6 +310,37 @@ export default function ProductsPage()
     };
 
     const columns: Column<Product>[] = [
+        {
+            key: 'reorder',
+            header: '',
+            width: 44,
+            cell: (p) =>
+            {
+                const idx = list.findIndex((x) => x.id === p.id);
+                return (
+            <div className="flex flex-col">
+              <button
+                type="button"
+                aria-label="move up"
+                disabled={!canReorder || idx <= 0}
+                onClick={() => move(p, -1)}
+                className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+              >
+                <ArrowUp className="h-3.5 w-3.5" aria-hidden />
+              </button>
+              <button
+                type="button"
+                aria-label="move down"
+                disabled={!canReorder || idx < 0 || idx >= list.length - 1}
+                onClick={() => move(p, 1)}
+                className="text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30 disabled:hover:text-muted-foreground"
+              >
+                <ArrowDown className="h-3.5 w-3.5" aria-hidden />
+              </button>
+            </div>
+                );
+            }
+        },
         { key: 'name', header: t('pages.products.name'), accessor: (p) => p.name },
         { key: 'price', header: t('pages.products.price'), cell: (p) => p.price },
         { key: 'durationDays', header: t('pages.products.durationDays'), hideBelow: 'sm', cell: (p) => p.durationDays },
@@ -339,7 +403,8 @@ export default function ProductsPage()
         </div>
 
         <Card className="p-4 sm:p-5">
-          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs text-muted-foreground">{t('pages.products.reorderHint')}</span>
             <div className="flex flex-wrap items-center gap-2">
               <Select
                 className="min-w-[130px]"

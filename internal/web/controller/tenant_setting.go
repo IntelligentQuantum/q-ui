@@ -30,6 +30,10 @@ func NewTenantSettingController(g *gin.RouterGroup) *TenantSettingController {
 	grp.Use(middleware.RequirePermission(model.PermTenantSettings))
 	grp.GET("", a.get)
 	grp.POST("", a.update)
+	// Per-workspace client pricing — what this workspace charges its OWN users
+	// (e.g. moderators) to create/reset a client. Same tenant.settings capability.
+	grp.GET("/pricing", a.getPricing)
+	grp.POST("/pricing", a.updatePricing)
 
 	// Gateway config is a distinct capability (tenant.payments): a Manager
 	// configures their OWN ZarinPal/Plisio credentials; payments route to them.
@@ -58,6 +62,30 @@ func (a *TenantSettingController) updatePayment(c *gin.Context) {
 		return
 	}
 	if err := a.tenantSettingService.UpdatePayment(tid, in); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "success"), nil)
+}
+
+func (a *TenantSettingController) getPricing(c *gin.Context) {
+	tid, _ := tenant.FromContext(c)
+	view, err := a.tenantSettingService.GetPricing(tid)
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "fail"), err)
+		return
+	}
+	jsonObj(c, view, nil)
+}
+
+func (a *TenantSettingController) updatePricing(c *gin.Context) {
+	tid, _ := tenant.FromContext(c)
+	var in service.TenantPricingView
+	if err := c.ShouldBindJSON(&in); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if err := a.tenantSettingService.UpdatePricing(tid, in); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}

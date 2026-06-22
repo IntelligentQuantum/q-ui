@@ -73,6 +73,20 @@ var rolePermissions = map[string]map[Permission]bool{
 		PermTenantPayments:  true,
 		PermTenantUsers:     true,
 	},
+	// Moderator: workspace STAFF created by a manager. The only privileged thing
+	// it can do is create/manage clients (ownership-scoped + tenant-confined like
+	// every non-admin), for which it is charged the manager-set per-GB rate from
+	// its own balance. It cannot buy products, manage customers, see finance, edit
+	// workspace settings, or manage other staff — those perms are deliberately
+	// absent. The manager funds the moderator's balance (BalanceManage on the
+	// manager side); the moderator only views its own.
+	RoleModerator: {
+		PermClientManage:   true,
+		PermBalanceViewOwn: true,
+		PermOrderViewOwn:   true, // see own created services/orders
+		PermTicketCreate:   true,
+		PermTicketViewOwn:  true,
+	},
 	RoleReseller: {
 		PermProductView:     true,
 		PermProductPurchase: true,

@@ -231,6 +231,7 @@ func (a *APIController) me(c *gin.Context) {
 		"isReseller":       user.IsReseller(),
 		"isMember":         user.IsMember(),
 		"isManager":        user.IsManager(),
+		"isModerator":      user.IsModerator(),
 		"tenantId":         user.TenantId,
 		"tenantSlug":       tenantSlug,
 		"brandLogo":        brandLogo,

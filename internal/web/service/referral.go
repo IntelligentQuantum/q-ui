@@ -260,7 +260,7 @@ type ResellerReferral struct {
 func (s *ReferralService) ListResellers() ([]ResellerReferral, error) {
 	var users []model.User
 	if err := database.GetDB().
-		Where("role IN ?", []string{model.RoleReseller, model.RoleUser, model.RoleModerator}).
+		Where("role IN ?", []string{model.RoleReseller}).
 		Order("username asc").Find(&users).Error; err != nil {
 		return nil, err
 	}

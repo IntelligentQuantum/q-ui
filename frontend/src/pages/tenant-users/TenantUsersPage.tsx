@@ -53,12 +53,12 @@ interface UserFormValues {
   costPerGbOverride?: number;
 }
 
-const ROLE_BADGE: Record<string, BadgeVariant> = { reseller: 'neutral', member: 'success' };
+const ROLE_BADGE: Record<string, BadgeVariant> = { moderator: 'warning', reseller: 'neutral', member: 'success' };
 
 function normalizeRole(role: string): string
 {
     const r = (role || '').toLowerCase();
-    return r === 'reseller' || r === 'member' ? r : 'member';
+    return r === 'reseller' || r === 'member' || r === 'moderator' ? r : 'member';
 }
 
 async function fetchUsers(): Promise<TenantUser[]>
@@ -116,9 +116,11 @@ export default function TenantUsersPage()
 
     const [modalOpen, setModalOpen] = useState(false);
     const [editing, setEditing] = useState<TenantUser | null>(null);
-    const { register, handleSubmit, reset, control, formState: { errors } } = useForm<UserFormValues>({
+    const { register, handleSubmit, reset, control, watch, formState: { errors } } = useForm<UserFormValues>({
         defaultValues: { username: '', role: 'member' }
     });
+    const watchRole = watch('role');
+    const watchPerGb = Number(watch('costPerGbOverride')) || 0;
 
     const saveMut = useMutation({
         mutationFn: (values: UserFormValues) =>
@@ -195,7 +197,8 @@ export default function TenantUsersPage()
 
     const roleOptions = [
         { value: 'reseller', label: t('pages.users.role_reseller') },
-        { value: 'member', label: t('pages.users.role_member') }
+        { value: 'member', label: t('pages.users.role_member') },
+        { value: 'moderator', label: t('pages.users.role_moderator') }
     ];
 
     const columns: Column<TenantUser>[] = [
@@ -309,9 +312,20 @@ export default function TenantUsersPage()
             <Controller control={control} name="role" rules={{ required: true }}
               render={({ field }) => <Select id="tu-role" value={field.value} onChange={field.onChange} options={roleOptions} />} />
           </Field>
-          <Field label={t('pages.users.costPerGb')} htmlFor="tu-costPerGb">
+          <Field
+            label={watchRole === 'moderator' ? t('pages.users.pricePerGb') : t('pages.users.costPerGb')}
+            htmlFor="tu-costPerGb"
+          >
             <Input id="tu-costPerGb" type="number" min={0} placeholder={t('pages.users.costPerGbDefault')}
               {...register('costPerGbOverride', { valueAsNumber: true, min: 0 })} />
+            <span className="text-xs text-muted-foreground">
+              {watchRole === 'moderator' ? t('pages.users.costPerGbModeratorHint') : t('pages.users.costPerGbHint')}
+            </span>
+            {watchPerGb > 0 && (
+              <span className="text-xs text-accent">
+                {t('pages.users.costPerGbPreview', { amount: formatMoney(watchPerGb * 100) })}
+              </span>
+            )}
           </Field>
         </form>
       </Modal>

@@ -88,21 +88,28 @@ interface BalanceFormValues {
 const ROLE_BADGE: Record<string, BadgeVariant> = {
     admin: 'warning',
     manager: 'primary',
+    moderator: 'outline',
     reseller: 'neutral',
     member: 'success'
 };
 
-// Normalize casing + legacy "user" alias so the label/colour resolve no matter
-// how the role was stored (e.g. "Admin", "ADMIN", "user").
+// Normalize casing so the label/colour resolve no matter how the role was stored
+// (e.g. "Admin", "ADMIN"). The five canonical roles are admin/manager/moderator/
+// reseller/member; anything else falls back to member.
 function normalizeRole(role: string): string
 {
     const raw = (role || '').toLowerCase();
-    // Legacy "user" and the removed "moderator" role both fold to reseller.
-    if (raw === 'user' || raw === 'moderator')
+    switch (raw)
     {
-        return 'reseller';
+        case 'admin':
+        case 'manager':
+        case 'moderator':
+        case 'reseller':
+        case 'member':
+            return raw;
+        default:
+            return 'member';
     }
-    return raw || 'member';
 }
 
 async function fetchUsers(): Promise<PanelUser[]>

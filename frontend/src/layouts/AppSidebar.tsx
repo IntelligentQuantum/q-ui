@@ -247,7 +247,10 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         // Managers manage their catalog via the Products page; the storefront /store
         // (which lists all of a workspace's products for buying) is for customers, so
         // it's hidden from the workspace owner.
-        push(has('product.purchase') && !realAdmin && !me?.isManager, '/store', 'store', 'menu.store');
+        // Hide the storefront from a manager only on their OWN workspace (their own
+        // products live on the Products page). When browsing the admin/another store
+        // they DO see it, so they can resell those products with their own balance.
+        push(has('product.purchase') && !realAdmin && !(me?.isManager && onOwnStore), '/store', 'store', 'menu.store');
         push(has('product.purchase') && !realAdmin, '/services', 'services', 'menu.services');
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // own orders / oversight
         push(Boolean(me?.isReseller) && onOwnStore, '/customers', 'team', 'menu.customers'); // reseller — referred customers

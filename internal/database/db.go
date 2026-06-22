@@ -280,7 +280,7 @@ func runSeeders(isUsersEmpty bool) error {
 	}
 
 	if empty && isUsersEmpty {
-		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "ApiTokensHash", "RoleBalanceBackfill", "LegacyProxySettingsCleanup", "LegacyUserToReseller", "ModeratorToReseller"}
+		seeders := []string{"UserPasswordHash", "ClientsTable", "InboundClientsArrayFix", "InboundClientTgIdFix", "InboundClientSubIdFix", "FreedomFinalRulesReverseFix", "ApiTokensHash", "RoleBalanceBackfill"}
 		for _, name := range seeders {
 			if err := db.Create(&model.HistoryOfSeeders{SeederName: name}).Error; err != nil {
 				return err
@@ -373,51 +373,7 @@ func runSeeders(isUsersEmpty bool) error {
 		}
 	}
 
-	if !slices.Contains(seedersHistory, "LegacyUserToReseller") {
-		if err := migrateLegacyUserRole(); err != nil {
-			return err
-		}
-	}
-
-	if !slices.Contains(seedersHistory, "ModeratorToReseller") {
-		if err := migrateModeratorRole(); err != nil {
-			return err
-		}
-	}
 	return nil
-}
-
-// migrateModeratorRole rewrites stored "moderator" accounts to "reseller". The
-// moderator role was removed; NormalizeRole already folds it, and this one-time
-// seeder makes the stored value match so the role never resurfaces in the UI or
-// role filters.
-func migrateModeratorRole() error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.User{}).
-			Where("role = ?", model.RoleModerator).
-			Update("role", model.RoleReseller).Error; err != nil {
-			return err
-		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "ModeratorToReseller"}).Error
-	})
-}
-
-// migrateLegacyUserRole canonicalizes pre-redesign "user" rows to the new
-// "reseller" role. The old "user" role already owned clients and held a balance
-// (i.e. reseller semantics), so this preserves every capability while moving
-// stored values onto the four-role vocabulary. It runs AFTER RoleBalanceBackfill
-// so genuine legacy operators (which that seeder promotes to admin) are never
-// touched — only explicitly-created limited accounts from the two-role era are
-// remapped to reseller.
-func migrateLegacyUserRole() error {
-	return db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.User{}).
-			Where("role = ?", model.RoleUser).
-			Update("role", model.RoleReseller).Error; err != nil {
-			return err
-		}
-		return tx.Create(&model.HistoryOfSeeders{SeederName: "LegacyUserToReseller"}).Error
-	})
 }
 
 // backfillUserRoles runs once on installs that predate the RBAC role column.
@@ -429,7 +385,7 @@ func migrateLegacyUserRole() error {
 func backfillUserRoles() error {
 	return db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Model(&model.User{}).
-			Where("role IS NULL OR role = '' OR role = ?", model.RoleUser).
+			Where("role IS NULL OR role = '' OR role = ?", "user"). // "user" = the column's AutoMigrate default
 			Update("role", model.RoleAdmin).Error; err != nil {
 			return err
 		}

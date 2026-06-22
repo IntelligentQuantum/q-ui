@@ -40,11 +40,15 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/workspace-payments':
             return has('tenant.payments'); // manager — own gateways
         case '/clients':
-            return has('client.manage'); // admin + manager
+            return has('client.manage'); // admin + manager + moderator
         case '/products':
             return has('product.manage'); // admin + manager
         case '/store':
-            return has('product.purchase') && !me.isManager; // managers manage products, not the storefront
+            // Managers CAN reach the store when browsing the admin/another workspace's
+            // storefront (to resell its products). The sidebar hides the item on their
+            // OWN workspace; hard-blocking the route here stranded a manager on a blank
+            // page after clicking "Original panel" (which lands on /store).
+            return has('product.purchase');
         case '/billing':
         case '/manual-deposit':
             return has('product.purchase'); // admin, reseller, member
@@ -86,6 +90,10 @@ function homeFor(me: MeInfo): string
     if (me.isManager)
     {
         return '/products';
+    }
+    if (me.isModerator)
+    {
+        return '/clients'; // workspace staff — their one job is creating clients
     }
     if (me.isReseller)
     {

@@ -42,6 +42,27 @@ async function fetchSettings(): Promise<WorkspaceSettings>
     return { ...DEFAULTS, ...(msg.obj as Partial<WorkspaceSettings>) };
 }
 
+interface WorkspacePricing {
+  clientCost: number;
+  clientCostPerGB: number;
+  resetTrafficCost: number;
+  resetTrafficCostPerGB: number;
+}
+
+const PRICING_DEFAULTS: WorkspacePricing = {
+    clientCost: 0, clientCostPerGB: 0, resetTrafficCost: 0, resetTrafficCostPerGB: 0
+};
+
+async function fetchPricing(): Promise<WorkspacePricing>
+{
+    const msg = await HttpUtil.get('/panel/api/tenant/settings/pricing', undefined, { silent: true });
+    if (!msg?.success)
+    {
+        throw new Error(msg?.msg || 'Failed to load pricing');
+    }
+    return { ...PRICING_DEFAULTS, ...(msg.obj as Partial<WorkspacePricing>) };
+}
+
 function Field({ label, htmlFor, hint, children }: { label: ReactNode; htmlFor?: string; hint?: ReactNode; children: ReactNode })
 {
     return (
@@ -92,6 +113,30 @@ export default function WorkspaceSettingsPage()
 
     const set = <K extends keyof WorkspaceSettings>(k: K, v: WorkspaceSettings[K]) =>
         setDraft((d) => (d ? { ...d, [k]: v } : d));
+
+    // Per-workspace client pricing (separate endpoint, own draft + Save button).
+    const pricingQuery = useQuery({ queryKey: ['tenant', 'pricing'], queryFn: fetchPricing });
+    const [pricing, setPricing] = useState<WorkspacePricing | null>(null);
+    useEffect(() =>
+    {
+        if (pricingQuery.data)
+        {
+            setPricing(pricingQuery.data);
+        }
+    }, [pricingQuery.data]);
+    const pricingSaveMut = useMutation({
+        mutationFn: (v: WorkspacePricing) => HttpUtil.post('/panel/api/tenant/settings/pricing', v, JSON_HEADERS),
+        onSuccess: (msg) =>
+        {
+            if (msg?.success)
+            {
+                queryClient.invalidateQueries({ queryKey: ['tenant', 'pricing'] });
+                messageApi.success(t('pages.workspaceSettings.toasts.saved'));
+            }
+        }
+    });
+    const setPrice = (k: keyof WorkspacePricing, v: number) =>
+        setPricing((d) => (d ? { ...d, [k]: v } : d));
 
     if (query.isLoading || !draft)
     {
@@ -178,6 +223,37 @@ export default function WorkspaceSettingsPage()
           <Field label={t('pages.workspaceSettings.subTitle')} htmlFor="ws-sub" hint={t('pages.workspaceSettings.subTitleHint')}>
             <Input id="ws-sub" value={draft.subTitle} onChange={(e) => set('subTitle', e.target.value)} />
           </Field>
+        </Card>
+
+        {/* Per-workspace client pricing: what this workspace charges its own users
+            (e.g. moderators) to create/reset clients. Own Save (separate endpoint). */}
+        <Card className="flex flex-col gap-4 p-4 sm:p-5">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-muted-foreground">{t('pages.workspaceSettings.pricing')}</h2>
+            {pricing ? (
+              <Button onClick={() => pricingSaveMut.mutateAsync(pricing)} loading={pricingSaveMut.isPending}>
+                <Save className="h-4 w-4" aria-hidden />
+                {t('save')}
+              </Button>
+            ) : null}
+          </div>
+          <p className="text-xs text-muted-foreground">{t('pages.workspaceSettings.pricingHint')}</p>
+          {pricing ? (
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Field label={t('pages.workspaceSettings.clientCost')} htmlFor="ws-cc" hint={t('pages.workspaceSettings.clientCostHint')}>
+                <Input id="ws-cc" type="number" min={0} value={pricing.clientCost} onChange={(e) => setPrice('clientCost', Number(e.target.value) || 0)} />
+              </Field>
+              <Field label={t('pages.workspaceSettings.clientCostPerGb')} htmlFor="ws-ccg" hint={t('pages.workspaceSettings.clientCostPerGbHint')}>
+                <Input id="ws-ccg" type="number" min={0} value={pricing.clientCostPerGB} onChange={(e) => setPrice('clientCostPerGB', Number(e.target.value) || 0)} />
+              </Field>
+              <Field label={t('pages.workspaceSettings.resetCost')} htmlFor="ws-rc" hint={t('pages.workspaceSettings.resetCostHint')}>
+                <Input id="ws-rc" type="number" min={0} value={pricing.resetTrafficCost} onChange={(e) => setPrice('resetTrafficCost', Number(e.target.value) || 0)} />
+              </Field>
+              <Field label={t('pages.workspaceSettings.resetCostPerGb')} htmlFor="ws-rcg" hint={t('pages.workspaceSettings.resetCostPerGbHint')}>
+                <Input id="ws-rcg" type="number" min={0} value={pricing.resetTrafficCostPerGB} onChange={(e) => setPrice('resetTrafficCostPerGB', Number(e.target.value) || 0)} />
+              </Field>
+            </div>
+          ) : null}
         </Card>
 
         {/* The workspace's own support ticket categories. Self-contained (its own

@@ -73,11 +73,12 @@ type Product struct {
 	// (the buyer's config is attached to every one). Empty = no provisioning
 	// (e.g. a pure balance/credit product) — buying it just records an order
 	// without creating an Xray config.
-	InboundIds IntList `json:"inboundIds" gorm:"column:inbound_ids;type:text"`
-	Status     string  `json:"status" gorm:"index;default:'active'"`     // active | inactive
-	CreatedBy  int     `json:"createdBy" gorm:"column:created_by;index"` // user id of creator
-	CreatedAt  int64   `json:"createdAt" gorm:"autoCreateTime:milli"`
-	UpdatedAt  int64   `json:"updatedAt" gorm:"autoUpdateTime:milli"`
+	InboundIds   IntList `json:"inboundIds" gorm:"column:inbound_ids;type:text"`
+	Status       string  `json:"status" gorm:"index;default:'active'"`                     // active | inactive
+	DisplayOrder int     `json:"displayOrder" gorm:"column:display_order;index;default:0"` // manual catalog/store sort order (ascending); ties broken by id
+	CreatedBy    int     `json:"createdBy" gorm:"column:created_by;index"`                 // user id of creator
+	CreatedAt    int64   `json:"createdAt" gorm:"autoCreateTime:milli"`
+	UpdatedAt    int64   `json:"updatedAt" gorm:"autoUpdateTime:milli"`
 }
 
 func (Product) TableName() string { return "products" }

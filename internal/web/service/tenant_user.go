@@ -31,11 +31,12 @@ type TenantUserService struct {
 	walletService WalletService
 }
 
-// tenantManageableRole reports whether a role is one a manager may assign/manage:
-// member or reseller only.
+// tenantManageableRole reports whether a role is one a manager may assign/manage
+// within their own tenant: member, reseller, or moderator (workspace staff).
+// Never manager/admin.
 func tenantManageableRole(role string) bool {
 	switch model.NormalizeRole(role) {
-	case model.RoleReseller, model.RoleMember:
+	case model.RoleReseller, model.RoleMember, model.RoleModerator:
 		return true
 	default:
 		return false

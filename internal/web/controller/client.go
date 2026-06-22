@@ -49,6 +49,9 @@ type ClientController struct {
 	walletService  service.WalletService
 	orderService   service.OrderService
 	tenantService  service.TenantService
+	// tenantSettingService resolves a workspace's own client-pricing (managers
+	// price their own users), falling back to the global per-role rate.
+	tenantSettingService service.TenantSettingService
 }
 
 func NewClientController(g *gin.RouterGroup) *ClientController {
@@ -282,10 +285,12 @@ func (a *ClientController) create(c *gin.Context) {
 	var charged int64
 	var chargedTenant int
 	if !user.IsAdmin() {
-		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
-		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
-		// Per-account override: when set (>0), this user's own per-GB price wins
-		// over the role default (e.g. user "test" at 10000/GB instead of 15000).
+		// Workspace pricing: a manager prices their own workspace's client creation.
+		// EffectiveClientCost returns the tenant's configured rate, else the global
+		// per-role default; the global/admin scope keeps the global rate.
+		base, perGB := a.tenantSettingService.EffectiveClientCost(user.TenantId, user.CanonicalRole())
+		// Per-account override: when set (>0), this user's own per-GB price wins over
+		// the workspace/role default (e.g. one moderator at 10000/GB).
 		if user.CostPerGBOverride > 0 {
 			perGB = user.CostPerGBOverride
 		}
@@ -640,8 +645,7 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	var charged int64
 	var chargedTenant int
 	if user != nil && !user.IsAdmin() {
-		base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
-		perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
+		base, perGB := a.tenantSettingService.EffectiveResetCost(user.TenantId, user.CanonicalRole())
 		var quota int64
 		if ct, terr := a.inboundService.GetClientTrafficByEmail(email); terr == nil && ct != nil {
 			quota = ct.Total

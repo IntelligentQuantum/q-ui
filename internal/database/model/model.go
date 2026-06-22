@@ -65,21 +65,21 @@ type User struct {
 //	manager  - owns an isolated Tenant (workspace); every capability is scoped
 //	           to that one tenant. Cannot touch infrastructure, other tenants,
 //	           system roles, or create another manager/admin.
+//	moderator- workspace STAFF created by a manager; may create/manage clients
+//	           within the manager's own tenant (charged the manager-set per-GB
+//	           rate from their own balance). Cannot buy products, manage
+//	           customers, edit workspace settings, or manage other staff.
 //	reseller - business partner; owns and resells to their own clients/customers.
 //	member   - end customer; buys products and manages their own services.
 //
-// RoleUser ("user") and RoleModerator ("moderator") are LEGACY aliases that are
-// normalized to RoleReseller everywhere — the moderator role was removed; any
-// stored moderator account folds to reseller (a one-time seeder also rewrites the
-// stored value). They are kept only so existing data normalizes correctly.
+// The five active roles. Any unknown or blank stored value normalizes to the
+// least-privileged role (member) — see NormalizeRole.
 const (
-	RoleAdmin    = "admin"
-	RoleManager  = "manager"
-	RoleReseller = "reseller"
-	RoleMember   = "member"
-
-	RoleUser      = "user"      // legacy alias -> reseller
-	RoleModerator = "moderator" // legacy alias -> reseller (role removed)
+	RoleAdmin     = "admin"
+	RoleManager   = "manager"
+	RoleModerator = "moderator"
+	RoleReseller  = "reseller"
+	RoleMember    = "member"
 )
 
 // NormalizeRole maps any stored or user-supplied role string to a canonical
@@ -91,7 +91,9 @@ func NormalizeRole(role string) string {
 		return RoleAdmin
 	case RoleManager:
 		return RoleManager
-	case RoleReseller, RoleUser, RoleModerator:
+	case RoleModerator:
+		return RoleModerator
+	case RoleReseller:
 		return RoleReseller
 	case RoleMember:
 		return RoleMember
@@ -117,9 +119,9 @@ func (u *User) CanonicalRole() string {
 func (u *User) IsAdmin() bool   { return u.CanonicalRole() == RoleAdmin }
 func (u *User) IsManager() bool { return u.CanonicalRole() == RoleManager }
 
-// IsModerator always returns false: the moderator role was removed and folds to
-// reseller. Kept so any remaining caller compiles and never sees a moderator.
-func (u *User) IsModerator() bool { return false }
+// IsModerator reports whether the user is workspace staff (creates clients within
+// a manager's tenant). See the role doc comment above.
+func (u *User) IsModerator() bool { return u.CanonicalRole() == RoleModerator }
 func (u *User) IsReseller() bool  { return u.CanonicalRole() == RoleReseller }
 func (u *User) IsMember() bool    { return u.CanonicalRole() == RoleMember }
 

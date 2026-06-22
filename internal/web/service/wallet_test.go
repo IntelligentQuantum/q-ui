@@ -12,7 +12,7 @@ func newTestUser(t *testing.T, us *UserService, username string, balance int64) 
 	u, err := us.AdminCreateUser(AdminUserInput{
 		Username: username,
 		Password: "Sup3rSecret",
-		Role:     model.RoleUser,
+		Role:     model.RoleReseller,
 		Balance:  balance,
 	})
 	if err != nil {
