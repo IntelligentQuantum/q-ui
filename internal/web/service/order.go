@@ -480,10 +480,17 @@ func (s *OrderService) provision(buyer *model.User, product *model.Product, orde
 			TotalGB:    product.TrafficLimit,
 			ExpiryTime: expiry,
 			Enable:     true,
-			ID:         uuid.NewString(),  // vmess / vless
-			SubID:      randSecret()[:16], // subscription id
-			Password:   randSecret(),      // trojan / shadowsocks
-			Auth:       randSecret(),      // hysteria
+			ID:         uuid.NewString(), // vmess / vless
+			// Default to XTLS Vision so a VLESS+TCP+(TLS|REALITY) config provisions
+			// EXACTLY like a hand-made one on the Clients page (where the operator
+			// picks this flow). Without it a store config has no flow and won't
+			// connect on a REALITY/Vision inbound. ClientService.Create strips it on
+			// any inbound that can't use Vision (non-VLESS, ws/grpc/etc.), so this is
+			// safe across every protocol the product targets.
+			Flow:     visionFlow,
+			SubID:    randSecret()[:16], // subscription id
+			Password: randSecret(),      // trojan / shadowsocks
+			Auth:     randSecret(),      // hysteria
 		},
 		InboundIds: []int(product.InboundIds),
 		OwnerId:    buyer.Id,

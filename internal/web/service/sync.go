@@ -135,7 +135,12 @@ func (s *SyncService) reconcileClient(actor string, productID int, email string,
 			res.Err = err.Error()
 		}
 	}
-	if len(remove) > 0 {
+	// Only detach the removed inbounds once the attach to the new ones SUCCEEDED.
+	// Detaching after a failed attach would strip the config off its current
+	// inbounds while it never landed on the new set — orphaning it on no inbound,
+	// which makes its subscription link resolve to nothing. The periodic
+	// ReconcileAllProducts re-attempts the attach later.
+	if len(remove) > 0 && res.OK {
 		nr, err := s.withRetry(func() (bool, error) {
 			return s.clientService.DetachByEmailMany(&s.inboundService, email, remove)
 		})
@@ -148,6 +153,9 @@ func (s *SyncService) reconcileClient(actor string, productID int, email string,
 			}
 			res.Err += err.Error()
 		}
+	} else if len(remove) > 0 {
+		logger.Warningf("sync: product %d — skipping detach of %v for %q because attach failed (avoids orphaning); will retry next reconcile",
+			productID, remove, email)
 	}
 	return res
 }

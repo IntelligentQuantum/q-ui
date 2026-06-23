@@ -52,6 +52,9 @@ type ClientController struct {
 	// tenantSettingService resolves a workspace's own client-pricing (managers
 	// price their own users), falling back to the global per-role rate.
 	tenantSettingService service.TenantSettingService
+	// treasuryService debits/credits the workspace treasury — a manager creating a
+	// client draws from it (cost-of-goods) instead of their personal balance.
+	treasuryService service.WorkspaceWalletService
 }
 
 func NewClientController(g *gin.RouterGroup) *ClientController {
@@ -282,22 +285,44 @@ func (a *ClientController) create(c *gin.Context) {
 	// debit, client creation and (on failure) the refund are sequenced so a
 	// failed creation never leaves the user out of pocket and an unpaid client
 	// is never created.
+	// Cost system. A MANAGER creating a client in their own workspace draws the
+	// bandwidth cost-of-goods (the admin's per-GB rate for managers) from the
+	// WORKSPACE TREASURY — workspace capital, not their personal wallet. Everyone
+	// else (moderator/reseller/member) pays the workspace's own price from their
+	// PERSONAL balance, and that revenue accrues to the treasury. Admins are free.
 	var charged int64
 	var chargedTenant int
-	if !user.IsAdmin() {
-		// Workspace pricing: a manager prices their own workspace's client creation.
-		// EffectiveClientCost returns the tenant's configured rate, else the global
-		// per-role default; the global/admin scope keeps the global rate.
-		base, perGB := a.tenantSettingService.EffectiveClientCost(user.TenantId, user.CanonicalRole())
-		// Per-account override: when set (>0), this user's own per-GB price wins over
-		// the workspace/role default (e.g. one moderator at 10000/GB).
+	var chargedTreasury bool
+	if user.IsManager() && user.TenantId > model.GlobalTenantId {
+		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
+		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
 		if user.CostPerGBOverride > 0 {
 			perGB = user.CostPerGBOverride
 		}
 		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
 		if cost > 0 {
-			// The customer pays from their account balance; the cost accrues to their
-			// workspace's treasury (revenue), never the manager's personal wallet.
+			// Allowed to run the treasury negative (a visible, reconcilable debt) so a
+			// manager is never blocked mid-provision; the bandwidth-quota gate above is
+			// the hard cap on a workspace's capacity.
+			if derr := a.treasuryService.DebitCostOfGoods(user.TenantId, cost, "client create: "+payload.Client.Email,
+				service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
+				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
+				return
+			}
+			charged = cost
+			chargedTenant = user.TenantId
+			chargedTreasury = true
+		}
+	} else if !user.IsAdmin() {
+		// Workspace pricing: the manager sets what their workspace charges; a per-
+		// account override (>0) wins. Paid from the user's personal balance, and the
+		// cost accrues to the workspace treasury (revenue).
+		base, perGB := a.tenantSettingService.EffectiveClientCost(user.TenantId, user.CanonicalRole())
+		if user.CostPerGBOverride > 0 {
+			perGB = user.CostPerGBOverride
+		}
+		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
+		if cost > 0 {
 			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "client create: "+payload.Client.Email,
 				service.TxMeta{Source: model.TxSourcePurchase})
 			if derr != nil {
@@ -316,8 +341,14 @@ func (a *ClientController) create(c *gin.Context) {
 	needRestart, err := a.clientService.Create(&a.inboundService, &payload)
 	if err != nil {
 		if charged > 0 {
-			// Refund the reservation (buyer + workspace treasury); creation never happened.
-			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
+			// Refund the reservation; creation never happened. Manager charges hit the
+			// treasury, everyone else the buyer wallet + treasury.
+			if chargedTreasury {
+				if refundErr := a.treasuryService.CreditTreasury(chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
+					service.TxMeta{Source: model.WsSourceRefund, Actor: user.Username}); refundErr != nil {
+					logger.Warning("failed to refund client-create treasury charge:", refundErr)
+				}
+			} else if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund client-create charge:", refundErr)
 			}
@@ -644,34 +675,58 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	// reset never leaves the owner out of pocket. Admins reset for free.
 	var charged int64
 	var chargedTenant int
+	var chargedTreasury bool
 	if user != nil && !user.IsAdmin() {
-		base, perGB := a.tenantSettingService.EffectiveResetCost(user.TenantId, user.CanonicalRole())
 		var quota int64
 		if ct, terr := a.inboundService.GetClientTrafficByEmail(email); terr == nil && ct != nil {
 			quota = ct.Total
 		}
-		cost := service.ComputeClientCost(base, perGB, quota)
-		if cost > 0 {
-			// The customer's reset cost accrues to their workspace's treasury.
-			mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "reset traffic: "+email,
-				service.TxMeta{Source: model.TxSourcePurchase})
-			if derr != nil {
-				if errors.Is(derr, service.ErrInsufficientBalance) {
-					pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
+		if user.IsManager() && user.TenantId > model.GlobalTenantId {
+			// Manager: reset cost-of-goods comes out of the WORKSPACE TREASURY.
+			base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
+			perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
+			cost := service.ComputeClientCost(base, perGB, quota)
+			if cost > 0 {
+				if derr := a.treasuryService.DebitCostOfGoods(user.TenantId, cost, "reset traffic: "+email,
+					service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
+					jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
 					return
 				}
-				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
-				return
+				charged = cost
+				chargedTenant = user.TenantId
+				chargedTreasury = true
 			}
-			charged = cost
-			chargedTenant = mid
+		} else {
+			// moderator/reseller/member: reset cost comes out of their PERSONAL balance
+			// (at the workspace's price), accruing to the workspace treasury.
+			base, perGB := a.tenantSettingService.EffectiveResetCost(user.TenantId, user.CanonicalRole())
+			cost := service.ComputeClientCost(base, perGB, quota)
+			if cost > 0 {
+				mid, derr := a.walletService.DebitWorkspacePurchase(user, user.TenantId, cost, "reset traffic: "+email,
+					service.TxMeta{Source: model.TxSourcePurchase})
+				if derr != nil {
+					if errors.Is(derr, service.ErrInsufficientBalance) {
+						pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.clients.toasts.insufficientBalance"))
+						return
+					}
+					jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
+					return
+				}
+				charged = cost
+				chargedTenant = mid
+			}
 		}
 	}
 
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
 	if err != nil {
 		if charged > 0 {
-			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (reset failed): "+email,
+			if chargedTreasury {
+				if refundErr := a.treasuryService.CreditTreasury(chargedTenant, charged, "refund (reset failed): "+email,
+					service.TxMeta{Source: model.WsSourceRefund, Actor: user.Username}); refundErr != nil {
+					logger.Warning("failed to refund reset-traffic treasury charge:", refundErr)
+				}
+			} else if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (reset failed): "+email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund reset-traffic charge:", refundErr)
 			}

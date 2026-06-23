@@ -586,6 +586,17 @@ func (s *Server) start(restartXray bool, startTgBot bool) (err error) {
 
 	s.startTask(restartXray)
 
+	// One-time repair: store-bought configs were provisioned without a connection
+	// flow, so VLESS+REALITY/TLS configs from the store couldn't connect (hand-made
+	// configs on the Clients page get the flow). Backfill xtls-rprx-vision on
+	// existing flow-less configs that sit on a Vision-capable inbound. Runs after
+	// xray is up so the fix is pushed live; guarded to run exactly once.
+	if nr, err := (&service.ClientService{}).BackfillVisionFlow(&service.InboundService{}); err != nil {
+		logger.Warning("vision flow backfill on startup:", err)
+	} else if nr {
+		s.xrayService.SetToNeedRestart()
+	}
+
 	if startTgBot {
 		isTgbotenabled, err := s.settingService.GetTgbotEnabled()
 		if (err == nil) && (isTgbotenabled) {
