@@ -410,6 +410,8 @@
     "finance": {
       "title": "Finance Control Center",
       "subtitle": "Every deposit, sale, balance change and profit in one place.",
+      "scopeAll": "All workspaces",
+      "scopeOwn": "Your workspace",
       "tabOverview": "Overview",
       "tabDeposits": "Deposits",
       "tabAnalytics": "Analytics",

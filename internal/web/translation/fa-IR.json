@@ -1930,6 +1930,8 @@
     "finance": {
       "title": "مرکز کنترل مالی",
       "subtitle": "هر واریز، فروش، تغییر موجودی و سود در یک‌جا.",
+      "scopeAll": "همه کارگاه‌ها",
+      "scopeOwn": "کارگاه شما",
       "tabOverview": "نمای کلی",
       "tabDeposits": "واریزها",
       "tabAnalytics": "تحلیل‌ها",
