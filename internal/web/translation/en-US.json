@@ -2762,6 +2762,7 @@
     "adminReferrals": {
       "title": "Referral Management",
       "subtitle": "Assign referral codes and track reseller performance.",
+      "searchPlaceholder": "Search by username or code",
       "code": "Referral code",
       "codeHint": "4–32 chars: letters, digits, _ or -. Leave blank to clear.",
       "editCode": "Edit code",

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Pencil } from 'lucide-react';
@@ -9,7 +9,7 @@ import { HttpUtil } from '@/utils';
 import { message } from '@/components/ui/message';
 import { setMessageInstance } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
-import { Badge, Button, Card, CardContent, Input, Label, Modal, Spinner, Switch, Table } from '@/components/ui';
+import { Badge, Button, Card, CardContent, Input, Label, Modal, SearchInput, Select, Spinner, Switch, Table } from '@/components/ui';
 import type { Column } from '@/components/ui';
 
 const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as const;
@@ -48,6 +48,31 @@ export default function AdminReferralsPage()
             return msg?.success ? ((msg.obj as Reseller[]) ?? []) : [];
         }
     });
+
+    // Client-side search + status filter (the roster is small and already loaded).
+    const resellers = useMemo(() => query.data ?? [], [query.data]);
+    const [search, setSearch] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const filtered = useMemo(() =>
+    {
+        const needle = search.trim().toLowerCase();
+        return resellers.filter((r) =>
+        {
+            if (statusFilter === 'enabled' && !r.enabled)
+            {
+                return false;
+            }
+            if (statusFilter === 'disabled' && r.enabled)
+            {
+                return false;
+            }
+            if (!needle)
+            {
+                return true;
+            }
+            return [r.username, r.code].some((v) => (v || '').toLowerCase().includes(needle));
+        });
+    }, [resellers, search, statusFilter]);
 
     const [editing, setEditing] = useState<Reseller | null>(null);
     const [code, setCode] = useState('');
@@ -135,9 +160,29 @@ export default function AdminReferralsPage()
     <PageShell title={t('pages.adminReferrals.title')} description={t('pages.adminReferrals.subtitle')}>
       <Card>
         <CardContent className="p-4 sm:p-5">
+          <div className="mb-3 flex flex-wrap items-center justify-end gap-2">
+            <Select
+              className="w-full sm:w-44"
+              aria-label={t('filter')}
+              value={statusFilter}
+              onChange={setStatusFilter}
+              options={[
+                  { value: 'all', label: t('all') },
+                  { value: 'enabled', label: t('pages.adminReferrals.enabled') },
+                  { value: 'disabled', label: t('disabled') }
+              ]}
+            />
+            <SearchInput
+              className="w-full max-w-[280px] sm:w-auto"
+              aria-label={t('pages.adminReferrals.searchPlaceholder')}
+              placeholder={t('pages.adminReferrals.searchPlaceholder')}
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
           <Table<Reseller>
             columns={columns}
-            data={query.data ?? []}
+            data={filtered}
             rowKey={(r) => String(r.id)}
             loading={query.isFetching}
             pageSize={10}
