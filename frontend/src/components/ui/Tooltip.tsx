@@ -30,18 +30,23 @@ const sideGap: Record<TooltipSide, string> = {
 // It also caps maxHeight to the available space in the chosen direction (and
 // flips top<->bottom when the anchored side is too cramped) so a tall list never
 // runs off-screen with unreachable rows — it scrolls inside the viewport instead.
+// Keep a data-heavy popover a sensible, popover-sized height (it scrolls inside),
+// never taller than the room available in the chosen direction.
+const MAX_POPOVER_HEIGHT = 360;
+
 function fixedStyleFor(sideValue: TooltipSide, rect: DOMRect): CSSProperties
 {
     const margin = 8;
     const vh = window.innerHeight;
+    const cap = (space: number) => Math.min(Math.max(0, space), MAX_POPOVER_HEIGHT);
 
     if (sideValue === 'start')
     {
-        return { top: rect.top + rect.height / 2, left: rect.left, transform: 'translate(-100%, -50%)', maxHeight: vh - margin * 2 };
+        return { top: rect.top + rect.height / 2, left: rect.left, transform: 'translate(-100%, -50%)', maxHeight: cap(vh - margin * 2) };
     }
     if (sideValue === 'end')
     {
-        return { top: rect.top + rect.height / 2, left: rect.right, transform: 'translateY(-50%)', maxHeight: vh - margin * 2 };
+        return { top: rect.top + rect.height / 2, left: rect.right, transform: 'translateY(-50%)', maxHeight: cap(vh - margin * 2) };
     }
 
     // top / bottom — pick the side with usable room, preferring the requested one.
@@ -59,8 +64,8 @@ function fixedStyleFor(sideValue: TooltipSide, rect: DOMRect): CSSProperties
 
     const left = rect.left + rect.width / 2;
     return placeBelow
-        ? { top: rect.bottom, left, transform: 'translateX(-50%)', maxHeight: spaceBelow }
-        : { top: rect.top, left, transform: 'translate(-50%, -100%)', maxHeight: spaceAbove };
+        ? { top: rect.bottom, left, transform: 'translateX(-50%)', maxHeight: cap(spaceBelow) }
+        : { top: rect.top, left, transform: 'translate(-50%, -100%)', maxHeight: cap(spaceAbove) };
 }
 
 export interface TooltipProps {
@@ -127,14 +132,16 @@ export function Tooltip({ content, side = 'top', delay = 150, children, classNam
           id={id}
           style={interactive ? (pos ?? undefined) : undefined}
           className={cn(
-              'z-[var(--z-popover)] rounded-md border border-border bg-surface-raised px-2 py-1 text-xs font-medium text-foreground shadow-md',
+              'z-[var(--z-popover)] rounded-md border border-border bg-surface-raised text-xs font-medium text-foreground shadow-md',
               'motion-safe:animate-[fade-in_120ms_ease-out]',
               interactive
-                  // Cap height/width to the viewport and scroll internally so a
-                  // data-heavy list (e.g. all online clients) is fully reachable
-                  // instead of overflowing off-screen with no way to see the rest.
+                  // The popover is the single scroll container: capped to a
+                  // popover height (see fixedStyleFor) and scrolling internally so
+                  // a data-heavy list (e.g. all online clients) is fully reachable
+                  // instead of overflowing off-screen. No padding here — content
+                  // (e.g. TooltipList) owns its layout so a sticky header sits flush.
                   ? 'fixed pointer-events-auto max-w-[min(85vw,24rem)] overflow-y-auto overscroll-contain whitespace-normal'
-                  : cn('absolute pointer-events-none whitespace-nowrap', sidePos[side], sideGap[side]),
+                  : cn('absolute pointer-events-none whitespace-nowrap px-2 py-1', sidePos[side], sideGap[side]),
               className
           )}
         >
@@ -142,5 +149,57 @@ export function Tooltip({ content, side = 'top', delay = 150, children, classNam
         </span>
       )}
     </span>
+    );
+}
+
+export interface TooltipListProps {
+  /** The rows to show (emails, inbound labels, …). */
+  items: string[];
+  /** Optional sticky header label; a count badge is shown next to it. */
+  title?: ReactNode;
+  /** Monospace the rows (use for emails/IDs so they align). */
+  mono?: boolean;
+  /** Shown when `items` is empty. */
+  emptyText?: string;
+}
+
+/**
+ * Standard content for a data-heavy interactive Tooltip: a sticky header with a
+ * count and a clean, scrollable list of rows. Pair with `<Tooltip interactive>`,
+ * which provides the fixed positioning, viewport clamping and the scroll. Used
+ * for the clients summary cards, the inbound client-count badges, and inbound
+ * overflow chips so they all look and behave identically.
+ */
+export function TooltipList({ items, title, mono = false, emptyText = '—' }: TooltipListProps)
+{
+    return (
+    <div className="min-w-[10rem]">
+      {title != null && (
+        <div className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-border bg-surface-raised px-3 py-2">
+          <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</span>
+          <span className="rounded-full bg-foreground/10 px-1.5 py-px text-[10px] font-semibold tabular-nums text-foreground">
+            {items.length}
+          </span>
+        </div>
+      )}
+      {items.length === 0 ? (
+        <div className="px-3 py-2 text-xs text-muted-foreground">{emptyText}</div>
+      ) : (
+        <ul className="flex flex-col py-1">
+          {items.map((it, i) => (
+            <li
+              key={`${ it }-${ i }`}
+              title={it}
+              className={cn(
+                  'truncate px-3 py-1 text-xs leading-relaxed text-foreground/90 transition-colors hover:bg-foreground/[0.06]',
+                  mono && 'font-mono text-[11px]'
+              )}
+            >
+              {it}
+            </li>
+          ))}
+        </ul>
+      )}
+    </div>
     );
 }

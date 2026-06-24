@@ -64,8 +64,8 @@ export type { DrawerProps } from './Drawer';
 export { confirm } from './confirm';
 export type { ConfirmOptions } from './confirm';
 
-export { Tooltip } from './Tooltip';
-export type { TooltipProps, TooltipSide } from './Tooltip';
+export { Tooltip, TooltipList } from './Tooltip';
+export type { TooltipProps, TooltipSide, TooltipListProps } from './Tooltip';
 
 export { Select } from './Select';
 export type { SelectProps, SelectOption } from './Select';

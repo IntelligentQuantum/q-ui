@@ -44,6 +44,7 @@ import {
     Switch,
     Table,
     Tooltip,
+    TooltipList,
     cn,
     confirm
 } from '@/components/ui';
@@ -732,13 +733,7 @@ export default function ClientsPage()
           <Tooltip
             interactive
             side="bottom"
-            content={
-              <div className="flex max-h-64 max-w-[260px] flex-col gap-1 overflow-y-auto">
-                {overflow.map((id) => (
-                  <span key={id} className="truncate text-xs">{inboundLabel(id)}</span>
-                ))}
-              </div>
-            }
+            content={<TooltipList title={t('inbounds')} items={overflow.map((id) => inboundLabel(id))} />}
           >
             <Chip tone="neutral">+{overflow.length}</Chip>
           </Tooltip>
@@ -1063,11 +1058,7 @@ export default function ClientsPage()
                           block
                           interactive
                           side="bottom"
-                          content={
-                            <div className="flex max-h-64 min-w-[140px] flex-col gap-0.5 overflow-y-auto">
-                              {s.list.map((e) => <span key={e} className="truncate text-xs">{e}</span>)}
-                            </div>
-                          }
+                          content={<TooltipList title={s.label} items={s.list} mono />}
                         >
                           <div className="h-full">{card}</div>
                         </Tooltip>

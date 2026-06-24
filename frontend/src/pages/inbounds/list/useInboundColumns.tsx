@@ -3,7 +3,7 @@ import { useTranslation } from 'react-i18next';
 import { Users } from 'lucide-react';
 
 import { SizeFormatter, IntlUtil, ColorUtils } from '@/utils';
-import { InfinityIcon, Badge, Switch, Tooltip, type Column, type BadgeVariant } from '@/components/ui';
+import { InfinityIcon, Badge, Switch, Tooltip, TooltipList, type Column, type BadgeVariant } from '@/components/ui';
 import { useDatepicker } from '@/hooks/useDatepicker';
 import type { NodeRecord } from '@/api/queries/useNodesQuery';
 
@@ -218,12 +218,8 @@ export function useInboundColumns({
                     {
                         return null;
                     }
-                    const emailList = (emails: string[]) => (
-            <div className="max-h-[min(60vh,360px)] min-w-[150px] overflow-y-auto pe-1">
-              {emails.map((e) => (
-                <div key={e} className="py-0.5 font-mono text-xs">{e}</div>
-              ))}
-            </div>
+                    const emailList = (emails: string[], title: string) => (
+            <TooltipList title={title} items={emails} mono />
                     );
                     return (
             <div className="flex flex-wrap items-center gap-1">
@@ -231,22 +227,22 @@ export function useInboundColumns({
                 <Users className="h-3 w-3" aria-hidden /> {cc.clients}
               </Badge>
               {cc.active.length > 0 && (
-                <Tooltip interactive side="bottom" content={emailList(cc.active)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.active, t('subscription.active'))}>
                   <Badge variant="success" className="tabular-nums">{cc.active.length}</Badge>
                 </Tooltip>
               )}
               {cc.deactive.length > 0 && (
-                <Tooltip interactive side="bottom" content={emailList(cc.deactive)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.deactive, t('disabled'))}>
                   <Badge variant="neutral" className="tabular-nums">{cc.deactive.length}</Badge>
                 </Tooltip>
               )}
               {cc.depleted.length > 0 && (
-                <Tooltip interactive side="bottom" content={emailList(cc.depleted)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.depleted, t('depleted'))}>
                   <Badge variant="danger" className="tabular-nums">{cc.depleted.length}</Badge>
                 </Tooltip>
               )}
               {cc.online.length > 0 && (
-                <Tooltip interactive side="bottom" content={emailList(cc.online)}>
+                <Tooltip interactive side="bottom" content={emailList(cc.online, t('online'))}>
                   <Badge variant="primary" className="tabular-nums">{cc.online.length}</Badge>
                 </Tooltip>
               )}
