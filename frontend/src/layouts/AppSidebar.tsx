@@ -381,7 +381,17 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         if (key === LOGOUT_KEY)
         {
             await HttpUtil.post('/logout');
-            window.location.href = window.Q_UI_BASE_PATH || '/';
+            // Keep the workspace context on logout: a workspace member lands back
+            // on their own workspace's login (?ws=<slug>) — branded, and a re-login
+            // returns to that workspace — instead of the original/admin panel. On a
+            // custom workspace domain the slug is implicit (Q_UI_WORKSPACE resolves
+            // it), so the bare login is already correct. Admins (and an admin
+            // impersonating a workspace) return to the original panel login.
+            const base = window.Q_UI_BASE_PATH || '/';
+            const wsSlug = me && !me.isAdmin ? (me.tenantSlug || '') : '';
+            window.location.href = wsSlug && !window.Q_UI_WORKSPACE
+                ? `${ base }?ws=${ encodeURIComponent(wsSlug) }`
+                : base;
             return;
         }
         if (key === MY_WORKSPACE_KEY)
@@ -400,7 +410,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         }
         // Keep navigation inside the current storefront's /<slug> context.
         navigate(`${ navPrefix }${ key }`);
-    }, [navigate, navPrefix, homeSlug]);
+    }, [navigate, navPrefix, homeSlug, me]);
 
     const toggleCollapsed = useCallback(() =>
     {
