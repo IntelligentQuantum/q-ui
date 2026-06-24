@@ -61,6 +61,10 @@ export default function StorePage()
     const homeSlug = me?.isAdmin ? '' : (me?.tenantSlug || '');
     const onOwnStore = homeSlug ? storeSlug === homeSlug : !storeSlug;
     const onForeignStore = !!me && !me.isAdmin && !me.isManager && !onOwnStore;
+    // A manager buying on their OWN store provisions from the workspace pool (the
+    // treasury, depleted by cost-of-goods server-side), not their personal wallet —
+    // so the personal-balance affordability gate must not block them.
+    const fromWorkspace = !!me?.isManager && onOwnStore;
     const { format, formatNumber, unit } = useCurrency();
     const [buying, setBuying] = useState<Product | null>(null);
     const [name, setName] = useState('');
@@ -157,10 +161,10 @@ export default function StorePage()
           {!onForeignStore && (
             <StatCard
               icon={<Wallet className="h-5 w-5" aria-hidden />}
-              label={t('pages.store.balance')}
+              label={fromWorkspace ? t('pages.managers.workspaceBalance') : t('pages.store.balance')}
               value={
                 <>
-                  {formatNumber(balance)}{' '}
+                  {formatNumber(fromWorkspace ? (me?.workspaceBalance ?? 0) : balance)}{' '}
                   <span className="text-base font-medium text-muted-foreground">{unit}</span>
                 </>
               }
@@ -203,7 +207,7 @@ export default function StorePage()
             <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
               {filtered.map((p) =>
               {
-                  const affordable = balance >= p.price;
+                  const affordable = fromWorkspace || balance >= p.price;
                   return (
                   <div
                     key={p.id}
@@ -277,10 +281,12 @@ export default function StorePage()
                 <span className="text-muted-foreground">{t('pages.store.price')}</span>
                 <span className="font-semibold tabular-nums">{format(buying.price)}</span>
               </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted-foreground">{t('pages.store.balanceAfter')}</span>
-                <span className="tabular-nums">{format(Math.max(0, balance - buying.price))}</span>
-              </div>
+              {!fromWorkspace && (
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">{t('pages.store.balanceAfter')}</span>
+                  <span className="tabular-nums">{format(Math.max(0, balance - buying.price))}</span>
+                </div>
+              )}
             </div>
 
             <div className="flex flex-col gap-1.5">

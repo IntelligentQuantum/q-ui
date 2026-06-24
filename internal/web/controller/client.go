@@ -281,42 +281,15 @@ func (a *ClientController) create(c *gin.Context) {
 		payload.Client.Reverse = nil
 	}
 
-	// Cost system: non-admins are charged clientCost credits per client. The
-	// debit, client creation and (on failure) the refund are sequenced so a
-	// failed creation never leaves the user out of pocket and an unpaid client
-	// is never created.
-	// Cost system. A MANAGER creating a client in their own workspace draws the
-	// bandwidth cost-of-goods (the admin's per-GB rate for managers) from the
-	// WORKSPACE TREASURY — workspace capital, not their personal wallet. Everyone
-	// else (moderator/reseller/member) pays the workspace's own price from their
-	// PERSONAL balance, and that revenue accrues to the treasury. Admins are free.
+	// Cost system (PREPAID BANDWIDTH model). A non-manager (moderator) pays the
+	// workspace's selling price up front — that revenue goes to the workspace
+	// MANAGER's personal wallet (inside DebitWorkspacePurchase). A manager pays
+	// nothing up front. Then, once the config is actually created, the workspace
+	// TREASURY (the prepaid bandwidth pool) is depleted by the cost-of-goods for
+	// EVERY non-admin (manager and moderator alike). Admins are free.
 	var charged int64
 	var chargedTenant int
-	var chargedTreasury bool
-	if user.IsManager() && user.TenantId > model.GlobalTenantId {
-		base, _ := a.settingService.GetClientCostForRole(user.CanonicalRole())
-		perGB, _ := a.settingService.GetClientCostPerGBForRole(user.CanonicalRole())
-		if user.CostPerGBOverride > 0 {
-			perGB = user.CostPerGBOverride
-		}
-		cost := service.ComputeClientCost(base, perGB, payload.Client.TotalGB)
-		if cost > 0 {
-			// Allowed to run the treasury negative (a visible, reconcilable debt) so a
-			// manager is never blocked mid-provision; the bandwidth-quota gate above is
-			// the hard cap on a workspace's capacity.
-			if derr := a.treasuryService.DebitCostOfGoods(user.TenantId, cost, "client create: "+payload.Client.Email,
-				service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
-				jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
-				return
-			}
-			charged = cost
-			chargedTenant = user.TenantId
-			chargedTreasury = true
-		}
-	} else if !user.IsAdmin() {
-		// Workspace pricing: the manager sets what their workspace charges; a per-
-		// account override (>0) wins. Paid from the user's personal balance, and the
-		// cost accrues to the workspace treasury (revenue).
+	if !user.IsAdmin() && !user.IsManager() {
 		base, perGB := a.tenantSettingService.EffectiveClientCost(user.TenantId, user.CanonicalRole())
 		if user.CostPerGBOverride > 0 {
 			perGB = user.CostPerGBOverride
@@ -341,14 +314,8 @@ func (a *ClientController) create(c *gin.Context) {
 	needRestart, err := a.clientService.Create(&a.inboundService, &payload)
 	if err != nil {
 		if charged > 0 {
-			// Refund the reservation; creation never happened. Manager charges hit the
-			// treasury, everyone else the buyer wallet + treasury.
-			if chargedTreasury {
-				if refundErr := a.treasuryService.CreditTreasury(chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
-					service.TxMeta{Source: model.WsSourceRefund, Actor: user.Username}); refundErr != nil {
-					logger.Warning("failed to refund client-create treasury charge:", refundErr)
-				}
-			} else if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
+			// Creation never happened — reverse the buyer's payment (and the manager's revenue).
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (create failed): "+payload.Client.Email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund client-create charge:", refundErr)
 			}
@@ -359,6 +326,15 @@ func (a *ClientController) create(c *gin.Context) {
 		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
+	}
+	// Config created — deplete the workspace's prepaid bandwidth pool by the
+	// cost-of-goods (the admin's per-GB rate for the workspace's manager × GB).
+	// Applies to managers AND moderators; the global/admin scope has no treasury.
+	if !user.IsAdmin() && user.TenantId > model.GlobalTenantId {
+		if _, derr := a.treasuryService.DebitProvisionBandwidth(user.TenantId, payload.Client.TotalGB, "client create: "+payload.Client.Email,
+			service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
+			logger.Warning("client create: workspace bandwidth debit failed:", derr)
+		}
 	}
 	jsonMsgObj(c, I18nWeb(c, "pages.inbounds.toasts.inboundClientAddSuccess"), pendingNodeObj(a.inboundService.AnyNodePending(payload.InboundIds)), nil)
 	if needRestart {
@@ -673,32 +649,18 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	// billable action for non-admins (configured separately from client
 	// creation). Sequenced as debit -> reset -> refund-on-failure so a failed
 	// reset never leaves the owner out of pocket. Admins reset for free.
+	// Prepaid bandwidth model (mirrors client create): a non-manager pays the
+	// workspace reset price up front (→ manager's personal wallet); a manager pays
+	// nothing up front. After the reset, the workspace TREASURY is depleted by the
+	// bandwidth cost-of-goods for the re-granted quota (manager + moderator alike).
 	var charged int64
 	var chargedTenant int
-	var chargedTreasury bool
+	var quota int64
 	if user != nil && !user.IsAdmin() {
-		var quota int64
 		if ct, terr := a.inboundService.GetClientTrafficByEmail(email); terr == nil && ct != nil {
 			quota = ct.Total
 		}
-		if user.IsManager() && user.TenantId > model.GlobalTenantId {
-			// Manager: reset cost-of-goods comes out of the WORKSPACE TREASURY.
-			base, _ := a.settingService.GetResetTrafficCostForRole(user.CanonicalRole())
-			perGB, _ := a.settingService.GetResetTrafficCostPerGBForRole(user.CanonicalRole())
-			cost := service.ComputeClientCost(base, perGB, quota)
-			if cost > 0 {
-				if derr := a.treasuryService.DebitCostOfGoods(user.TenantId, cost, "reset traffic: "+email,
-					service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
-					jsonMsg(c, I18nWeb(c, "somethingWentWrong"), derr)
-					return
-				}
-				charged = cost
-				chargedTenant = user.TenantId
-				chargedTreasury = true
-			}
-		} else {
-			// moderator/reseller/member: reset cost comes out of their PERSONAL balance
-			// (at the workspace's price), accruing to the workspace treasury.
+		if !user.IsManager() {
 			base, perGB := a.tenantSettingService.EffectiveResetCost(user.TenantId, user.CanonicalRole())
 			cost := service.ComputeClientCost(base, perGB, quota)
 			if cost > 0 {
@@ -721,18 +683,20 @@ func (a *ClientController) resetTrafficByEmail(c *gin.Context) {
 	needRestart, err := a.clientService.ResetTrafficByEmail(&a.inboundService, email)
 	if err != nil {
 		if charged > 0 {
-			if chargedTreasury {
-				if refundErr := a.treasuryService.CreditTreasury(chargedTenant, charged, "refund (reset failed): "+email,
-					service.TxMeta{Source: model.WsSourceRefund, Actor: user.Username}); refundErr != nil {
-					logger.Warning("failed to refund reset-traffic treasury charge:", refundErr)
-				}
-			} else if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (reset failed): "+email,
+			if refundErr := a.walletService.RefundWorkspacePurchase(user.Id, chargedTenant, charged, "refund (reset failed): "+email,
 				service.TxMeta{Source: model.TxSourceRefund}); refundErr != nil {
 				logger.Warning("failed to refund reset-traffic charge:", refundErr)
 			}
 		}
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
+	}
+	// Reset re-grants the quota — deplete the workspace's prepaid bandwidth pool.
+	if user != nil && !user.IsAdmin() && user.TenantId > model.GlobalTenantId {
+		if _, derr := a.treasuryService.DebitProvisionBandwidth(user.TenantId, quota, "reset traffic: "+email,
+			service.TxMeta{Source: model.WsSourceQuotaBuy, Actor: user.Username}); derr != nil {
+			logger.Warning("reset traffic: workspace bandwidth debit failed:", derr)
+		}
 	}
 	jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.resetInboundClientTrafficSuccess"), nil)
 	if needRestart {

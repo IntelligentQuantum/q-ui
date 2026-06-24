@@ -230,3 +230,43 @@ func (s *WorkspaceWalletService) ListTransactions(tenantID, limit, offset int) (
 	}
 	return rows, nil
 }
+
+// tenantBandwidthCost returns the bandwidth cost-of-goods (credits) for
+// provisioning trafficBytes in a workspace: the admin's per-GB rate for that
+// workspace's MANAGER (plus the manager's per-account override) × GB. 0 for the
+// global tenant or an unresolvable manager. This is what the manager owes the
+// admin for bandwidth — distinct from the workspace's own selling price.
+func tenantBandwidthCost(tenantID int, trafficBytes int64) int64 {
+	if tenantID <= model.GlobalTenantId {
+		return 0
+	}
+	var t model.Tenant
+	if err := database.GetDB().Select("manager_user_id").Where("id = ?", tenantID).First(&t).Error; err != nil {
+		return 0
+	}
+	var mgr model.User
+	if err := database.GetDB().Select("role, cost_per_gb_override").Where("id = ?", t.ManagerUserId).First(&mgr).Error; err != nil {
+		return 0
+	}
+	perGB, _ := (&SettingService{}).GetClientCostPerGBForRole(mgr.CanonicalRole())
+	if mgr.CostPerGBOverride > 0 {
+		perGB = mgr.CostPerGBOverride
+	}
+	return ComputeClientCost(0, perGB, trafficBytes)
+}
+
+// DebitProvisionBandwidth depletes a workspace's prepaid bandwidth pool by the
+// cost-of-goods for trafficBytes (see tenantBandwidthCost). Called on every
+// provision (store sale, direct client create, traffic reset). No-op for the
+// global tenant or a zero cost. Allowed to run the treasury negative (a visible,
+// reconcilable debt). Returns the amount debited so a caller can refund it.
+func (s *WorkspaceWalletService) DebitProvisionBandwidth(tenantID int, trafficBytes int64, desc string, meta TxMeta) (int64, error) {
+	cost := tenantBandwidthCost(tenantID, trafficBytes)
+	if cost <= 0 {
+		return 0, nil
+	}
+	if err := s.DebitCostOfGoods(tenantID, cost, desc, meta); err != nil {
+		return 0, err
+	}
+	return cost, nil
+}

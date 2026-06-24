@@ -744,8 +744,14 @@ export default function ClientFormModal({
             return null;
         }
         const cost = base + (perGB > 0 && form.totalGB > 0 ? Math.round(form.totalGB * perGB) : 0);
-        const after = (me.balance || 0) - cost;
-        return { cost, after, insufficient: after < 0 };
+        // A manager draws the cost-of-goods from the WORKSPACE pool (which may run a
+        // reconcilable deficit) — NOT their personal wallet — so preview against the
+        // workspace balance and never flag "insufficient". Everyone else pays from
+        // their own balance and IS blocked server-side when short.
+        const fromWorkspace = !!me.isManager;
+        const bal = fromWorkspace ? (me.workspaceBalance || 0) : (me.balance || 0);
+        const after = bal - cost;
+        return { cost, after, insufficient: !fromWorkspace && after < 0 };
     })();
 
     return (

@@ -160,6 +160,7 @@ const (
 	TxSourceGateway       = "gateway"
 	TxSourceCrypto        = "crypto"
 	TxSourcePurchase      = "purchase"
+	TxSourceSale          = "sale" // revenue credited to a workspace manager's personal wallet
 	TxSourceRenewal       = "renewal"
 	TxSourceRefund        = "refund"
 	TxSourceReferral      = "referral_commission"

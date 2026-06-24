@@ -71,7 +71,17 @@ func (s *ClientService) BackfillVisionFlow(inboundSvc *InboundService) (bool, er
 		}
 		updated := *rec.ToClient()
 		updated.Flow = visionFlow
-		nr, uErr := s.UpdateByEmail(inboundSvc, email, updated)
+		// Retry on a transient Postgres deadlock (40P01): the per-config update
+		// contends with the traffic writer / xray-stats sweeps that run right after
+		// startup. A short bounded retry clears it without skipping the config.
+		var nr bool
+		var uErr error
+		for attempt := 0; attempt < 4; attempt++ {
+			nr, uErr = s.UpdateByEmail(inboundSvc, email, updated)
+			if uErr == nil || !strings.Contains(strings.ToLower(uErr.Error()), "deadlock") {
+				break
+			}
+		}
 		if uErr != nil {
 			logger.Warning("vision backfill: update", email, "failed:", uErr)
 			continue

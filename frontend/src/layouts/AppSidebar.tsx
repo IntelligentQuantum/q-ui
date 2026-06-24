@@ -508,6 +508,38 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         {
             return null;
         }
+        const base = cn(
+            'flex items-center gap-2 rounded-md border border-accent-subtle bg-accent-subtle/60 text-[13px] font-medium text-muted-foreground',
+            iconOnly ? 'justify-center px-0 py-2' : 'px-3 py-2'
+        );
+        // Managers see TWO balances: the workspace pool (prepaid bandwidth the admin
+        // funds, depleted by cost-of-goods) and their personal wallet (sales revenue
+        // / profit). Both are read-only here.
+        if (me.isManager)
+        {
+            const rows = [
+                { label: t('pages.managers.workspaceBalance'), val: formatMoney(me.workspaceBalance) },
+                { label: t('balance'), val: formatMoney(me.balance) }
+            ];
+            if (iconOnly)
+            {
+                return (
+            <div className={base} title={rows.map((r) => `${ r.label }: ${ r.val }`).join(' · ')}>
+              <Wallet className="h-4 w-4 flex-shrink-0 text-accent" />
+            </div>
+                );
+            }
+            return (
+          <div className={cn(base, 'flex-col items-start gap-1')}>
+            {rows.map((r) => (
+              <span key={r.label} className="flex w-full min-w-0 items-center gap-2 truncate">
+                <Wallet className="h-3.5 w-3.5 flex-shrink-0 text-accent" />
+                <span className="truncate">{r.label}: <strong className="font-semibold text-foreground">{r.val}</strong></span>
+              </span>
+            ))}
+          </div>
+            );
+        }
         const inner = (
         <>
           <Wallet className="h-4 w-4 flex-shrink-0 text-accent" />
@@ -517,10 +549,6 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
             </span>
           )}
         </>
-        );
-        const base = cn(
-            'flex items-center gap-2 rounded-md border border-accent-subtle bg-accent-subtle/60 text-[13px] font-medium text-muted-foreground',
-            iconOnly ? 'justify-center px-0 py-2' : 'px-3 py-2'
         );
         if (!canTopUp)
         {

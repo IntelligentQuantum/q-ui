@@ -133,11 +133,14 @@ func (s *OrderService) Purchase(buyer *model.User, productId int, name string, v
 		return nil, ErrProductMisconfigured
 	}
 
+	// A manager buying from their OWN store provisions from the workspace pool —
+	// the cost-of-goods debit below depletes the treasury — so they are NOT charged
+	// the product price personally. A customer/reseller pays the price from their
+	// own balance, and that revenue accrues to the manager's PERSONAL wallet.
+	ownerManager := buyer.IsManager() && buyer.TenantId == view.TenantID
 	var charged int64
 	var chargedTenant int
-	if product.Price > 0 {
-		// Sale revenue accrues to the storefront workspace's treasury (not the
-		// manager's personal wallet); the buyer pays from their account balance.
+	if product.Price > 0 && !ownerManager {
 		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("purchase: %s (#%d)", product.Name, product.Id),
 			TxMeta{Source: model.TxSourcePurchase, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username})
@@ -231,9 +234,12 @@ func (s *OrderService) Renew(buyer *model.User, productId int, email string, vie
 		return nil, ErrServiceForbidden
 	}
 
+	// Same rule as Purchase: a manager renewing in their OWN store draws only the
+	// cost-of-goods from the treasury (below), not the price from their wallet.
+	ownerManager := buyer.IsManager() && buyer.TenantId == view.TenantID
 	var charged int64
 	var chargedTenant int
-	if product.Price > 0 {
+	if product.Price > 0 && !ownerManager {
 		mid, derr := s.walletService.DebitWorkspacePurchase(buyer, view.TenantID, product.Price,
 			fmt.Sprintf("renew: %s (#%d)", product.Name, product.Id),
 			TxMeta{Source: model.TxSourceRenewal, RefId: fmt.Sprintf("%d", product.Id), Actor: buyer.Username})
@@ -408,26 +414,10 @@ func (s *OrderService) chargeManagerCostOfGoods(sellerTenantID int, trafficLimit
 	if sellerTenantID <= model.GlobalTenantId {
 		return
 	}
-	var t model.Tenant
-	if err := database.GetDB().Select("manager_user_id").Where("id = ?", sellerTenantID).First(&t).Error; err != nil {
-		return
-	}
-	mgr := model.User{}
-	if err := database.GetDB().Select("role, cost_per_gb_override").Where("id = ?", t.ManagerUserId).First(&mgr).Error; err != nil {
-		return
-	}
-	perGB, _ := s.settingService.GetClientCostPerGBForRole(mgr.CanonicalRole())
-	if mgr.CostPerGBOverride > 0 {
-		perGB = mgr.CostPerGBOverride
-	}
-	cost := ComputeClientCost(0, perGB, trafficLimit)
-	if cost <= 0 {
-		return
-	}
-	if err := (&WorkspaceWalletService{}).DebitCostOfGoods(sellerTenantID, cost,
+	if _, err := (&WorkspaceWalletService{}).DebitProvisionBandwidth(sellerTenantID, trafficLimit,
 		fmt.Sprintf("cost of goods: %s (#%d)", productName, productId),
 		TxMeta{Source: model.WsSourceQuotaBuy, RefId: fmt.Sprintf("%d", productId), Actor: "system"}); err != nil {
-		logger.Errorf("order: cost-of-goods debit %d for tenant %d (product %d) failed (manual reconciliation): %v", cost, sellerTenantID, productId, err)
+		logger.Errorf("order: cost-of-goods debit for tenant %d (product %d) failed (manual reconciliation): %v", sellerTenantID, productId, err)
 	}
 }
 
