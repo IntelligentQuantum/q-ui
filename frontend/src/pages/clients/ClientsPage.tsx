@@ -866,7 +866,11 @@ export default function ClientsPage()
             }
         ];
 
-        if (isAdmin)
+        // Owner column for staff who see MORE than their own configs: admins (every
+        // config) and managers (their whole workspace). It tells them who created /
+        // owns each config. Regular resellers/members see only their own, so it's
+        // redundant for them.
+        if (isAdmin || me?.isManager)
         {
             cols.push({
                 key: 'owner',

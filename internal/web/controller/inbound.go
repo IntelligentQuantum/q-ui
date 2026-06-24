@@ -140,7 +140,9 @@ func (a *InboundController) getInboundsSlim(c *gin.Context) {
 // caller's own user_id is always wrong here (it returns nothing for a second
 // admin / for any user who created no inbounds).
 func (a *InboundController) getInboundOptions(c *gin.Context) {
-	options, err := a.inboundService.GetAllInboundOptions()
+	// Filter by the caller: admins see every inbound; a manager/moderator only sees
+	// the inbounds assigned to their workspace / to them (empty assignment = all).
+	options, err := a.inboundService.GetVisibleInboundOptions(session.GetLoginUser(c))
 	if err != nil {
 		jsonMsg(c, I18nWeb(c, "pages.inbounds.toasts.obtain"), err)
 		return

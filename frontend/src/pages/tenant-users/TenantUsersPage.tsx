@@ -20,6 +20,7 @@ import {
     Input,
     Label,
     Modal,
+    MultiSelect,
     PasswordInput,
     Select,
     Spinner,
@@ -41,6 +42,7 @@ interface TenantUser {
   email: string;
   balance: number;
   costPerGbOverride: number;
+  allowedInbounds?: number[];
 }
 
 interface UserFormValues {
@@ -51,6 +53,7 @@ interface UserFormValues {
   email?: string;
   role: string;
   costPerGbOverride?: number;
+  allowedInbounds?: number[];
 }
 
 const ROLE_BADGE: Record<string, BadgeVariant> = { moderator: 'warning', reseller: 'neutral', member: 'success' };
@@ -122,6 +125,22 @@ export default function TenantUsersPage()
     const watchRole = watch('role');
     const watchPerGb = Number(watch('costPerGbOverride')) || 0;
 
+    // Inbound picker for moderators: the options are this workspace's inbounds
+    // (the /options endpoint is already filtered to what the manager may use), so a
+    // manager can only grant a moderator inbounds the manager themselves can see.
+    const inboundsQuery = useQuery({
+        queryKey: ['inbounds', 'options'],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get('/panel/api/inbounds/options', undefined, { silent: true });
+            return (msg?.obj as { id: number; remark: string; protocol: string; port: number }[] | null) ?? [];
+        }
+    });
+    const inboundOptions = useMemo(
+        () => (inboundsQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${ i.remark } (${ i.protocol }@${ i.port })` })),
+        [inboundsQuery.data]
+    );
+
     const saveMut = useMutation({
         mutationFn: (values: UserFormValues) =>
         {
@@ -142,13 +161,13 @@ export default function TenantUsersPage()
     function openCreate()
     {
         setEditing(null);
-        reset({ username: '', password: '', fullName: '', phone: '', email: '', role: 'member', costPerGbOverride: 0 });
+        reset({ username: '', password: '', fullName: '', phone: '', email: '', role: 'member', costPerGbOverride: 0, allowedInbounds: [] });
         setModalOpen(true);
     }
     function openEdit(row: TenantUser)
     {
         setEditing(row);
-        reset({ username: row.username, password: '', fullName: row.fullName, phone: row.phone, email: row.email, role: normalizeRole(row.role), costPerGbOverride: row.costPerGbOverride });
+        reset({ username: row.username, password: '', fullName: row.fullName, phone: row.phone, email: row.email, role: normalizeRole(row.role), costPerGbOverride: row.costPerGbOverride, allowedInbounds: row.allowedInbounds ?? [] });
         setModalOpen(true);
     }
     const submit = handleSubmit((values) => saveMut.mutateAsync(values));
@@ -327,6 +346,22 @@ export default function TenantUsersPage()
               </span>
             )}
           </Field>
+          {watchRole === 'moderator' && (
+            <Field label={t('pages.tenantUsers.allowedInbounds')} htmlFor="tu-inbounds">
+              <Controller
+                control={control}
+                name="allowedInbounds"
+                render={({ field }) => (
+                  <MultiSelect
+                    value={(field.value ?? []).map(String)}
+                    onChange={(vals) => field.onChange(vals.map(Number))}
+                    options={inboundOptions}
+                  />
+                )}
+              />
+              <span className="text-xs text-muted-foreground">{t('pages.tenantUsers.allowedInboundsHint')}</span>
+            </Field>
+          )}
         </form>
       </Modal>
 

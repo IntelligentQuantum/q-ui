@@ -81,11 +81,13 @@ var rolePermissions = map[string]map[Permission]bool{
 	// absent. The manager funds the moderator's balance (BalanceManage on the
 	// manager side); the moderator only views its own.
 	RoleModerator: {
-		PermClientManage:   true,
-		PermBalanceViewOwn: true,
-		PermOrderViewOwn:   true, // see own created services/orders
-		PermTicketCreate:   true,
-		PermTicketViewOwn:  true,
+		PermClientManage:    true,
+		PermProductView:     true, // browse the store
+		PermProductPurchase: true, // buy from the store (paid from own balance)
+		PermBalanceViewOwn:  true,
+		PermOrderViewOwn:    true, // see own created services/orders
+		PermTicketCreate:    true,
+		PermTicketViewOwn:   true,
 	},
 	RoleReseller: {
 		PermProductView:     true,

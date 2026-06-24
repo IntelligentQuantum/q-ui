@@ -302,6 +302,13 @@
     "copyAllConfigsCopied": "All configs copied"
   },
   "menu": {
+    "sections": {
+      "manage": "Manage",
+      "commerce": "Commerce",
+      "admin": "Administration",
+      "support": "Support",
+      "account": "Account"
+    },
     "theme": "Theme",
     "dark": "Dark",
     "ultraDark": "Ultra Dark",
@@ -2693,6 +2700,9 @@
       "quotaGb": "Quota (GB)",
       "quotaHint": "Set 0 for unlimited bandwidth.",
       "bandwidthTitle": "Allocate bandwidth — {name}",
+      "allowedInbounds": "Allowed inbounds",
+      "allowedInboundsHint": "Which inbounds this workspace may create clients on. Leave empty to allow all inbounds. The manager can further restrict each moderator.",
+      "inboundsTitle": "Allowed inbounds — {name}",
       "apiKeyTitle": "API Key",
       "apiKeyHint": "Copy this key now — it is shown only once and cannot be retrieved later.",
       "rotateConfirmTitle": "Rotate API key for {name}?",
@@ -2705,6 +2715,7 @@
         "slugTaken": "That slug is already in use",
         "notFound": "Workspace not found",
         "bandwidthUpdated": "Bandwidth updated",
+        "inboundsUpdated": "Allowed inbounds updated",
         "statusUpdated": "Status updated",
         "deleted": "Workspace deleted",
         "domainUpdated": "Domain updated",
@@ -2755,6 +2766,8 @@
       }
     },
     "tenantUsers": {
+      "allowedInbounds": "Allowed inbounds",
+      "allowedInboundsHint": "Which inbounds this moderator may create clients on. Leave empty to allow all the inbounds available to your workspace.",
       "toasts": {
         "forbidden": "That user is outside your workspace",
         "roleForbidden": "You can only manage member and reseller accounts"

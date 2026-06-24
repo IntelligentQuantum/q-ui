@@ -44,11 +44,9 @@ function canAccess(me: MeInfo, path: string): boolean
         case '/products':
             return has('product.manage'); // admin + manager
         case '/store':
-            // Managers CAN reach the store when browsing the admin/another workspace's
-            // storefront (to resell its products). The sidebar hides the item on their
-            // OWN workspace; hard-blocking the route here stranded a manager on a blank
-            // page after clicking "Original panel" (which lands on /store).
-            return has('product.purchase');
+            // Every role can browse the store (buying is gated separately by
+            // product.purchase on the backend).
+            return has('product.view');
         case '/billing':
         case '/manual-deposit':
             return has('product.purchase'); // admin, reseller, member

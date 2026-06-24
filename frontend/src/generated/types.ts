@@ -476,6 +476,7 @@ export interface Setting {
 }
 
 export interface User {
+  allowedInbounds: number[];
   balance: number;
   costPerGbOverride: number;
   createdAt: number;

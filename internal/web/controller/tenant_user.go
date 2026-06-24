@@ -60,6 +60,7 @@ func (a *TenantUserController) create(c *gin.Context) {
 		Role:              form.Role,
 		Balance:           form.Balance,
 		CostPerGBOverride: form.CostPerGbOverride,
+		AllowedInbounds:   form.AllowedInbounds,
 	}, tenant.ScopeFrom(c))
 	if err != nil {
 		if msg := tenantUserErrorMessage(c, err); msg != "" {
@@ -91,6 +92,7 @@ func (a *TenantUserController) update(c *gin.Context) {
 		Email:             form.Email,
 		Role:              form.Role,
 		CostPerGBOverride: form.CostPerGbOverride,
+		AllowedInbounds:   form.AllowedInbounds,
 	}, tenant.ScopeFrom(c))
 	if err != nil {
 		if msg := tenantUserErrorMessage(c, err); msg != "" {

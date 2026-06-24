@@ -46,13 +46,17 @@ type User struct {
 	// TenantId is the workspace this user belongs to. 0 = the global/admin scope
 	// (the original single-tenant world); a Manager and all their sub-users carry
 	// their tenant's id. See model.Tenant.
-	TenantId          int    `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
-	Balance           int64  `json:"balance" gorm:"default:0"`
-	CostPerGBOverride int    `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
-	ReferralCode      string `json:"referralCode" gorm:"column:referral_code;default:'';index"`
-	ReferralEnabled   bool   `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
-	ReferredByUserId  int    `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
-	LoginEpoch        int64  `json:"-" gorm:"default:0"`
+	TenantId          int   `json:"tenantId" gorm:"column:tenant_id;index;default:0"`
+	Balance           int64 `json:"balance" gorm:"default:0"`
+	CostPerGBOverride int   `json:"costPerGbOverride" gorm:"column:cost_per_gb_override;default:0"`
+	// AllowedInbounds restricts which inbounds this user may attach clients to when
+	// creating configs (empty = inherit the workspace's set / see all). A manager
+	// sets it per moderator; the workspace-wide set is stored per tenant.
+	AllowedInbounds  IntList `json:"allowedInbounds" gorm:"column:allowed_inbounds;type:text"`
+	ReferralCode     string  `json:"referralCode" gorm:"column:referral_code;default:'';index"`
+	ReferralEnabled  bool    `json:"referralEnabled" gorm:"column:referral_enabled;default:1"`
+	ReferredByUserId int     `json:"referredByUserId" gorm:"column:referred_by_user_id;default:0;index"`
+	LoginEpoch       int64   `json:"-" gorm:"default:0"`
 	// CreatedAt is the registration timestamp (ms). Backfilled to 0 for accounts
 	// that predate this column; set automatically on new signups.
 	CreatedAt int64 `json:"createdAt" gorm:"autoCreateTime:milli"`

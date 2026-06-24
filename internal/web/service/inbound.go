@@ -353,6 +353,70 @@ func (s *InboundService) inboundOptions(userId *int) ([]InboundOption, error) {
 	return out, nil
 }
 
+// GetVisibleInboundOptions returns the inbound options a user may pick when
+// creating clients. Admins see all. A non-admin is filtered by the effective
+// allow-list (allowedInboundSet): a manager by their workspace's assigned set, a
+// moderator by their own assigned subset. Unrestricted at every level → see all
+// (the opt-in default), so nothing changes until someone assigns a subset.
+func (s *InboundService) GetVisibleInboundOptions(user *model.User) ([]InboundOption, error) {
+	all, err := s.GetAllInboundOptions()
+	if err != nil {
+		return nil, err
+	}
+	if user == nil || user.IsAdmin() {
+		return all, nil
+	}
+	allowed := allowedInboundSet(user)
+	if allowed == nil {
+		return all, nil
+	}
+	out := make([]InboundOption, 0, len(all))
+	for _, o := range all {
+		if allowed[o.Id] {
+			out = append(out, o)
+		}
+	}
+	return out, nil
+}
+
+// allowedInboundSet resolves the effective inbound allow-list for a non-admin
+// user, or nil when unrestricted (see all). The moderator's own set is intersected
+// with the workspace set; an empty moderator set inherits the workspace set; an
+// empty workspace set means unrestricted.
+func allowedInboundSet(user *model.User) map[int]bool {
+	tenantSet := (&TenantSettingService{}).GetAllowedInbounds(user.TenantId)
+	eff := []int(user.AllowedInbounds)
+	if len(eff) > 0 {
+		if len(tenantSet) > 0 {
+			eff = intersectInts(eff, tenantSet)
+		}
+	} else {
+		eff = tenantSet
+	}
+	if len(eff) == 0 {
+		return nil
+	}
+	set := make(map[int]bool, len(eff))
+	for _, id := range eff {
+		set[id] = true
+	}
+	return set
+}
+
+func intersectInts(a, b []int) []int {
+	bs := make(map[int]bool, len(b))
+	for _, x := range b {
+		bs[x] = true
+	}
+	out := make([]int, 0, len(a))
+	for _, x := range a {
+		if bs[x] {
+			out = append(out, x)
+		}
+	}
+	return out
+}
+
 // GetAllInbounds retrieves all inbounds with client stats.
 func (s *InboundService) GetAllInbounds() ([]*model.Inbound, error) {
 	db := database.GetDB()

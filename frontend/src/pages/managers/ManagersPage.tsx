@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { ReactNode } from 'react';
 import { useTranslation } from 'react-i18next';
-import { Building2, Eye, Gauge, Globe, KeyRound, LogIn, Pause, Play, Plus, Trash2, Users, Wallet } from 'lucide-react';
+import { Building2, Eye, Gauge, Globe, KeyRound, LogIn, Network, Pause, Play, Plus, Trash2, Users, Wallet } from 'lucide-react';
 import { useForm } from 'react-hook-form';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
@@ -20,6 +20,7 @@ import {
     Input,
     Label,
     Modal,
+    MultiSelect,
     PasswordInput,
     Spinner,
     StatCard,
@@ -187,6 +188,40 @@ export default function ManagersPage()
         setBwGb(String(Math.round((row.tenant.bandwidthQuotaBytes / GB) * 100) / 100));
     }
 
+    // ---- allowed inbounds (which inbounds this workspace may create clients on) ----
+    const [inboundTarget, setInboundTarget] = useState<ManagerRow | null>(null);
+    const [selectedInbounds, setSelectedInbounds] = useState<string[]>([]);
+    const allInboundsQuery = useQuery({
+        queryKey: ['inbounds', 'options'],
+        queryFn: async () =>
+        {
+            const msg = await HttpUtil.get('/panel/api/inbounds/options', undefined, { silent: true });
+            return (msg?.obj as { id: number; remark: string; protocol: string; port: number }[] | null) ?? [];
+        }
+    });
+    const inboundOpts = useMemo(
+        () => (allInboundsQuery.data ?? []).map((i) => ({ value: String(i.id), label: `${ i.remark } (${ i.protocol }@${ i.port })` })),
+        [allInboundsQuery.data]
+    );
+    const inboundMut = useMutation({
+        mutationFn: () => HttpUtil.post(`/panel/api/admin/managers/${ inboundTarget!.tenant.id }/inbounds`, { allowedInbounds: selectedInbounds.map(Number) }, JSON_HEADERS),
+        onSuccess: (msg) =>
+        {
+            if (msg?.success)
+            {
+                setInboundTarget(null);
+                messageApi.success(t('pages.managers.toasts.inboundsUpdated'));
+            }
+        }
+    });
+    async function openInbounds(row: ManagerRow)
+    {
+        const msg = await HttpUtil.get(`/panel/api/admin/managers/${ row.tenant.id }/inbounds`, undefined, { silent: true });
+        const ids = (msg?.obj as { allowedInbounds?: number[] } | null)?.allowedInbounds ?? [];
+        setSelectedInbounds(ids.map(String));
+        setInboundTarget(row);
+    }
+
     // ---- custom domain ----
     const [domainTarget, setDomainTarget] = useState<ManagerRow | null>(null);
     const [domainValue, setDomainValue] = useState('');
@@ -352,6 +387,11 @@ export default function ManagersPage()
               <Gauge className="h-4 w-4" aria-hidden />
             </Button>
           </Tooltip>
+          <Tooltip content={t('pages.managers.allowedInbounds')}>
+            <Button variant="ghost" size="icon" onClick={() => openInbounds(row)}>
+              <Network className="h-4 w-4" aria-hidden />
+            </Button>
+          </Tooltip>
           <Tooltip content={t('pages.managers.setDomain')}>
             <Button variant="ghost" size="icon" onClick={() => openDomain(row)}>
               <Globe className="h-4 w-4" aria-hidden />
@@ -513,6 +553,23 @@ export default function ManagersPage()
         >
           <Field label={t('pages.managers.quotaGb')} htmlFor="m-bw" hint={t('pages.managers.quotaHint')}>
             <Input id="m-bw" type="number" min={0} value={bwGb} onChange={(e) => setBwGb(e.target.value)} />
+          </Field>
+        </Modal>
+
+        {/* Allowed inbounds — which inbounds this workspace may create clients on */}
+        <Modal
+          open={!!inboundTarget}
+          onClose={() => setInboundTarget(null)}
+          title={inboundTarget ? t('pages.managers.inboundsTitle', { name: inboundTarget.tenant.slug }) : ''}
+          footer={
+            <>
+              <Button variant="secondary" onClick={() => setInboundTarget(null)}>{t('cancel')}</Button>
+              <Button onClick={() => inboundMut.mutateAsync()} loading={inboundMut.isPending}>{t('confirm')}</Button>
+            </>
+          }
+        >
+          <Field label={t('pages.managers.allowedInbounds')} htmlFor="m-inbounds" hint={t('pages.managers.allowedInboundsHint')}>
+            <MultiSelect value={selectedInbounds} onChange={setSelectedInbounds} options={inboundOpts} />
           </Field>
         </Modal>
 

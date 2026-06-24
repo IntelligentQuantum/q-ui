@@ -334,6 +334,9 @@ type AdminUserInput struct {
 	Role              string
 	Balance           int64
 	CostPerGBOverride int // per-GB price override; 0 = use role default
+	// AllowedInbounds restricts which inbounds the user may attach clients to
+	// (empty = inherit the workspace's set). A manager sets it per moderator.
+	AllowedInbounds []int
 	// TenantID is the workspace the account belongs to (0 = admin panel). Used to
 	// stamp the account and scope per-workspace username/email uniqueness.
 	TenantID int
@@ -444,6 +447,7 @@ func (s *UserService) adminCreateUserTx(tx *gorm.DB, in AdminUserInput) (*model.
 		Role:              normalizeRole(in.Role),
 		Balance:           balance,
 		CostPerGBOverride: override,
+		AllowedInbounds:   model.IntList(in.AllowedInbounds),
 		TenantId:          in.TenantID, // the workspace the account belongs to (0 = admin panel)
 	}
 	var count int64
@@ -497,6 +501,7 @@ func (s *UserService) AdminUpdateUser(id int, in AdminUserInput) (*model.User, e
 		"email":                email,
 		"role":                 newRole,
 		"cost_per_gb_override": override,
+		"allowed_inbounds":     model.IntList(in.AllowedInbounds),
 	}
 	if strings.TrimSpace(in.Password) != "" {
 		if err := ValidatePasswordStrength(in.Password); err != nil {

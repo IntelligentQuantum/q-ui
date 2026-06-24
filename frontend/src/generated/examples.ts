@@ -467,6 +467,9 @@ export const EXAMPLES: Record<string, unknown> = {
     "value": ""
   },
   "User": {
+    "allowedInbounds": [
+      0
+    ],
     "balance": 0,
     "costPerGbOverride": 0,
     "createdAt": 0,

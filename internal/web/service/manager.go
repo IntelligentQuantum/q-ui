@@ -222,6 +222,19 @@ func (s *ManagerService) SuspendWorkspaceForUser(userID int) error {
 		Update("status", model.TenantSuspended).Error
 }
 
+// GetAllowedInbounds returns the inbound ids the admin assigned to a workspace
+// (nil = no restriction / all inbounds). tenantID is the workspace id — the same
+// id the Managers page passes for bandwidth/domain/etc.
+func (s *ManagerService) GetAllowedInbounds(tenantID int) []int {
+	return (&TenantSettingService{}).GetAllowedInbounds(tenantID)
+}
+
+// SetAllowedInbounds stores the inbound ids a workspace may use (empty clears the
+// restriction → all inbounds).
+func (s *ManagerService) SetAllowedInbounds(tenantID int, ids []int) error {
+	return (&TenantSettingService{}).SetAllowedInbounds(tenantID, ids)
+}
+
 // deriveSlug turns a username into a slug candidate: lowercase, non-alphanumerics
 // to single hyphens, trimmed, padded/clamped to the 3–32 length the slug pattern
 // requires.

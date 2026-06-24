@@ -37,6 +37,10 @@ func NewManagerController(g *gin.RouterGroup) *ManagerController {
 	grp.POST("/:id/bandwidth", a.allocateBandwidth)
 	grp.POST("/:id/domain", a.setDomain)
 	grp.POST("/:id/rotate-key", a.rotateKey)
+	// Which inbounds this manager's workspace may use when creating clients
+	// (empty = all). The manager further restricts per-moderator on their side.
+	grp.GET("/:id/inbounds", a.getInbounds)
+	grp.POST("/:id/inbounds", a.setInbounds)
 	grp.POST("/:id/del", a.del)
 	return a
 }
@@ -234,6 +238,36 @@ func (a *ManagerController) allocateBandwidth(c *gin.Context) {
 			pureJsonMsg(c, http.StatusOK, false, msg)
 			return
 		}
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	jsonMsg(c, I18nWeb(c, "success"), nil)
+}
+
+func (a *ManagerController) getInbounds(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	ids := a.managerService.GetAllowedInbounds(id)
+	jsonObj(c, gin.H{"allowedInbounds": ids}, nil)
+}
+
+func (a *ManagerController) setInbounds(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	var form struct {
+		AllowedInbounds []int `json:"allowedInbounds"`
+	}
+	if err := c.ShouldBindJSON(&form); err != nil {
+		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
+		return
+	}
+	if err := a.managerService.SetAllowedInbounds(id, form.AllowedInbounds); err != nil {
 		jsonMsg(c, I18nWeb(c, "somethingWentWrong"), err)
 		return
 	}

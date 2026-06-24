@@ -208,6 +208,11 @@ func identType(name string) TypeRef {
 		return TypeRef{Kind: KindInt}
 	case "any":
 		return TypeRef{Kind: KindAny}
+	case "IntList":
+		// Domain alias `type IntList []int` (comma-separated in the DB, a JSON array
+		// on the wire). Inline as int[] so it needs no separate named schema.
+		elem := TypeRef{Kind: KindInt}
+		return TypeRef{Kind: KindArray, Element: &elem}
 	default:
 		return TypeRef{Kind: KindRef, Name: name}
 	}

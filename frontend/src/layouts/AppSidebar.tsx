@@ -119,6 +119,33 @@ interface SubItem {
   label: ReactNode;
 }
 
+// Sidebar sections, in display order. Each nav item maps to one (sectionOf); the
+// renderer groups items under a small labelled header so every role's menu reads
+// as logical clusters (Manage / Commerce / Administration / Support / Account)
+// instead of one long flat list. The "main" section (dashboard + cross-store
+// shortcuts) has no header. Empty sections are skipped per role.
+const SECTION_ORDER = ['main', 'manage', 'commerce', 'admin', 'support', 'account'] as const;
+type SectionKey = (typeof SECTION_ORDER)[number];
+
+function sectionOf(key: string): SectionKey
+{
+    switch (key)
+    {
+        case '/inbounds': case '/clients': case '/groups': case '/nodes': case '/products':
+            return 'manage';
+        case '/store': case '/services': case '/orders': case '/customers': case '/referral': case '/admin-referrals': case '/manual-deposits':
+            return 'commerce';
+        case '/users': case '/managers': case '/tenant-users': case '/workspace-settings': case '/workspace-payments': case '/finance': case '/settings': case '/xray': case '/api-docs':
+            return 'admin';
+        case '/support': case '/tickets':
+            return 'support';
+        case '/billing': case '/manual-deposit': case '/profile':
+            return 'account';
+        default:
+            return 'main';
+    }
+}
+
 function readCollapsed(): boolean
 {
     try
@@ -250,7 +277,9 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         // Hide the storefront from a manager only on their OWN workspace (their own
         // products live on the Products page). When browsing the admin/another store
         // they DO see it, so they can resell those products with their own balance.
-        push(has('product.purchase') && !realAdmin && !(me?.isManager && onOwnStore), '/store', 'store', 'menu.store');
+        // Store is visible to EVERY role (browse + buy). Managers/admins see it on
+        // their own storefront too; buyers browsing a foreign store still see it.
+        push(has('product.view'), '/store', 'store', 'menu.store');
         push(has('product.purchase') && !realAdmin, '/services', 'services', 'menu.services');
         push(has('order.view_own'), '/orders', 'orders', 'menu.orders');         // own orders / oversight
         push(Boolean(me?.isReseller) && onOwnStore, '/customers', 'team', 'menu.customers'); // reseller — referred customers
@@ -497,6 +526,32 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
         );
     }), [childOf, selectedKey, logicalPath, openKeys, toggleSubmenu, openLink]);
 
+    // Renders nav items grouped into labelled sections (see SECTION_ORDER). When
+    // collapsed (iconOnly) a thin divider stands in for the text header so the icon
+    // rail still reads as clusters. Empty sections produce nothing.
+    const renderGrouped = useCallback((
+        items: NavTab[],
+        opts: { expandable: boolean; iconOnly: boolean; onNavigate?: () => void }
+    ): ReactNode[] => SECTION_ORDER.flatMap((sec) =>
+    {
+        const secItems = items.filter((it) => sectionOf(it.key) === sec);
+        if (secItems.length === 0)
+        {
+            return [] as ReactNode[];
+        }
+        const out: ReactNode[] = [];
+        if (sec !== 'main')
+        {
+            out.push(
+                opts.iconOnly
+                    ? <li key={`sec-${ sec }`} aria-hidden="true" className="mx-2 my-2 border-t border-border/60" />
+                    : <li key={`sec-${ sec }`} className="px-3 pb-1 pt-4 text-[11px] font-semibold uppercase tracking-wider text-muted-foreground/60">{t(`menu.sections.${ sec }`)}</li>
+            );
+        }
+        out.push(...renderItems(secItems, opts));
+        return out;
+    }), [renderItems, t]);
+
     // Buyers (admin/reseller/member) can top up; for them the balance chip is a
     // button that jumps straight to the deposit page — the primary money action,
     // one click from anywhere. Non-buyers (moderator) get the static chip.
@@ -603,7 +658,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
 
         <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
           <ul className="space-y-0.5">
-            {renderItems(navItems, { expandable: true, iconOnly: collapsed })}
+            {renderGrouped(navItems, { expandable: true, iconOnly: collapsed })}
           </ul>
         </nav>
 
@@ -661,7 +716,7 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
 
             <nav className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden p-2">
               <ul className="space-y-0.5">
-                {renderItems(navItems, { expandable: true, iconOnly: false, onNavigate: () => setDrawerOpen(false) })}
+                {renderGrouped(navItems, { expandable: true, iconOnly: false, onNavigate: () => setDrawerOpen(false) })}
               </ul>
             </nav>
 

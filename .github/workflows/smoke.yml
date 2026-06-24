@@ -4,7 +4,16 @@ name: Deploy Smoke Tests
 # credential generation. Runs only when the install/deploy assets change.
 
 on:
+  # Branch pushes ONLY — never tag pushes. A new tag makes GitHub's `paths`
+  # filter treat every file as "changed" (there is no prior tag ref to diff
+  # against), so this workflow would fire on every release tag and race
+  # release.yml, which uploads the per-arch assets over the following minutes.
+  # The smoke tests download `releases/latest`, so that race made firstboot 404
+  # on a not-yet-uploaded binary. The published release is smoke-tested instead
+  # by the workflow_run trigger below, once release.yml has fully completed.
   push:
+    branches:
+      - "**"
     paths:
       - "install.sh"
       - "deploy/**"
@@ -14,12 +23,25 @@ on:
       - "install.sh"
       - "deploy/**"
       - ".github/workflows/smoke.yml"
+  # Smoke-test the ACTUAL published release, but only after release.yml has built
+  # and uploaded every arch asset — eliminating the publish race. Gated below to
+  # successful v* tag releases so PR/branch runs of release.yml are ignored.
+  workflow_run:
+    workflows: ["Release 3X-UI"]
+    types:
+      - completed
 
 permissions:
   contents: read
 
 jobs:
   noninteractive-install:
+    # Run for branch pushes / PRs that touch the install assets, and for a
+    # successful release of a v* tag (assets fully uploaded by then).
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
     strategy:
       fail-fast: false
       matrix:
@@ -32,6 +54,10 @@ jobs:
         run: bash deploy/test/smoke-noninteractive.sh
 
   first-boot:
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
     strategy:
       fail-fast: false
       matrix:

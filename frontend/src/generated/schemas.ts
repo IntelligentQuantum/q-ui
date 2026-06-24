@@ -2203,6 +2203,13 @@ export const SCHEMAS: Record<string, unknown> = {
   "User": {
     "description": "User represents a user account in the 3x-ui panel.",
     "properties": {
+      "allowedInbounds": {
+        "description": "AllowedInbounds restricts which inbounds this user may attach clients to when\ncreating configs (empty = inherit the workspace's set / see all). A manager\nsets it per moderator; the workspace-wide set is stored per tenant.",
+        "items": {
+          "type": "integer"
+        },
+        "type": "array"
+      },
       "balance": {
         "type": "integer"
       },
@@ -2246,6 +2253,7 @@ export const SCHEMAS: Record<string, unknown> = {
       }
     },
     "required": [
+      "allowedInbounds",
       "balance",
       "costPerGbOverride",
       "createdAt",

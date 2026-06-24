@@ -508,6 +508,7 @@ export const SettingSchema = z.object({
 export type Setting = z.infer<typeof SettingSchema>;
 
 export const UserSchema = z.object({
+  allowedInbounds: z.array(z.number().int()),
   balance: z.number().int(),
   costPerGbOverride: z.number().int(),
   createdAt: z.number().int(),

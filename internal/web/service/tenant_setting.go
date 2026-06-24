@@ -41,7 +41,43 @@ const (
 	tsClientCostPerGB       = "clientCostPerGB"
 	tsResetTrafficCost      = "resetTrafficCost"
 	tsResetTrafficCostPerGB = "resetTrafficCostPerGB"
+
+	// allowedInbounds is the CSV of inbound ids the admin assigned to this
+	// workspace. Empty = no restriction (the manager + their users see all
+	// inbounds). The admin edits it from the Managers page.
+	tsAllowedInbounds = "allowedInbounds"
 )
+
+// GetAllowedInbounds returns the inbound ids the admin assigned to a workspace
+// (nil = no restriction / all inbounds). The global tenant has none.
+func (s *TenantSettingService) GetAllowedInbounds(tenantID int) []int {
+	if tenantID <= model.GlobalTenantId {
+		return nil
+	}
+	m, err := s.raw(tenantID)
+	if err != nil {
+		return nil
+	}
+	var l model.IntList
+	_ = l.Scan(m[tsAllowedInbounds])
+	return []int(l)
+}
+
+// SetAllowedInbounds stores a workspace's allowed inbound ids (empty clears the
+// restriction → all inbounds). Admin-only (called from the Managers controller).
+func (s *TenantSettingService) SetAllowedInbounds(tenantID int, ids []int) error {
+	if tenantID <= model.GlobalTenantId {
+		return nil
+	}
+	v, err := model.IntList(ids).Value()
+	if err != nil {
+		return err
+	}
+	csv, _ := v.(string)
+	return database.GetDB().Transaction(func(tx *gorm.DB) error {
+		return s.upsert(tx, tenantID, tsAllowedInbounds, csv)
+	})
+}
 
 // TenantSettingService reads/writes per-tenant configuration in the
 // tenant_settings key/value table. Reads fall back to the global default when a

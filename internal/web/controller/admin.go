@@ -75,6 +75,7 @@ type adminUserForm struct {
 	Role              string `json:"role"`
 	Balance           int64  `json:"balance"`
 	CostPerGbOverride int    `json:"costPerGbOverride"`
+	AllowedInbounds   []int  `json:"allowedInbounds"`
 }
 
 type balanceAdjustForm struct {
