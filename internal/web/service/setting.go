@@ -43,7 +43,7 @@ var defaultValueMap = map[string]string{
 	"sessionMaxAge":                 "360",
 	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",
 	"panelProxy":                    "",
-	"pageSize":                      "25",
+	"pageSize":                      "10",
 	"expireDiff":                    "0",
 	"trafficDiff":                   "0",
 	"remarkModel":                   "-ieo",

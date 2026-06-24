@@ -140,7 +140,7 @@ export default function AdminReferralsPage()
             data={query.data ?? []}
             rowKey={(r) => String(r.id)}
             loading={query.isFetching}
-            pageSize={25}
+            pageSize={10}
             empty={<div className="py-10 text-center text-muted-foreground">{t('pages.adminReferrals.empty')}</div>}
           />
         </CardContent>

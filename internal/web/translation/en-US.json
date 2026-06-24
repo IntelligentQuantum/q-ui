@@ -243,6 +243,16 @@
   "delete": "Delete",
   "reset": "Reset",
   "noData": "Nothing here yet",
+  "pagination": {
+    "label": "Pagination",
+    "first": "First page",
+    "previous": "Previous page",
+    "next": "Next page",
+    "last": "Last page",
+    "page": "Page {page}",
+    "range": "{from}–{to} of {total}",
+    "rowsPerPage": "Rows per page"
+  },
   "copySuccess": "Copied successfully",
   "sure": "Sure",
   "encryption": "Encryption",

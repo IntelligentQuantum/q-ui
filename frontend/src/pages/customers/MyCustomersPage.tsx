@@ -56,7 +56,7 @@ export default function MyCustomersPage()
             data={query.data ?? []}
             rowKey={(r) => String(r.id)}
             loading={query.isFetching}
-            pageSize={25}
+            pageSize={10}
             empty={<div className="py-10 text-center text-muted-foreground">{t('pages.customers.empty')}</div>}
           />
         </CardContent>

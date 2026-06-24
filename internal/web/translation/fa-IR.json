@@ -177,6 +177,16 @@
   "delete": "حذف",
   "reset": "بازنشانی",
   "noData": "داده‌ای وجود ندارد.",
+  "pagination": {
+    "label": "صفحه‌بندی",
+    "first": "صفحه اول",
+    "previous": "صفحه قبل",
+    "next": "صفحه بعد",
+    "last": "صفحه آخر",
+    "page": "صفحه {page}",
+    "range": "{from}–{to} از {total}",
+    "rowsPerPage": "تعداد در هر صفحه"
+  },
   "copySuccess": "باموفقیت کپی‌شد",
   "sure": "مطمئن",
   "encryption": "رمزگذاری",

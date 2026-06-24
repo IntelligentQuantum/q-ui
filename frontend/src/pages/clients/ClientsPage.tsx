@@ -2,8 +2,6 @@ import { lazy, useCallback, useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { message } from '@/components/ui/message';
 import {
-    ChevronLeft,
-    ChevronRight,
     Clock,
     EllipsisVertical,
     Info,
@@ -38,6 +36,7 @@ import {
     Card,
     Checkbox,
     DropdownMenu,
+    Pagination,
     SearchInput,
     Select,
     Spinner,
@@ -244,7 +243,7 @@ export default function ClientsPage()
     const [sortColumn, setSortColumn] = useState<string | null>(initialSort.column);
     const [sortOrder, setSortOrder] = useState<'ascend' | 'descend' | null>(initialSort.order);
     const [currentPage, setCurrentPage] = useState(1);
-    const [tablePageSize, setTablePageSize] = useState(25);
+    const [tablePageSize, setTablePageSize] = useState(10);
     // debouncedSearch lags behind the input so we don't spam the server on every
     // keystroke; the search box still feels instant locally.
     const [debouncedSearch, setDebouncedSearch] = useState(searchKey);
@@ -708,8 +707,6 @@ export default function ClientsPage()
     // Pagination math (server-side: `filtered` is the total matching count).
     const pageCount = Math.max(1, Math.ceil(filtered / tablePageSize));
     const showPagination = filtered > tablePageSize || (filtered > 10 && tablePageSize > filtered);
-    const rangeFrom = filtered === 0 ? 0 : (currentPage - 1) * tablePageSize + 1;
-    const rangeTo = Math.min(currentPage * tablePageSize, filtered);
 
     function gotoPage(p: number)
     {
@@ -1254,18 +1251,18 @@ export default function ClientsPage()
                         }
                       />
                       {showPagination && (
-                        <PaginationBar
+                        <Pagination
                           page={currentPage}
                           pageCount={pageCount}
-                          pageSize={tablePageSize}
                           total={filtered}
-                          rangeFrom={rangeFrom}
-                          rangeTo={rangeTo}
-                          onPage={gotoPage}
-                          onPageSize={(s) =>
+                          pageSize={tablePageSize}
+                          pageSizeOptions={PAGE_SIZE_OPTIONS}
+                          onPageChange={gotoPage}
+                          onPageSizeChange={(s) =>
                           {
                               setTablePageSize(s); setCurrentPage(1);
                           }}
+                          className="px-1 pt-3"
                         />
                       )}
                     </>
@@ -1303,15 +1300,14 @@ export default function ClientsPage()
                         </div>
                       )}
                       {filteredClients.length > 0 && showPagination && (
-                        <PaginationBar
+                        <Pagination
                           page={currentPage}
                           pageCount={pageCount}
-                          pageSize={tablePageSize}
                           total={filtered}
-                          rangeFrom={rangeFrom}
-                          rangeTo={rangeTo}
-                          onPage={gotoPage}
-                          onPageSize={(s) =>
+                          pageSize={tablePageSize}
+                          pageSizeOptions={PAGE_SIZE_OPTIONS}
+                          onPageChange={gotoPage}
+                          onPageSizeChange={(s) =>
                           {
                               setTablePageSize(s); setCurrentPage(1);
                           }}
@@ -1550,70 +1546,6 @@ function RemovableChip({
         <X className="h-3 w-3" aria-hidden />
       </button>
     </span>
-    );
-}
-
-// Server-side pagination controls (the DS Table paginates client-side, which we
-// disable with pageSize=0; counts/pages come from the server).
-function PaginationBar({
-    page,
-    pageCount,
-    pageSize,
-    total,
-    rangeFrom,
-    rangeTo,
-    onPage,
-    onPageSize,
-    compact
-}: {
-  page: number;
-  pageCount: number;
-  pageSize: number;
-  total: number;
-  rangeFrom: number;
-  rangeTo: number;
-  onPage: (p: number) => void;
-  onPageSize: (s: number) => void;
-  compact?: boolean;
-})
-{
-    return (
-    <div className="flex flex-wrap items-center justify-center gap-3 sm:justify-between">
-      <span className="text-xs tabular-nums text-muted-foreground">
-        {rangeFrom}–{rangeTo} / {total}
-      </span>
-      <div className="flex items-center gap-2">
-        {total > 10 && !compact && (
-          <Select
-            value={String(pageSize)}
-            className="min-w-[88px]"
-            onChange={(v) => onPageSize(Number(v))}
-            options={PAGE_SIZE_OPTIONS.map((n) => ({ value: String(n), label: String(n) }))}
-          />
-        )}
-        <div className="flex items-center gap-1">
-          <button
-            type="button"
-            disabled={page <= 1}
-            onClick={() => onPage(page - 1)}
-            aria-label="Previous page"
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-          >
-            <ChevronLeft className="h-4 w-4 rtl:rotate-180" aria-hidden />
-          </button>
-          <span className="px-1 text-xs tabular-nums text-muted-foreground">{page} / {pageCount}</span>
-          <button
-            type="button"
-            disabled={page >= pageCount}
-            onClick={() => onPage(page + 1)}
-            aria-label="Next page"
-            className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-          >
-            <ChevronRight className="h-4 w-4 rtl:rotate-180" aria-hidden />
-          </button>
-        </div>
-      </div>
-    </div>
     );
 }
 

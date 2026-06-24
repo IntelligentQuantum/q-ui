@@ -47,7 +47,7 @@ export function MultiSelect({
     const [open, setOpen] = useState(false);
     const [query, setQuery] = useState('');
     const [active, setActive] = useState(-1);
-    const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+    const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLUListElement>(null);
     const inputRef = useRef<HTMLInputElement>(null);
@@ -80,10 +80,27 @@ export function MultiSelect({
         const place = () =>
         {
             const r = rootRef.current?.getBoundingClientRect();
-            if (r)
+            if (!r)
             {
-                setMenuPos({ top: r.bottom + 6, left: r.left, width: r.width });
+                return;
             }
+            // Auto-flip above when the viewport is cramped below, and clamp the
+            // height to the room available so the list always scrolls into view.
+            const gap = 6;
+            const cap = 288;
+            const vh = window.innerHeight;
+            const spaceBelow = vh - r.bottom - gap;
+            const spaceAbove = r.top - gap;
+            const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+            const avail = Math.max(0, openUp ? spaceAbove : spaceBelow);
+            const maxHeight = Math.min(cap, Math.max(96, avail));
+            setMenuPos({
+                top: openUp ? undefined : r.bottom + gap,
+                bottom: openUp ? vh - r.top + gap : undefined,
+                left: r.left,
+                width: r.width,
+                maxHeight
+            });
         };
         place();
         window.addEventListener('scroll', place, true);
@@ -268,8 +285,8 @@ export function MultiSelect({
           id={listId}
           aria-multiselectable
           tabIndex={-1}
-          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-          className="z-[var(--z-popover)] max-h-60 overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
+          style={{ position: 'fixed', top: menuPos.top, bottom: menuPos.bottom, left: menuPos.left, width: menuPos.width, maxHeight: menuPos.maxHeight }}
+          className="z-[var(--z-popover)] overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
         >
           {filtered.length === 0 && (
             <li className="px-2.5 py-2 text-sm text-muted-foreground">—</li>

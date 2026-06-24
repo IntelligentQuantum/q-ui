@@ -1,10 +1,11 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
-import { ChevronDown, ChevronUp, ChevronsUpDown, ChevronLeft, ChevronRight, Inbox } from 'lucide-react';
+import { ChevronDown, ChevronUp, ChevronsUpDown, Inbox } from 'lucide-react';
 import { cn } from './cn';
 import { Checkbox } from './Checkbox';
 import { Skeleton } from './Skeleton';
 import { EmptyState } from './EmptyState';
+import { Pagination, DEFAULT_PAGE_SIZE } from './Pagination';
 
 export interface Column<T> {
   key: string;
@@ -83,21 +84,13 @@ export function Table<T>({
 {
     const [sort, setSort] = useState<SortState>(null);
     const [page, setPage] = useState(0);
-
-    // Resolve the table's actual direction (nearest `dir`) to flip the pagination
-    // chevrons. JS, not CSS — Tailwind's `:dir()`/`rtl:` compile to language- or
-    // ancestor-based selectors that misfire when a region's dir differs from the
-    // document (e.g. an LTR view inside an RTL panel). Runs every render to stay in
-    // sync; setState bails when unchanged.
-    const rootRef = useRef<HTMLDivElement>(null);
-    const [rtl, setRtl] = useState(false);
-    useLayoutEffect(() =>
+    // Rows-per-page is locally adjustable via the footer selector, seeded from the
+    // `pageSize` prop. Re-sync if a parent drives the prop (e.g. a saved setting).
+    const [size, setSize] = useState(pageSize);
+    useEffect(() =>
     {
-        if (rootRef.current)
-        {
-            setRtl(getComputedStyle(rootRef.current).direction === 'rtl');
-        }
-    });
+        setSize(pageSize);
+    }, [pageSize]);
 
     const sorted = useMemo(() =>
     {
@@ -128,9 +121,14 @@ export function Table<T>({
     }, [data, sort, columns]);
 
     const paginated = pageSize > 0;
-    const pageCount = paginated ? Math.max(1, Math.ceil(sorted.length / pageSize)) : 1;
+    const effSize = size > 0 ? size : pageSize;
+    const pageCount = paginated ? Math.max(1, Math.ceil(sorted.length / effSize)) : 1;
     const current = Math.min(page, pageCount - 1);
-    const rows = paginated ? sorted.slice(current * pageSize, current * pageSize + pageSize) : sorted;
+    const rows = paginated ? sorted.slice(current * effSize, current * effSize + effSize) : sorted;
+    // Show the bar once a list outgrows a single default page, so the page
+    // numbers and the rows-per-page selector are reachable (and stay reachable
+    // even after the user widens the page so everything fits).
+    const showPagination = paginated && sorted.length > Math.min(effSize, DEFAULT_PAGE_SIZE);
 
     const toggleSort = (key: string) =>
     {
@@ -200,7 +198,7 @@ export function Table<T>({
     const totalCols = columns.length + (rowSelection ? 1 : 0);
 
     return (
-    <div ref={rootRef} className={cn('overflow-hidden rounded-lg border border-border bg-surface', className)}>
+    <div className={cn('overflow-hidden rounded-lg border border-border bg-surface', className)}>
       <div className="overflow-x-auto">
         <table className="w-full border-collapse text-sm">
           <thead>
@@ -258,7 +256,7 @@ export function Table<T>({
           </thead>
           <tbody>
             {loading ? (
-                Array.from({ length: paginated ? Math.min(pageSize, 5) : 5 }).map((_, r) => (
+                Array.from({ length: paginated ? Math.min(effSize, 5) : 5 }).map((_, r) => (
                 <tr key={`sk-${ r }`} className="border-b border-border last:border-0">
                   {rowSelection && <td className="px-3 py-3 sm:px-4" />}
                   {columns.map((col) => (
@@ -332,34 +330,20 @@ export function Table<T>({
         </table>
       </div>
 
-      {paginated && !loading && sorted.length > pageSize && (
-        <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-3">
-          <span className="text-xs text-muted-foreground">
-            {current * pageSize + 1}–{Math.min((current + 1) * pageSize, sorted.length)} of {sorted.length}
-          </span>
-          <div className="flex items-center gap-1">
-            <button
-              type="button"
-              disabled={current === 0}
-              onClick={() => setPage((p) => Math.max(0, p - 1))}
-              aria-label="Previous page"
-              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-            >
-              <ChevronLeft className={cn('h-4 w-4', rtl && 'rotate-180')} aria-hidden />
-            </button>
-            <span className="px-1 text-xs tabular-nums text-muted-foreground">
-              {current + 1} / {pageCount}
-            </span>
-            <button
-              type="button"
-              disabled={current >= pageCount - 1}
-              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
-              aria-label="Next page"
-              className="grid h-8 w-8 place-items-center rounded-md text-muted-foreground outline-none transition-colors hover:bg-surface-sunken hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-40"
-            >
-              <ChevronRight className={cn('h-4 w-4', rtl && 'rotate-180')} aria-hidden />
-            </button>
-          </div>
+      {showPagination && !loading && (
+        <div className="border-t border-border px-4 py-3">
+          <Pagination
+            page={current + 1}
+            pageCount={pageCount}
+            total={sorted.length}
+            pageSize={effSize}
+            onPageChange={(p) => setPage(p - 1)}
+            onPageSizeChange={(s) =>
+            {
+                setSize(s);
+                setPage(0);
+            }}
+          />
         </div>
       )}
     </div>

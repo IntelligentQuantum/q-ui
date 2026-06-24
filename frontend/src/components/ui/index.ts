@@ -90,6 +90,9 @@ export type { TabsProps, TabItem } from './Tabs';
 export { Table } from './Table';
 export type { TableProps, Column } from './Table';
 
+export { Pagination, DEFAULT_PAGE_SIZE, DEFAULT_PAGE_SIZE_OPTIONS } from './Pagination';
+export type { PaginationProps } from './Pagination';
+
 export { Toaster, showToast, dismissToast, clearToasts } from './Toast';
 export type { ToastType, ToastItem } from './Toast';
 

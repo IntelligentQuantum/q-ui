@@ -44,7 +44,7 @@ export function Select({
 {
     const [open, setOpen] = useState(false);
     const [active, setActive] = useState(-1);
-    const [menuPos, setMenuPos] = useState<{ top: number; left: number; width: number } | null>(null);
+    const [menuPos, setMenuPos] = useState<{ top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null>(null);
     const rootRef = useRef<HTMLDivElement>(null);
     const menuRef = useRef<HTMLUListElement>(null);
     const listId = useId();
@@ -62,10 +62,30 @@ export function Select({
         const place = () =>
         {
             const r = rootRef.current?.getBoundingClientRect();
-            if (r)
+            if (!r)
             {
-                setMenuPos({ top: r.bottom + 6, left: r.left, width: r.width });
+                return;
             }
+            // Auto-flip: anchor below the trigger normally, but flip above when the
+            // viewport is cramped below (e.g. a rows-per-page select sitting at the
+            // bottom of the page) so the options never spill off-screen. Either way
+            // the height is clamped to the room available, so the list scrolls and
+            // the last option (100/200) is always reachable.
+            const gap = 6;
+            const cap = 288;
+            const vh = window.innerHeight;
+            const spaceBelow = vh - r.bottom - gap;
+            const spaceAbove = r.top - gap;
+            const openUp = spaceBelow < 200 && spaceAbove > spaceBelow;
+            const avail = Math.max(0, openUp ? spaceAbove : spaceBelow);
+            const maxHeight = Math.min(cap, Math.max(96, avail));
+            setMenuPos({
+                top: openUp ? undefined : r.bottom + gap,
+                bottom: openUp ? vh - r.top + gap : undefined,
+                left: r.left,
+                width: r.width,
+                maxHeight
+            });
         };
         place();
         window.addEventListener('scroll', place, true);
@@ -201,8 +221,8 @@ export function Select({
           role="listbox"
           id={listId}
           tabIndex={-1}
-          style={{ position: 'fixed', top: menuPos.top, left: menuPos.left, width: menuPos.width }}
-          className="z-[var(--z-popover)] max-h-60 overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
+          style={{ position: 'fixed', top: menuPos.top, bottom: menuPos.bottom, left: menuPos.left, width: menuPos.width, maxHeight: menuPos.maxHeight }}
+          className="z-[var(--z-popover)] overflow-auto rounded-lg border border-border bg-surface-raised p-1.5 shadow-lg motion-safe:animate-[fade-in_120ms_ease-out]"
         >
           {options.map((opt, i) => (
             <li
