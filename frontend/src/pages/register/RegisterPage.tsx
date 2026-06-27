@@ -93,6 +93,15 @@ export default function RegisterPage()
     const [lang, setLang] = useState<string>(() => LanguageManager.getLanguage());
     const [brandTitle, setBrandTitle] = useState<string>(() => BrandManager.getTitle());
 
+    // "Back to Login" link preserves the tenant context from /tenant/<slug>/register.
+    const backToLoginHref = useMemo(() =>
+    {
+        const slug = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1];
+        return slug
+            ? (basePath || '/') + `tenant/${ encodeURIComponent(slug) }`
+            : (basePath || '/');
+    }, []);
+
     const {
         register,
         handleSubmit,
@@ -117,10 +126,10 @@ export default function RegisterPage()
         let cancelled = false;
         (async () =>
         {
-            // Workspace context (/panel/manager/<slug>) flows in via ?ws so the
-            // page shows that manager's brand and gates on ITS registration flag;
-            // the new account is created in that manager's tenant.
-            const ws = new URLSearchParams(window.location.search).get('ws') || window.Q_UI_WORKSPACE || '';
+            // Workspace context (/panel/manager/<slug>) flows in via /tenant/<slug>
+            // path so the page shows that manager's brand and gates on ITS
+            // registration flag; the new account is created in that manager's tenant.
+            const ws = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1] || window.Q_UI_WORKSPACE || '';
             const info = await HttpUtil.post('/getWorkspaceInfo', { slug: ws }, { silent: true });
             if (cancelled)
             {
@@ -133,7 +142,7 @@ export default function RegisterPage()
             }
             if (!obj?.registrationEnable)
             {
-                window.location.replace(ws ? `${ basePath || '/' }?ws=${ encodeURIComponent(ws) }` : (basePath || '/'));
+                window.location.replace(ws ? `${ basePath || '/' }tenant/${ encodeURIComponent(ws) }` : (basePath || '/'));
             }
         })();
         return () =>
@@ -147,7 +156,7 @@ export default function RegisterPage()
         setSubmitting(true);
         try
         {
-            const ws = new URLSearchParams(window.location.search).get('ws') || window.Q_UI_WORKSPACE || '';
+            const ws = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1] || window.Q_UI_WORKSPACE || '';
             const payload = {
                 fullName: values.fullName.trim(),
                 phone: values.phone.trim(),
@@ -166,7 +175,7 @@ export default function RegisterPage()
             {
                 window.setTimeout(() =>
                 {
-                    window.location.href = ws ? `${ basePath || '/' }?ws=${ encodeURIComponent(ws) }` : (basePath || '/');
+                    window.location.href = ws ? `${ basePath || '/' }tenant/${ encodeURIComponent(ws) }` : (basePath || '/');
                 }, REDIRECT_DELAY_MS);
             }
             else
@@ -341,7 +350,7 @@ export default function RegisterPage()
 
                 <div className="mt-4 text-center text-sm text-muted-foreground">
                   <span>{t('pages.register.haveAccount')}</span>{' '}
-                  <a href={basePath || '/'} className="font-medium text-accent hover:underline">
+                  <a href={backToLoginHref} className="font-medium text-accent hover:underline">
                     {t('pages.register.backToLogin')}
                   </a>
                 </div>

@@ -100,11 +100,13 @@ export default function LoginPage()
     });
 
     // Keep the workspace slug on the "create account" link so signup lands in the
-    // same manager's tenant.
+    // same manager's tenant. Extracted from /tenant/<slug> path (replaces old ?ws=<slug> query).
     const registerHref = useMemo(() =>
     {
-        const ws = new URLSearchParams(window.location.search).get('ws');
-        return (basePath || '/') + 'register' + (ws ? `?ws=${ encodeURIComponent(ws) }` : '');
+        const slug = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1];
+        return slug
+            ? (basePath || '/') + `tenant/${ encodeURIComponent(slug) }/register`
+            : (basePath || '/') + 'register';
     }, []);
 
     useEffect(() =>
@@ -113,9 +115,9 @@ export default function LoginPage()
         (async () =>
         {
             // The Manager workspace whose brand + registration flag apply on this
-            // login screen: ?ws=<slug> (carried from /panel/manager/<slug>), or the
-            // workspace this custom domain belongs to (window.Q_UI_WORKSPACE).
-            const ws = new URLSearchParams(window.location.search).get('ws')
+            // login screen: /tenant/<slug> path (carried from the foreign-workspace
+            // login link), or the workspace this custom domain belongs to (window.Q_UI_WORKSPACE).
+            const ws = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1]
                 || window.Q_UI_WORKSPACE || '';
             const [twoFactor, workspace] = await Promise.all([
                 HttpUtil.post('/getTwoFactorEnable', undefined, { silent: true }),
@@ -153,8 +155,8 @@ export default function LoginPage()
         try
         {
             // Per-workspace login: tell the backend which workspace's accounts to
-            // authenticate against (the ?ws slug, or this custom domain's workspace).
-            const urlWs = new URLSearchParams(window.location.search).get('ws');
+            // authenticate against (the /tenant/<slug> path, or this custom domain's workspace).
+            const urlWs = window.location.pathname.match(/\/tenant\/([^/]+)/)?.[1];
             const ws = urlWs || window.Q_UI_WORKSPACE || '';
             const msg = await HttpUtil.post('/login', { ...values, workspace: ws });
             if (msg.success)

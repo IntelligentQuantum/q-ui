@@ -193,11 +193,11 @@ export default function PanelLayout()
             <p className="text-sm text-muted-foreground">{t('pages.login.foreignDesc')}</p>
           </div>
           <div className="flex w-full flex-col gap-2">
-            <Button className="w-full" onClick={() => go(`${ base }?ws=${ encodeURIComponent(urlSlug) }`)}>
+            <Button className="w-full" onClick={() => go(`${ base }tenant/${ encodeURIComponent(urlSlug) }`)}>
               <LogIn className="h-4 w-4" aria-hidden />
               {t('pages.login.foreignSignIn')}
             </Button>
-            <Button variant="secondary" className="w-full" onClick={() => go(`${ base }register?ws=${ encodeURIComponent(urlSlug) }`)}>
+            <Button variant="secondary" className="w-full" onClick={() => go(`${ base }tenant/${ encodeURIComponent(urlSlug) }/register`)}>
               <UserPlus className="h-4 w-4" aria-hidden />
               {t('pages.login.foreignRegister')}
             </Button>

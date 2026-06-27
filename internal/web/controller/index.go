@@ -88,6 +88,10 @@ func NewIndexController(g *gin.RouterGroup) *IndexController {
 func (a *IndexController) initRouter(g *gin.RouterGroup) {
 	g.GET("/", a.index)
 	g.GET("/register", a.registerPage)
+	// Workspace-scoped login/register at /tenant/:slug and /tenant/:slug/register.
+	// Replaces the old ?ws=<slug> query-param scheme with a path-based URL.
+	g.GET("/tenant/:slug", a.index)
+	g.GET("/tenant/:slug/register", a.registerPage)
 	g.GET("/csrf-token", a.csrfToken)
 
 	g.POST("/login", middleware.CSRFMiddleware(), a.login)
@@ -225,9 +229,14 @@ func (a *IndexController) registerPage(c *gin.Context) {
 		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path")+"panel/")
 		return
 	}
-	// Registration is gated per workspace: the ?ws=<slug> query (set by the
-	// register link on a manager's panel) selects whose registration flag applies.
-	if _, regEnabled, _ := a.resolveWorkspaceTenant(c.Query("ws")); !regEnabled {
+	// Registration is gated per workspace: the :slug path param (from
+	// /tenant/:slug/register) or the old ?ws=<slug> query param selects which
+	// workspace's registration flag applies.
+	slug := c.Param("slug")
+	if slug == "" {
+		slug = c.Query("ws") // fallback for backward compat
+	}
+	if _, regEnabled, _ := a.resolveWorkspaceTenant(slug); !regEnabled {
 		c.Header("Cache-Control", "no-store")
 		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
 		return

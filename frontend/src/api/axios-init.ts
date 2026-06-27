@@ -153,7 +153,7 @@ export function setupAxios(): void
                     // across the login bounce, so the login page shows that
                     // workspace's branding and a signup lands in its tenant.
                     const ws = window.location.pathname.match(/\/panel\/manager\/([^/]+)/);
-                    window.location.replace(ws ? `${ basePath }?ws=${ encodeURIComponent(ws[1]) }` : basePath);
+                    window.location.replace(ws ? `${ basePath }tenant/${ encodeURIComponent(ws[1]) }` : basePath);
                 }
                 return new Promise(() =>
                 {});
