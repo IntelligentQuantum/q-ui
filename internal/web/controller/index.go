@@ -59,22 +59,36 @@ type IndexController struct {
 // registration flag. An empty/unknown/suspended slug resolves to the global
 // panel (tenant 0) with the global registration setting — so the original panel
 // behaves exactly as before.
-func (a *IndexController) resolveWorkspaceTenant(slug string) (tenantID int, registrationEnabled bool, title string) {
+func (a *IndexController) resolveWorkspaceTenant(slug string) (tenantID int, registrationEnabled bool, title, titleLtr, titleRtl string) {
 	globalReg, _ := a.settingService.GetRegistrationEnable()
 	globalTitle, _ := a.settingService.GetPanelTitle()
+	globalTitleLtr, _ := a.settingService.GetPanelTitleLtr()
+	globalTitleRtl, _ := a.settingService.GetPanelTitleRtl()
 	slug = strings.ToLower(strings.TrimSpace(slug))
 	if slug == "" {
-		return model.GlobalTenantId, globalReg, globalTitle
+		return model.GlobalTenantId, globalReg, globalTitle, globalTitleLtr, globalTitleRtl
 	}
 	t, err := a.tenantService.GetBySlug(slug)
 	if err != nil || t.Status != model.TenantActive {
-		return model.GlobalTenantId, globalReg, globalTitle
+		return model.GlobalTenantId, globalReg, globalTitle, globalTitleLtr, globalTitleRtl
 	}
 	view, _ := a.tenantSettingService.Get(t.Id)
 	if view != nil {
-		return t.Id, view.RegistrationEnable, view.BrandTitle
+		// Per-direction overrides only apply when the workspace (or admin) set
+		// them explicitly; otherwise we keep the workspace's BrandTitle for that
+		// direction so the brand reads the same in both languages until/unless
+		// the workspace customizes it per direction.
+		tenantLtr := view.BrandTitleLtr
+		if tenantLtr == "" {
+			tenantLtr = view.BrandTitle
+		}
+		tenantRtl := view.BrandTitleRtl
+		if tenantRtl == "" {
+			tenantRtl = view.BrandTitle
+		}
+		return t.Id, view.RegistrationEnable, view.BrandTitle, tenantLtr, tenantRtl
 	}
-	return t.Id, false, globalTitle
+	return t.Id, false, globalTitle, globalTitleLtr, globalTitleRtl
 }
 
 // NewIndexController creates a new IndexController and initializes its routes.
@@ -113,7 +127,7 @@ type workspaceInfoForm struct {
 func (a *IndexController) getWorkspaceInfo(c *gin.Context) {
 	var form workspaceInfoForm
 	_ = c.ShouldBind(&form)
-	tenantID, regEnabled, title := a.resolveWorkspaceTenant(form.Slug)
+	tenantID, regEnabled, title, titleLtr, titleRtl := a.resolveWorkspaceTenant(form.Slug)
 	logo := ""
 	if tenantID != model.GlobalTenantId {
 		if view, err := a.tenantSettingService.Get(tenantID); err == nil {
@@ -122,6 +136,8 @@ func (a *IndexController) getWorkspaceInfo(c *gin.Context) {
 	}
 	jsonObj(c, gin.H{
 		"title":              title,
+		"titleLtr":           titleLtr,
+		"titleRtl":           titleRtl,
 		"logo":               logo,
 		"registrationEnable": regEnabled,
 		"tenant":             tenantID != model.GlobalTenantId,
@@ -174,7 +190,7 @@ func (a *IndexController) login(c *gin.Context) {
 
 	// Resolve which workspace's accounts to authenticate against (per-workspace
 	// logins): the slug → tenant id, or tenant 0 for the original panel.
-	loginTenantID, _, _ := a.resolveWorkspaceTenant(form.Workspace)
+	loginTenantID, _, _, _, _ := a.resolveWorkspaceTenant(form.Workspace)
 	user, checkErr := a.userService.CheckUser(form.Username, form.Password, form.TwoFactorCode, loginTenantID)
 
 	if user == nil {
@@ -236,7 +252,7 @@ func (a *IndexController) registerPage(c *gin.Context) {
 	if slug == "" {
 		slug = c.Query("ws") // fallback for backward compat
 	}
-	if _, regEnabled, _ := a.resolveWorkspaceTenant(slug); !regEnabled {
+	if _, regEnabled, _, _, _ := a.resolveWorkspaceTenant(slug); !regEnabled {
 		c.Header("Cache-Control", "no-store")
 		c.Redirect(http.StatusTemporaryRedirect, c.GetString("base_path"))
 		return
@@ -281,7 +297,7 @@ func (a *IndexController) register(c *gin.Context) {
 	// Resolve the workspace from the slug and gate on ITS registration flag, so a
 	// signup on /panel/manager/<slug> joins that manager's tenant (or the global
 	// panel when no/unknown slug). Registration may be open per-workspace.
-	tenantID, regEnabled, _ := a.resolveWorkspaceTenant(form.Workspace)
+	tenantID, regEnabled, _, _, _ := a.resolveWorkspaceTenant(form.Workspace)
 	if !regEnabled {
 		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.register.toasts.disabled"))
 		return
@@ -363,10 +379,20 @@ func (a *IndexController) getTwoFactorEnable(c *gin.Context) {
 }
 
 // getPanelTitle returns the configurable brand/title so the pre-auth
-// login and registration pages can render it (defaults to "Q-UI").
+// login and registration pages can render it (defaults to "Q-UI"). Returns the
+// legacy `title` plus the per-direction overrides `titleLtr`/`titleRtl` so the
+// form can pick the right one for the active language without a second round
+// trip.
 func (a *IndexController) getPanelTitle(c *gin.Context) {
 	title, err := a.settingService.GetPanelTitle()
-	if err == nil {
-		jsonObj(c, title, nil)
+	if err != nil {
+		return
 	}
+	titleLtr, _ := a.settingService.GetPanelTitleLtr()
+	titleRtl, _ := a.settingService.GetPanelTitleRtl()
+	jsonObj(c, gin.H{
+		"title":    title,
+		"titleLtr": titleLtr,
+		"titleRtl": titleRtl,
+	}, nil)
 }

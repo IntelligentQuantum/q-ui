@@ -68,6 +68,11 @@ export interface MeInfo {
   cryptoBonusMinDeposit: number;
   cryptoBonusMax: number;
   panelTitle: string;
+  // Per-direction overrides shown in the sidebar header, falling back to
+  // `panelTitle` when unset. The frontend picks the right one based on the
+  // document direction (see BrandManager.getTitle).
+  panelTitleLtr: string;
+  panelTitleRtl: string;
 }
 
 export const ME_QUERY_KEY = ['me'] as const;
@@ -124,7 +129,9 @@ async function fetchMe(): Promise<MeInfo>
         cryptoBonusPercent: Number(o.cryptoBonusPercent) || 0,
         cryptoBonusMinDeposit: Number(o.cryptoBonusMinDeposit) || 0,
         cryptoBonusMax: Number(o.cryptoBonusMax) || 0,
-        panelTitle: String(o.panelTitle ?? '').trim() || 'Q-UI'
+        panelTitle: String(o.panelTitle ?? '').trim() || 'Q-UI',
+        panelTitleLtr: String(o.panelTitleLtr ?? '').trim(),
+        panelTitleRtl: String(o.panelTitleRtl ?? '').trim()
     };
 }
 

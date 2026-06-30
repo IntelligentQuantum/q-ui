@@ -133,11 +133,21 @@ export default function LoginPage()
             }
             if (workspace.success && workspace.obj)
             {
-                const info = workspace.obj as { title?: string; logo?: string; registrationEnable?: boolean };
+                const info = workspace.obj as {
+                    title?: string; titleLtr?: string; titleRtl?: string;
+                    logo?: string; registrationEnable?: boolean;
+                };
                 setRegistrationEnable(!!info.registrationEnable);
-                if (info.title)
+                if (info.title || info.titleLtr || info.titleRtl)
                 {
-                    setBrandTitle(BrandManager.setTitle(info.title));
+                    // The bilingual cache lets the brand slot pick LTR vs RTL by
+                    // active direction; title falls back when the workspace
+                    // (this admin's brand) didn't set a per-direction override.
+                    setBrandTitle(BrandManager.setTitle({
+                        title: info.title || '',
+                        ltr: info.titleLtr || '',
+                        rtl: info.titleRtl || ''
+                    }));
                 }
                 setBrandLogo(info.logo || '');
             }

@@ -9,6 +9,8 @@ export class AllSetting
     public webKeyFile = '';
     public webBasePath = '/';
     public panelTitle = 'Q-UI';
+    public panelTitleLtr = '';
+    public panelTitleRtl = '';
     public sessionMaxAge = 360;
     public trustedProxyCIDRs = '127.0.0.1/32,::1/128';
     public panelProxy = '';

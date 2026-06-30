@@ -27,7 +27,9 @@ type AllSetting struct {
 	WebCertFile       string `json:"webCertFile" form:"webCertFile"`                                 // Path to SSL certificate file for web server
 	WebKeyFile        string `json:"webKeyFile" form:"webKeyFile"`                                   // Path to SSL private key file for web server
 	WebBasePath       string `json:"webBasePath" form:"webBasePath"`                                 // Base path for web panel URLs
-	PanelTitle        string `json:"panelTitle" form:"panelTitle"`                                   // Configurable brand/title shown on login, register and sidebar
+	PanelTitle        string `json:"panelTitle" form:"panelTitle"`                                   // Configurable brand/title shown on login, register and sidebar (legacy/fallback when the LTR/RTL specific overrides are empty)
+	PanelTitleLtr     string `json:"panelTitleLtr" form:"panelTitleLtr"`                             // Brand/title used when the UI is in an LTR language (e.g. English). Falls back to PanelTitle when empty.
+	PanelTitleRtl     string `json:"panelTitleRtl" form:"panelTitleRtl"`                             // Brand/title used when the UI is in an RTL language (e.g. Persian/Arabic). Falls back to PanelTitle when empty.
 	SessionMaxAge     int    `json:"sessionMaxAge" form:"sessionMaxAge" validate:"gte=1,lte=525600"` // Session maximum age in minutes (cap at one year)
 	TrustedProxyCIDRs string `json:"trustedProxyCIDRs" form:"trustedProxyCIDRs"`                     // Trusted reverse proxy IPs/CIDRs for forwarded headers
 	PanelProxy        string `json:"panelProxy" form:"panelProxy"`                                   // Optional outbound proxy URL (socks5://|http://) the panel routes its own outgoing HTTP through (self-update, GitHub release checks, geo downloads)

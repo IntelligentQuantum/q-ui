@@ -135,10 +135,22 @@ export default function RegisterPage()
             {
                 return;
             }
-            const obj = info.success && info.obj ? (info.obj as { title?: string; registrationEnable?: boolean }) : null;
-            if (obj?.title)
+            const obj = info.success && info.obj
+                ? (info.obj as {
+                    title?: string; titleLtr?: string; titleRtl?: string;
+                    registrationEnable?: boolean
+                })
+                : null;
+            if (obj && (obj.title || obj.titleLtr || obj.titleRtl))
             {
-                setBrandTitle(BrandManager.setTitle(obj.title));
+                // Write the bilingual cache so the brand slot picks the right
+                // title by active direction; legacy `title` keeps working as a
+                // shared fallback when no per-direction override is set.
+                setBrandTitle(BrandManager.setTitle({
+                    title: obj.title || '',
+                    ltr: obj.titleLtr || '',
+                    rtl: obj.titleRtl || ''
+                }));
             }
             if (!obj?.registrationEnable)
             {

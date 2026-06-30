@@ -1145,7 +1145,19 @@ export class LanguageManager
  * logged in) and cached in localStorage so every page — including the pre-auth
  * login/register screens — can render the brand instantly without a flash of
  * the default while the request is in flight.
+ *
+ * The cache holds a small JSON envelope of { ltr, rtl, title } so the same
+ * store works in both directions: an explicit `ltr`/`rtl` override is shown
+ * when the document is in that direction, otherwise the legacy `title` is
+ * shown (so older single-title deployments keep working without any change).
  */
+export interface BrandCache
+{
+    title: string;
+    ltr: string;
+    rtl: string;
+}
+
 export class BrandManager
 {
     public static readonly DEFAULT_TITLE = 'Q-UI';
@@ -1153,30 +1165,83 @@ export class BrandManager
 
     public static getTitle(): string
     {
-        try
-        {
-            const cached = window.localStorage.getItem(BrandManager.STORAGE_KEY);
-            const trimmed = (cached ?? '').trim();
-            return trimmed || BrandManager.DEFAULT_TITLE;
-        }
-        catch
-        {
-            return BrandManager.DEFAULT_TITLE;
-        }
+        const isRtl = typeof document !== 'undefined' && document.documentElement.dir === 'rtl';
+        const cache = BrandManager.readCache();
+        const pick = isRtl ? (cache.rtl || cache.title) : (cache.ltr || cache.title);
+        const trimmed = (pick || '').trim();
+        return trimmed || BrandManager.DEFAULT_TITLE;
     }
 
-    public static setTitle(title: string | null | undefined): string
+    /**
+     * Backwards-compatible setter: accepts either a plain string (legacy —
+     * treated as the language-agnostic default title) or a BrandCache object
+     * (preferred — carries per-direction overrides).
+     */
+    public static setTitle(input: string | BrandCache | null | undefined): string
     {
-        const value = (title ?? '').trim() || BrandManager.DEFAULT_TITLE;
+        const cache = BrandManager.normalizeInput(input);
+        const fallback = (cache.title || '').trim() || BrandManager.DEFAULT_TITLE;
+        const value: BrandCache = {
+            title: fallback,
+            ltr: (cache.ltr || '').trim() || fallback,
+            rtl: (cache.rtl || '').trim() || fallback
+        };
         try
         {
-            window.localStorage.setItem(BrandManager.STORAGE_KEY, value);
+            window.localStorage.setItem(BrandManager.STORAGE_KEY, JSON.stringify(value));
         }
         catch
         {
             // localStorage unavailable (private mode / disabled) — ignore.
         }
-        return value;
+        return BrandManager.getTitle();
+    }
+
+    private static readCache(): BrandCache
+    {
+        try
+        {
+            const raw = window.localStorage.getItem(BrandManager.STORAGE_KEY);
+            if (!raw)
+            {
+                return { title: '', ltr: '', rtl: '' };
+            }
+            // Legacy caches stored a plain string (the panel title). Detect and
+            // upgrade to the new envelope so existing users get a seamless
+            // transition to the bilingual model.
+            if (raw.trimStart().startsWith('{'))
+            {
+                const parsed = JSON.parse(raw) as Partial<BrandCache>;
+                return {
+                    title: typeof parsed.title === 'string' ? parsed.title : '',
+                    ltr: typeof parsed.ltr === 'string' ? parsed.ltr : '',
+                    rtl: typeof parsed.rtl === 'string' ? parsed.rtl : ''
+                };
+            }
+            return { title: raw, ltr: raw, rtl: raw };
+        }
+        catch
+        {
+            return { title: '', ltr: '', rtl: '' };
+        }
+    }
+
+    private static normalizeInput(input: string | BrandCache | null | undefined): BrandCache
+    {
+        if (input == null)
+        {
+            return { title: '', ltr: '', rtl: '' };
+        }
+        if (typeof input === 'string')
+        {
+            const trimmed = input.trim();
+            return { title: trimmed, ltr: '', rtl: '' };
+        }
+        return {
+            title: typeof input.title === 'string' ? input.title : '',
+            ltr: typeof input.ltr === 'string' ? input.ltr : '',
+            rtl: typeof input.rtl === 'string' ? input.rtl : ''
+        };
     }
 }
 

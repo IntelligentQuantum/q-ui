@@ -40,6 +40,8 @@ var defaultValueMap = map[string]string{
 	"apiToken":                      "",
 	"webBasePath":                   normalizeBasePath(getEnv("QUI_INIT_WEB_BASE_PATH", "/")),
 	"panelTitle":                    "Q-UI",
+	"panelTitleLtr":                 "",
+	"panelTitleRtl":                 "",
 	"sessionMaxAge":                 "360",
 	"trustedProxyCIDRs":             "127.0.0.1/32,::1/128",
 	"panelProxy":                    "",
@@ -900,6 +902,41 @@ func (s *SettingService) GetPanelTitle() (string, error) {
 
 func (s *SettingService) SetPanelTitle(title string) error {
 	return s.setString("panelTitle", title)
+}
+
+// GetPanelTitleLtr returns the brand/title used when the UI is in an LTR
+// language. Falls back to "Q-UI" (via GetPanelTitle) when unset so existing
+// deployments keep their configured value for English with no extra step.
+func (s *SettingService) GetPanelTitleLtr() (string, error) {
+	title, err := s.getString("panelTitleLtr")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(title) == "" {
+		return s.GetPanelTitle()
+	}
+	return title, nil
+}
+
+func (s *SettingService) SetPanelTitleLtr(title string) error {
+	return s.setString("panelTitleLtr", title)
+}
+
+// GetPanelTitleRtl is the RTL counterpart of GetPanelTitleLtr. Falls back to
+// the legacy PanelTitle (then "Q-UI") when unset.
+func (s *SettingService) GetPanelTitleRtl() (string, error) {
+	title, err := s.getString("panelTitleRtl")
+	if err != nil {
+		return "", err
+	}
+	if strings.TrimSpace(title) == "" {
+		return s.GetPanelTitle()
+	}
+	return title, nil
+}
+
+func (s *SettingService) SetPanelTitleRtl(title string) error {
+	return s.setString("panelTitleRtl", title)
 }
 
 func (s *SettingService) GetTimeLocation() (*time.Location, error) {

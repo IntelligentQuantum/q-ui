@@ -199,6 +199,8 @@ func (a *APIController) me(c *gin.Context) {
 	cryptoBonusMinDeposit, _ := a.settingService.GetCryptoBonusMinDeposit()
 	cryptoBonusMax, _ := a.settingService.GetCryptoBonusMax()
 	panelTitle, _ := a.settingService.GetPanelTitle()
+	panelTitleLtr, _ := a.settingService.GetPanelTitleLtr()
+	panelTitleRtl, _ := a.settingService.GetPanelTitleRtl()
 	// Tenant identity: the user's HOME workspace (their own), independent of any
 	// admin impersonation on this request. tenantId 0 = the global/admin scope
 	// (no workspace); managers and their sub-users carry their tenant + slug.
@@ -213,6 +215,19 @@ func (a *APIController) me(c *gin.Context) {
 		if ts, err := a.tenantSettingService.Get(user.TenantId); err == nil {
 			if ts.BrandTitle != "" {
 				panelTitle = ts.BrandTitle
+			}
+			// Per-direction overrides: only used when the workspace actually set
+			// them; otherwise the workspace's own BrandTitle applies in both
+			// directions so the brand stays consistent until explicitly customized.
+			if ts.BrandTitleLtr != "" {
+				panelTitleLtr = ts.BrandTitleLtr
+			} else {
+				panelTitleLtr = ts.BrandTitle
+			}
+			if ts.BrandTitleRtl != "" {
+				panelTitleRtl = ts.BrandTitleRtl
+			} else {
+				panelTitleRtl = ts.BrandTitle
 			}
 			brandLogo, brandFavicon, brandTheme = ts.BrandLogo, ts.BrandFavicon, ts.Theme
 		}
@@ -253,7 +268,9 @@ func (a *APIController) me(c *gin.Context) {
 		"cryptoBonusMinDeposit": cryptoBonusMinDeposit,
 		"cryptoBonusMax":        cryptoBonusMax,
 		// Configurable brand/title shown in the sidebar header.
-		"panelTitle": panelTitle,
+		"panelTitle":    panelTitle,
+		"panelTitleLtr": panelTitleLtr,
+		"panelTitleRtl": panelTitleRtl,
 		// Reseller referral identity, so the SPA can render the share link without
 		// a second round-trip. Empty for non-resellers / before first generation.
 		"referralCode":    user.ReferralCode,

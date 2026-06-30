@@ -202,14 +202,18 @@ export default function AppSidebar({ drawerOpen, setDrawerOpen }: AppSidebarProp
     // Configurable brand/title. Prefer the freshly-loaded value from /me; fall
     // back to the cached one (so it renders before /me resolves). Cache it so the
     // pre-auth login/register screens show the same brand on next visit.
-    const brandTitle = me?.panelTitle?.trim() || BrandManager.getTitle();
+    const brandTitle = BrandManager.getTitle();
     useEffect(() =>
     {
-        if (me?.panelTitle)
+        if (me)
         {
-            BrandManager.setTitle(me.panelTitle);
+            BrandManager.setTitle({
+                title: me.panelTitle,
+                ltr: me.panelTitleLtr,
+                rtl: me.panelTitleRtl
+            });
         }
-    }, [me?.panelTitle]);
+    }, [me?.panelTitle, me?.panelTitleLtr, me?.panelTitleRtl]);
 
     const [collapsed, setCollapsed] = useState<boolean>(() => readCollapsed());
 

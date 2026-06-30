@@ -17,6 +17,8 @@ import (
 // them. Payment-gateway keys are managed separately under tenant.payments.
 const (
 	tsBrandTitle         = "brandTitle"
+	tsBrandTitleLtr      = "brandTitleLtr"
+	tsBrandTitleRtl      = "brandTitleRtl"
 	tsBrandLogo          = "brandLogo"
 	tsBrandFavicon       = "brandFavicon"
 	tsTheme              = "theme"
@@ -93,6 +95,11 @@ type TenantSettingService struct {
 type TenantSettingsView struct {
 	Slug               string `json:"slug"`
 	BrandTitle         string `json:"brandTitle"`
+	// Per-direction brand title overrides. Empty = fall back to BrandTitle (or
+	// to the global panel title for tenant 0). BrandTitleLtr is rendered when
+	// the UI is LTR (e.g. English), BrandTitleRtl when it is RTL (e.g. Persian).
+	BrandTitleLtr      string `json:"brandTitleLtr"`
+	BrandTitleRtl      string `json:"brandTitleRtl"`
 	BrandLogo          string `json:"brandLogo"`
 	BrandFavicon       string `json:"brandFavicon"`
 	Theme              string `json:"theme"`
@@ -171,6 +178,10 @@ func (s *TenantSettingService) Get(tenantID int) (*TenantSettingsView, error) {
 		Theme:              mapOr(m, tsTheme, "system"),
 		RegistrationEnable: mapBool(m, tsRegistrationEnable, globalReg),
 		SubTitle:           m[tsSubTitle],
+		// Per-direction overrides default to empty; callers prefer the explicit
+		// override only when set, otherwise fall back to (tenant) BrandTitle.
+		BrandTitleLtr: m[tsBrandTitleLtr],
+		BrandTitleRtl: m[tsBrandTitleRtl],
 	}, nil
 }
 
@@ -206,6 +217,8 @@ func (s *TenantSettingService) Update(tenantID int, v TenantSettingsView) error 
 	}
 	kv := map[string]string{
 		tsBrandTitle:         strings.TrimSpace(v.BrandTitle),
+		tsBrandTitleLtr:      strings.TrimSpace(v.BrandTitleLtr),
+		tsBrandTitleRtl:      strings.TrimSpace(v.BrandTitleRtl),
 		tsBrandLogo:          strings.TrimSpace(v.BrandLogo),
 		tsBrandFavicon:       strings.TrimSpace(v.BrandFavicon),
 		tsTheme:              theme,

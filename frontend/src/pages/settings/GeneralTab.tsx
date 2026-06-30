@@ -136,6 +136,16 @@ export default function GeneralTab({ allSetting, updateSetting }: GeneralTabProp
               onChange={(e) => updateSetting({ panelTitle: e.target.value })} />
           </SettingRow>
 
+          <SettingRow title={t('pages.settings.panelTitleLtr')} description={t('pages.settings.panelTitleLtrDesc')}>
+            <Input startIcon={<Type aria-hidden />} maxLength={60} placeholder="MyVPN" value={allSetting.panelTitleLtr}
+              onChange={(e) => updateSetting({ panelTitleLtr: e.target.value })} />
+          </SettingRow>
+
+          <SettingRow title={t('pages.settings.panelTitleRtl')} description={t('pages.settings.panelTitleRtlDesc')}>
+            <Input dir="rtl" startIcon={<Type aria-hidden />} maxLength={60} value={allSetting.panelTitleRtl}
+              onChange={(e) => updateSetting({ panelTitleRtl: e.target.value })} />
+          </SettingRow>
+
           <SettingRow title={t('pages.settings.panelUrlPath')} description={t('pages.settings.panelUrlPathDesc')}>
             <Input startIcon={<Route aria-hidden />} value={allSetting.webBasePath} onChange={(e) => updateSetting({ webBasePath: sanitizePath(e.target.value) })} />
           </SettingRow>
