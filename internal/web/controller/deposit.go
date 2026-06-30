@@ -114,15 +114,10 @@ func (a *DepositController) submit(c *gin.Context) {
 		return
 	}
 
-	// All deposit fields are mandatory: the tracking ref, the reported transfer
-	// date/time, and a note. The receipt image is required too (checked below).
-	trackingNumber := strings.TrimSpace(c.PostForm("trackingNumber"))
-	depositedAt := strings.TrimSpace(c.PostForm("depositedAt"))
+	// The buyer submits the amount, an optional description note, and the
+	// upload receipt — no tracking reference or transfer date is collected. The
+	// receipt image is mandatory and is validated below; description is optional.
 	description := strings.TrimSpace(c.PostForm("description"))
-	if trackingNumber == "" || depositedAt == "" || description == "" {
-		pureJsonMsg(c, http.StatusOK, false, I18nWeb(c, "pages.manualDeposit.toasts.fieldsRequired"))
-		return
-	}
 
 	// Receipt image: required proof — validate by byte signature, then persist.
 	var receiptName string
@@ -153,11 +148,9 @@ func (a *DepositController) submit(c *gin.Context) {
 	}
 
 	req, err := a.depositService.CreateRequest(user.Id, service.DepositInput{
-		Amount:         amount,
-		TrackingNumber: trackingNumber,
-		DepositedAt:    depositedAt,
-		Description:    description,
-		ReceiptImage:   receiptName,
+		Amount:       amount,
+		Description:  description,
+		ReceiptImage: receiptName,
 		// Submit against the storefront whose card the buyer just paid (the URL),
 		// so the request lands in that workspace's review queue.
 	}, tenant.ViewScope(c))
@@ -383,8 +376,6 @@ func (a *DepositController) reject(c *gin.Context) {
 // messages. Returns "" for unknown errors so the caller falls back to generic.
 func depositErrorMessage(c *gin.Context, err error) string {
 	switch {
-	case errors.Is(err, service.ErrDuplicateDeposit):
-		return I18nWeb(c, "pages.manualDeposit.toasts.duplicate")
 	case errors.Is(err, service.ErrInvalidDeposit):
 		return I18nWeb(c, "pages.manualDeposit.toasts.invalidAmount")
 	case errors.Is(err, service.ErrReceiptTooLarge):

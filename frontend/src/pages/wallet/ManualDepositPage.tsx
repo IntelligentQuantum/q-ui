@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import type { Dayjs } from 'dayjs';
 import {
     Banknote,
     Check,
@@ -20,7 +19,6 @@ import { HttpUtil, IntlUtil } from '@/utils';
 import { message } from '@/components/ui/message';
 import { setMessageInstance } from '@/utils/messageBus';
 import PageShell from '@/layouts/PageShell';
-import DateTimePicker from '@/components/form/DateTimePicker';
 import {
     Alert,
     Badge,
@@ -56,8 +54,6 @@ interface PaymentCard {
 interface DepositRequest {
   id: number;
   amount: number;
-  trackingNumber: string;
-  depositedAt: string;
   description: string;
   receiptImage: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -136,15 +132,13 @@ export default function ManualDepositPage()
     const depositsQuery = useQuery({ queryKey: ['deposits', 'mine'], queryFn: fetchDeposits });
 
     const [amount, setAmount] = useState<number>(0);
-    const [tracking, setTracking] = useState('');
-    const [depositedAt, setDepositedAt] = useState<Dayjs | null>(null);
     const [description, setDescription] = useState('');
     const [receipt, setReceipt] = useState<File | null>(null);
     const fileRef = useRef<HTMLInputElement>(null);
     const [historySearch, setHistorySearch] = useState('');
 
-    // Client-side filter over the user's own (small) history: tracking number,
-    // localized status, or amount.
+    // Client-side filter over the user's own (small) history: matches the amount
+    // or the localized status text.
     const filteredDeposits = useMemo(() =>
     {
         const rows = depositsQuery.data ?? [];
@@ -154,8 +148,7 @@ export default function ManualDepositPage()
             return rows;
         }
         return rows.filter((r) =>
-            r.trackingNumber?.toLowerCase().includes(q)
-            || String(r.amount).includes(q)
+            String(r.amount).includes(q)
             || t(`pages.manualDeposit.status_${ r.status }`, { defaultValue: r.status }).toLowerCase().includes(q));
     }, [depositsQuery.data, historySearch, t]);
 
@@ -164,8 +157,6 @@ export default function ManualDepositPage()
         {
             const fd = new FormData();
             fd.append('amount', String(amount));
-            fd.append('trackingNumber', tracking);
-            fd.append('depositedAt', depositedAt ? depositedAt.toISOString() : '');
             fd.append('description', description);
             if (receipt)
             {
@@ -179,8 +170,6 @@ export default function ManualDepositPage()
             {
                 messageApi.success(t('pages.manualDeposit.toasts.submitted'));
                 setAmount(0);
-                setTracking('');
-                setDepositedAt(null);
                 setDescription('');
                 setReceipt(null);
                 if (fileRef.current)
@@ -215,9 +204,8 @@ export default function ManualDepositPage()
         {
             messageApi.error(t('pages.manualDeposit.toasts.invalidAmount'));
             return;
-        }
-        // Every field is mandatory, and a receipt image must be attached.
-        if (!tracking.trim() || !depositedAt || !description.trim() || !receipt)
+        }		// The receipt image is mandatory; description is optional.
+		if (!receipt)
         {
             messageApi.error(t('pages.manualDeposit.toasts.fieldsRequired'));
             return;
@@ -232,12 +220,6 @@ export default function ManualDepositPage()
             key: 'amount',
             header: t('pages.manualDeposit.amount'),
             cell: (row) => <strong className="tabular-nums">{formatMoney(row.amount)}</strong>
-        },
-        {
-            key: 'trackingNumber',
-            header: t('pages.manualDeposit.trackingNumber'),
-            className: 'hidden sm:table-cell',
-            cell: (row) => <span className="font-mono text-sm" dir="ltr">{row.trackingNumber || '—'}</span>
         },
         {
             key: 'status',
@@ -356,23 +338,6 @@ export default function ManualDepositPage()
                     {unit}
                   </span>
                 </div>
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="dep-tracking">{t('pages.manualDeposit.trackingNumber')}</Label>
-                <Input
-                  id="dep-tracking"
-                  dir="ltr"
-                  placeholder={t('pages.manualDeposit.trackingPlaceholder')}
-                  value={tracking}
-                  onChange={(e) => setTracking(e.target.value)}
-                />
-              </div>
-
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="dep-when">{t('pages.manualDeposit.depositedAt')}</Label>
-                {/* Jalali calendar for Persian, native datetime for English. */}
-                <DateTimePicker value={depositedAt} onChange={setDepositedAt} showTime />
               </div>
             </div>
 

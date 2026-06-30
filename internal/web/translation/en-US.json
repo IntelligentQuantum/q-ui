@@ -64,7 +64,6 @@
     "noAdjustment": "No adjustment specified",
     "depositNotFound": "Deposit request not found",
     "depositNotPending": "Deposit request is not pending",
-    "depositTrackingExists": "A deposit with this tracking number already exists",
     "invalidDeposit": "Invalid deposit request",
     "paymentCardNotFound": "Payment card not found",
     "invalidPaymentCard": "Invalid payment card",

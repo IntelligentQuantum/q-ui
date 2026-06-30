@@ -33,7 +33,6 @@ interface DepositView {
   username: string;
   role: string;
   amount: number;
-  trackingNumber: string;
   description: string;
   receiptImage: string;
   status: 'pending' | 'approved' | 'rejected';
@@ -185,12 +184,6 @@ export default function ManualDepositsPage()
             cell: (row) => <strong className="tabular-nums">{formatMoney(row.amount)}</strong>
         },
         {
-            key: 'trackingNumber',
-            header: t('pages.adminDeposits.trackingNumber'),
-            className: 'hidden md:table-cell',
-            cell: (row) => <span className="font-mono text-sm" dir="ltr">{row.trackingNumber || '—'}</span>
-        },
-        {
             key: 'receipt',
             header: t('pages.adminDeposits.receipt'),
             className: 'hidden lg:table-cell',
@@ -325,8 +318,6 @@ export default function ManualDepositsPage()
             <dd className="col-span-2">{detail.username} <span className="text-muted-foreground capitalize">({detail.role})</span></dd>
             <dt className="text-muted-foreground">{t('pages.adminDeposits.amount')}</dt>
             <dd className="col-span-2 font-semibold">{formatMoney(detail.amount)}</dd>
-            <dt className="text-muted-foreground">{t('pages.adminDeposits.trackingNumber')}</dt>
-            <dd className="col-span-2 font-mono" dir="ltr">{detail.trackingNumber || '—'}</dd>
             <dt className="text-muted-foreground">{t('pages.manualDeposit.descriptionLabel')}</dt>
             <dd className="col-span-2 whitespace-pre-wrap break-words">{detail.description || '—'}</dd>
             <dt className="text-muted-foreground">{t('pages.adminDeposits.status')}</dt>

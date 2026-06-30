@@ -24,7 +24,6 @@ import (
 var (
 	ErrDepositNotFound    = errors.New("deposit request not found")
 	ErrDepositNotPending  = errors.New("deposit request is not pending")
-	ErrDuplicateDeposit   = errors.New("a deposit with this tracking number already exists")
 	ErrInvalidDeposit     = errors.New("invalid deposit request")
 	ErrCardNotFound       = errors.New("payment card not found")
 	ErrInvalidCard        = errors.New("invalid payment card")
@@ -288,48 +287,30 @@ func (s *DepositService) ReceiptFilePath(filename string) (string, error) {
 // DepositInput is the buyer-supplied payload for a new deposit request. The
 // receipt is handled separately (multipart) and passed in as ReceiptImage.
 type DepositInput struct {
-	Amount         int64
-	TrackingNumber string
-	DepositedAt    string // buyer-reported transfer date+time (datetime-local string)
-	Description    string
-	ReceiptImage   string // stored filename, already validated+saved; may be empty
+	Amount       int64
+	Description  string
+	ReceiptImage string // stored filename, already validated+saved; may be empty
 }
 
-// CreateRequest records a new pending deposit. It rejects a non-positive amount
-// and a tracking number already used by any prior request (duplicate-submission
-// guard). The wallet is NOT touched here — only an approval credits it.
+// CreateRequest records a new pending deposit. It rejects a non-positive amount;
+// only an approval credits the wallet — this entry point never touches it.
 func (s *DepositService) CreateRequest(userId int, in DepositInput, scope model.Scope) (*model.ManualDepositRequest, error) {
 	if userId <= 0 || in.Amount <= 0 {
 		return nil, ErrInvalidDeposit
 	}
-	tracking := strings.TrimSpace(in.TrackingNumber)
-	if tracking != "" {
-		// Dedup WITHIN the workspace only — a tracking number used in another tenant
-		// must not block this one (cross-tenant denial / existence oracle).
-		var count int64
-		if err := scope.Apply(database.GetDB().Model(&model.ManualDepositRequest{})).
-			Where("tracking_number = ?", tracking).Count(&count).Error; err != nil {
-			return nil, err
-		}
-		if count > 0 {
-			return nil, ErrDuplicateDeposit
-		}
-	}
 	req := &model.ManualDepositRequest{
-		UserId:         userId,
-		TenantId:       scope.OwnerTenantID(),
-		Amount:         in.Amount,
-		TrackingNumber: tracking,
-		DepositedAt:    strings.TrimSpace(in.DepositedAt),
-		Description:    strings.TrimSpace(in.Description),
-		ReceiptImage:   in.ReceiptImage,
-		Status:         model.ManualDepositPending,
+		UserId:       userId,
+		TenantId:     scope.OwnerTenantID(),
+		Amount:       in.Amount,
+		Description:  strings.TrimSpace(in.Description),
+		ReceiptImage: in.ReceiptImage,
+		Status:       model.ManualDepositPending,
 	}
 	if err := database.GetDB().Create(req).Error; err != nil {
 		return nil, err
 	}
-	logger.Infof("[audit] manual-deposit submitted: id=%d user=%d amount=%d tracking=%q",
-		req.Id, userId, in.Amount, tracking)
+	logger.Infof("[audit] manual-deposit submitted: id=%d user=%d amount=%d",
+		req.Id, userId, in.Amount)
 
 	// Notify every admin that a request is awaiting review (best-effort).
 	var username string
@@ -369,7 +350,7 @@ type ManualDepositView struct {
 }
 
 // ListAll returns deposit requests for the admin review queue, optionally
-// filtered by status and a search term (matched against tracking number or
+// filtered by status and a search term (matched against the submitter's
 // username), newest first.
 func (s *DepositService) ListAll(status, search string, limit, offset int, scope model.Scope) ([]ManualDepositView, error) {
 	if limit <= 0 || limit > 500 {
@@ -390,7 +371,7 @@ func (s *DepositService) ListAll(status, search string, limit, offset int, scope
 	}
 	if search = strings.TrimSpace(search); search != "" {
 		like := "%" + search + "%"
-		q = q.Where("d.tracking_number LIKE ? OR u.username LIKE ?", like, like)
+		q = q.Where("u.username LIKE ?", like)
 	}
 
 	var views []ManualDepositView

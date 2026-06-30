@@ -64,7 +64,6 @@
     "noAdjustment": "هیچ تغییری مشخص نشده است",
     "depositNotFound": "درخواست واریز یافت نشد",
     "depositNotPending": "درخواست واریز در حالت انتظار نیست",
-    "depositTrackingExists": "واریزی با این شماره پیگیری از قبل وجود دارد",
     "invalidDeposit": "درخواست واریز نامعتبر است",
     "paymentCardNotFound": "کارت پرداخت یافت نشد",
     "invalidPaymentCard": "کارت پرداخت نامعتبر است",

@@ -44,18 +44,18 @@ const (
 // the buyer's wallet and writes a Transaction) or Rejects it (with a reason, no
 // credit). ApprovedBy/ApprovedAt are set on either terminal transition so the
 // row is self-auditing.
+//
+// The intake now only carries the amount, a free-form description, and the
+// uploaded receipt — there is no tracking reference or transfer date captured
+// from the buyer, so this struct keeps no fields for them (legacy columns in
+// manual_deposit_requests from older builds are preserved by the DB layer so
+// historical rows still load; new rows simply leave them unset).
 type ManualDepositRequest struct {
 	Id       int   `json:"id" gorm:"primaryKey;autoIncrement"`
 	UserId   int   `json:"userId" gorm:"index;not null;column:user_id"`
 	TenantId int   `json:"tenantId" gorm:"column:tenant_id;index;default:0"` // workspace scope (0 = global/admin)
 	Amount   int64 `json:"amount" gorm:"not null"`                           // credits requested (always positive)
-	// TrackingNumber is the bank's transfer reference the buyer reports. It is
-	// uniquely indexed so the same receipt can't be submitted twice (duplicate
-	// detection); a blank value is allowed and not deduplicated.
-	TrackingNumber string `json:"trackingNumber" gorm:"column:tracking_number;index"`
-	// DepositedAt is the date+time the buyer reports making the transfer, as a
-	// free-form string captured from a datetime-local input (e.g. "2026-06-18T14:30").
-	DepositedAt string `json:"depositedAt" gorm:"column:deposited_at;default:''"`
+	// Description is the buyer's free-form note shown to the reviewer. May be empty.
 	Description string `json:"description" gorm:"default:''"`
 	// ReceiptImage is the stored filename (not a path) of the uploaded receipt,
 	// served back only through the authenticated receipt endpoint. Empty when no
