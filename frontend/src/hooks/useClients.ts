@@ -338,20 +338,29 @@ export function useClients()
     const pageSize = (defaults.pageSize as number) ?? 0;
 
     // Live summary: the client_stats WS event refreshes allClientStats every few
-    // seconds, so the top counters track reality without a page refresh. Falls
-    // back to the server-computed summary until the first event lands, and keeps
-    // the server's authoritative total for the headline count.
+    // seconds, so the top counters track reality without a page refresh.
+    //
+    // IMPORTANT: the WS event broadcasts GLOBAL stats (all tenants). Non-admin
+    // users (managers, moderators) must stick with the server-computed summary
+    // because ListPaged scopes it to their workspace. Using the live global
+    // stats would leak cross-tenant counts into the summary cards.
     const [allClientStats, setAllClientStats] = useState<ClientStatRow[]>([]);
     const summary = useMemo<ClientsSummary>(() =>
     {
         const serverSummary = listQuery.data?.summary ?? DEFAULT_SUMMARY;
+        // Non-admins are tenant-scoped — the global WS stats would leak other
+        // workspaces, so always use the server summary for them.
+        if (me != null && !me.isAdmin)
+        {
+            return serverSummary;
+        }
         if (allClientStats.length === 0)
         {
             return serverSummary;
         }
         const live = computeClientsSummary(allClientStats, new Set(onlines), expireDiff, trafficDiff);
         return { ...live, total: serverSummary.total || live.total };
-    }, [allClientStats, onlines, expireDiff, trafficDiff, listQuery.data?.summary]);
+    }, [allClientStats, onlines, expireDiff, trafficDiff, listQuery.data?.summary, me]);
 
     // Client mutations (add/update/remove/attach/detach/resetTraffic/…) all
     // mutate inbound rows server-side too — adding a client appends to
