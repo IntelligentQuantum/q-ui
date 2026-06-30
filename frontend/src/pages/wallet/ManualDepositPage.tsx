@@ -225,7 +225,7 @@ export default function ManualDepositPage()
             key: 'status',
             header: t('pages.manualDeposit.status'),
             cell: (row) => (
-        <div className="flex flex-col gap-1">
+        <div className="flex flex-col gap-1 items-start">
           <Badge variant={STATUS_BADGE[row.status] ?? 'neutral'}>
             {t(`pages.manualDeposit.status_${ row.status }`, { defaultValue: row.status })}
           </Badge>
