@@ -312,10 +312,11 @@ func (s *DepositService) CreateRequest(userId int, in DepositInput, scope model.
 	logger.Infof("[audit] manual-deposit submitted: id=%d user=%d amount=%d",
 		req.Id, userId, in.Amount)
 
-	// Notify every admin that a request is awaiting review (best-effort).
+	// Notify the workspace's staff that a request is awaiting review — tenant-
+	// scoped so a manager never sees another workspace's deposits (best-effort).
 	var username string
 	database.GetDB().Model(&model.User{}).Select("username").Where("id = ?", userId).Scan(&username)
-	_ = s.notificationService.NotifyAdmins(
+	_ = s.notificationService.NotifyTenantAdmins(req.TenantId,
 		"notifications.depositSubmitted.title",
 		"notifications.depositSubmitted.body",
 		model.NotificationInfo,
@@ -460,9 +461,10 @@ func (s *DepositService) Approve(adminId, id int, scope model.Scope) (*model.Man
 		"/manual-deposit",
 		map[string]any{"amount": formatAmount(result.Amount)},
 	)
-	// Fraud/finance alert: a large deposit pings every admin's bell.
+	// Fraud/finance alert: a large deposit pings the workspace's staff and global
+	// admins — never leaks into another tenant (best-effort).
 	if result.Amount >= LargeDepositThreshold {
-		_ = s.notificationService.NotifyAdmins(
+		_ = s.notificationService.NotifyTenantAdmins(result.TenantId,
 			"notifications.largeDeposit.title",
 			"notifications.largeDeposit.body",
 			model.NotificationWarning,

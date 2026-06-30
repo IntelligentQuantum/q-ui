@@ -68,6 +68,30 @@ func (s *NotificationService) NotifyAdmins(title, body, level, link string, para
 	return nil
 }
 
+// NotifyTenantAdmins writes the same notification for every admin/manager within
+// a specific tenant, plus global admins (tenant 0) who can see into all
+// workspaces. For tenant 0 it notifies only global admins. Used so a manager's
+// deposit never pings another workspace's staff.
+func (s *NotificationService) NotifyTenantAdmins(tenantId int, title, body, level, link string, params map[string]any) error {
+	var ids []int
+	q := database.GetDB().Model(&model.User{})
+	if tenantId == 0 {
+		q = q.Where("role = ? AND tenant_id = 0", model.RoleAdmin)
+	} else {
+		q = q.Where("(role IN ? AND tenant_id = ?) OR (role = ? AND tenant_id = 0)",
+			[]string{model.RoleAdmin, model.RoleManager}, tenantId, model.RoleAdmin)
+	}
+	if err := q.Pluck("id", &ids).Error; err != nil {
+		logger.Warning("notification: failed to load tenant admins:", err)
+		return err
+	}
+	for _, id := range ids {
+		_ = s.createOne(id, title, body, level, link, params)
+	}
+	websocket.BroadcastNotificationsChanged()
+	return nil
+}
+
 // NotifyUsers writes the same notification for a set of users (fan-out, e.g. all
 // support staff) and pushes a single real-time nudge.
 func (s *NotificationService) NotifyUsers(userIds []int, title, body, level, link string, params map[string]any) error {
