@@ -20,7 +20,6 @@ import {
     CardContent,
     CardHeader,
     CardTitle,
-    Input,
     Label,
     PasswordInput
 } from '@/components/ui';
@@ -30,8 +29,6 @@ const JSON_HEADERS = { headers: { 'Content-Type': 'application/json' } } as cons
 const basePath = window.Q_UI_BASE_PATH || '/';
 
 interface ProfileFormValues {
-  username: string;
-  email: string;
   newPassword: string;
   confirmPassword: string;
   currentPassword: string;
@@ -93,17 +90,8 @@ export default function ProfilePage()
         getValues,
         formState: { errors }
     } = useForm<ProfileFormValues>({
-        defaultValues: { username: '', email: '', newPassword: '', confirmPassword: '', currentPassword: '' }
+        defaultValues: { newPassword: '', confirmPassword: '', currentPassword: '' }
     });
-
-    useEffect(() =>
-    {
-        if (me)
-        {
-            setValue('username', me.username);
-            setValue('email', me.email ?? '');
-        }
-    }, [me, setValue]);
 
     const saveMut = useMutation({
         mutationFn: (values: ProfileFormValues) =>
@@ -111,8 +99,6 @@ export default function ProfilePage()
                 '/panel/api/profile',
                 {
                     currentPassword: values.currentPassword,
-                    username: values.username,
-                    email: values.email ?? '',
                     newPassword: values.newPassword ?? ''
                 },
                 JSON_HEADERS
@@ -171,40 +157,42 @@ export default function ProfilePage()
                 </div>
               </Card>
 
-              {/* Account form */}
+              {/* Profile info — display only, not editable */}
               <Card>
                 <CardHeader>
                   <CardTitle>{t('pages.profile.accountTitle')}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
-                    <Field label={t('username')} htmlFor="pf-username" error={errors.username?.message}>
-                      <Input
-                        id="pf-username"
-                        autoComplete="username"
-                        startIcon={<User aria-hidden />}
-                        aria-invalid={!!errors.username}
-                        {...register('username', {
-                            required: t('pages.register.errors.username'),
-                            pattern: { value: /^[A-Za-z0-9_]{3,32}$/, message: t('pages.register.errors.username') }
-                        })}
-                      />
-                    </Field>
-
-                    <Field label={t('emailAddress')} htmlFor="pf-email">
-                      <Input
-                        id="pf-email"
-                        autoComplete="email"
-                        startIcon={<Mail aria-hidden />}
-                        placeholder={t('pages.register.placeholders.email')}
-                        {...register('email')}
-                      />
-                    </Field>
-
-                    <div className="mt-2 border-t border-border pt-4">
-                      <h3 className="text-sm font-semibold text-foreground">{t('pages.profile.changePassword')}</h3>
+                  <div className="flex flex-col gap-3">
+                    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-sunken p-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface text-muted-foreground">
+                        <User className="h-4 w-4" aria-hidden />
+                      </div>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-xs text-muted-foreground">{t('username')}</span>
+                        <span className="truncate text-sm font-medium" dir="ltr">{me?.username || '—'}</span>
+                      </div>
                     </div>
+                    <div className="flex items-center gap-3 rounded-lg border border-border bg-surface-sunken p-3">
+                      <div className="grid h-9 w-9 shrink-0 place-items-center rounded-md bg-surface text-muted-foreground">
+                        <Mail className="h-4 w-4" aria-hidden />
+                      </div>
+                      <div className="flex min-w-0 flex-col">
+                        <span className="text-xs text-muted-foreground">{t('emailAddress')}</span>
+                        <span className="truncate text-sm font-medium" dir="ltr">{me?.email || '—'}</span>
+                      </div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
+              {/* Change password — separate card */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>{t('pages.profile.changePassword')}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <form noValidate onSubmit={onSubmit} className="flex flex-col gap-4">
                     <Field
                       label={t('pages.profile.newPassword')}
                       htmlFor="pf-new"
