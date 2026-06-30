@@ -27,6 +27,8 @@ type ClientSlim struct {
 	Comment    string              `json:"comment,omitempty"`
 	InboundIds []int               `json:"inboundIds"`
 	Traffic    *xray.ClientTraffic `json:"traffic,omitempty"`
+	OwnerId    int                 `json:"ownerId,omitempty"`
+	OwnerName  string              `json:"ownerName,omitempty"`
 	CreatedAt  int64               `json:"createdAt"`
 	UpdatedAt  int64               `json:"updatedAt"`
 }
@@ -306,6 +308,8 @@ func toClientSlim(c ClientWithAttachments) ClientSlim {
 		Comment:    c.Comment,
 		InboundIds: c.InboundIds,
 		Traffic:    c.Traffic,
+		OwnerId:    c.OwnerId,
+		OwnerName:  c.OwnerName,
 		CreatedAt:  c.CreatedAt,
 		UpdatedAt:  c.UpdatedAt,
 	}
