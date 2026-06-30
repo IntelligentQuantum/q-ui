@@ -1739,7 +1739,9 @@
       "admins": "Admins",
       "resellers": "Resellers",
       "totalBalance": "Total Balance",
-      "role_manager": "Manager"
+      "role_manager": "Manager",
+      "tenant": "Tenant",
+      "tenantGlobal": "Global"
     },
     "profile": {
       "accountTitle": "Account",

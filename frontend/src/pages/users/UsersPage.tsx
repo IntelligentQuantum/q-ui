@@ -53,6 +53,7 @@ interface PanelUser {
   email: string;
   balance: number;
   costPerGbOverride: number;
+  tenantName: string;
 }
 
 interface Transaction {
@@ -446,6 +447,17 @@ export default function UsersPage()
             }
         },
         {
+            key: 'tenant',
+            header: t('pages.users.tenant'),
+            accessor: (row) => row.tenantName || '',
+            sortable: true,
+            cell: (row) =>
+                row.tenantName
+                    ? <span className="text-sm">{row.tenantName}</span>
+                    : <Badge variant="neutral">{t('pages.users.tenantGlobal')}</Badge>,
+            className: 'hidden sm:table-cell'
+        },
+        {
             key: 'email',
             header: t('emailAddress'),
             accessor: (row) => row.email || '',
@@ -553,7 +565,7 @@ export default function UsersPage()
                     data={filteredUsers}
                     rowKey={(row) => String(row.id)}
                     loading={usersQuery.isFetching}
-                    pageSize={0}
+                    pageSize={10}
                     empty={
                       <div className="flex flex-col items-center gap-2 py-6 text-muted-foreground">
                         <Users className="h-8 w-8 opacity-50" aria-hidden />

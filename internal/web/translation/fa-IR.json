@@ -2513,7 +2513,9 @@
       "admins": "مدیران",
       "resellers": "نمایندگان",
       "totalBalance": "موجودی کل",
-      "role_manager": "مدیر فضای‌کاری"
+      "role_manager": "مدیر فضای‌کاری",
+      "tenant": "فضای کاری",
+      "tenantGlobal": "سراسری"
     },
     "profile": {
       "accountTitle": "حساب کاربری",

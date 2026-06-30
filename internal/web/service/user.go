@@ -363,17 +363,31 @@ func optionalEmail(email string) (string, error) {
 	return email, nil
 }
 
-// ListUsers returns every panel user with the password hash cleared so the
-// result is safe to serialize to an admin client.
-func (s *UserService) ListUsers() ([]model.User, error) {
-	var users []model.User
-	if err := database.GetDB().Order("id asc").Find(&users).Error; err != nil {
+// UserView is a panel user enriched with their workspace name for display in
+// the admin Users table. It embeds every User field and adds TenantName (empty
+// for tenant 0 / global scope).
+type UserView struct {
+	model.User
+	TenantName string `json:"tenantName"`
+}
+
+// ListUsers returns every panel user with the password hash cleared and the
+// workspace name resolved from the tenant ID, so the result is safe to serialize
+// and the Users table shows a readable name instead of a bare numeric ID.
+func (s *UserService) ListUsers() ([]UserView, error) {
+	var rows []UserView
+	if err := database.GetDB().
+		Table("users").
+		Select("users.*, COALESCE(tenants.name, '') AS tenant_name").
+		Joins("LEFT JOIN tenants ON tenants.id = users.tenant_id").
+		Order("users.id asc").
+		Scan(&rows).Error; err != nil {
 		return nil, err
 	}
-	for i := range users {
-		users[i].Password = ""
+	for i := range rows {
+		rows[i].Password = ""
 	}
-	return users, nil
+	return rows, nil
 }
 
 // GetUserByID loads a single user (password cleared).
