@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 import type { AllSetting } from '@/models/setting';
-import { Input, Select, SettingListItem, Switch } from '@/components/ui';
+import { Input, SettingListItem } from '@/components/ui';
 
 interface ManagerTabProps {
   allSetting: AllSetting;
@@ -60,8 +60,9 @@ function RoleCostRow({ title, description, managerKey, memberKey, allSetting, up
 }
 
 // ManagerTab groups the manager economy controls — what creating a client and
-// resetting its traffic costs, priced per tier (admins are always free), the
-// referral commission, and the ZarinPal gateway used to top up balances.
+// resetting its traffic costs, priced per tier (admins are always free), and
+// the referral commission. Payment-gateway settings (ZarinPal, Plisio, manual
+// deposit) live under their own Payments / Manual Deposit tabs.
 export default function ManagerTab({ allSetting, updateSetting }: ManagerTabProps)
 {
     const { t } = useTranslation();
@@ -126,57 +127,6 @@ export default function ManagerTab({ allSetting, updateSetting }: ManagerTabProp
           />
           <span className="text-sm text-muted-foreground">%</span>
         </div>
-      </SettingListItem>
-
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.security.zarinpalEnable')}
-        description={t('pages.settings.security.zarinpalEnableDesc')}
-      >
-        <Switch
-          checked={allSetting.zarinpalEnable}
-          onCheckedChange={(checked) => updateSetting({ zarinpalEnable: checked })}
-        />
-      </SettingListItem>
-
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.security.zarinpalMerchantId')}
-        description={t('pages.settings.security.zarinpalMerchantIdDesc')}
-      >
-        <Input
-          className="max-w-[340px]"
-          value={allSetting.zarinpalMerchantId}
-          onChange={(e) => updateSetting({ zarinpalMerchantId: e.target.value })}
-          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-        />
-      </SettingListItem>
-
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.security.zarinpalCurrency')}
-        description={t('pages.settings.security.zarinpalCurrencyDesc')}
-      >
-        <Select
-          className="w-36"
-          value={allSetting.zarinpalCurrency || 'IRT'}
-          onChange={(value) => updateSetting({ zarinpalCurrency: value })}
-          options={[
-              { value: 'IRT', label: 'IRT (Toman)' },
-              { value: 'IRR', label: 'IRR (Rial)' }
-          ]}
-        />
-      </SettingListItem>
-
-      <SettingListItem
-        paddings="small"
-        title={t('pages.settings.security.zarinpalSandbox')}
-        description={t('pages.settings.security.zarinpalSandboxDesc')}
-      >
-        <Switch
-          checked={allSetting.zarinpalSandbox}
-          onCheckedChange={(checked) => updateSetting({ zarinpalSandbox: checked })}
-        />
       </SettingListItem>
     </>
     );

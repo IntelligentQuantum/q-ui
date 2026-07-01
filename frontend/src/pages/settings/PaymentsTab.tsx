@@ -1,17 +1,18 @@
 import { useTranslation } from 'react-i18next';
 
 import type { AllSetting } from '@/models/setting';
-import { Input, PasswordInput, SettingListItem, Switch } from '@/components/ui';
+import { Input, PasswordInput, Select, SettingListItem, Switch } from '@/components/ui';
 
 interface PaymentsTabProps {
   allSetting: AllSetting;
   updateSetting: (patch: Partial<AllSetting>) => void;
 }
 
-// PaymentsTab configures the Plisio cryptocurrency gateway and the configurable
-// crypto deposit bonus. The bonus applies only to crypto top-ups credited
-// through Plisio (members & resellers) — admin manual balance changes and
-// internal transfers never receive it; that rule is enforced on the backend.
+// PaymentsTab configures the user-facing payment gateways (ZarinPal for fiat
+// top-ups, Plisio for crypto top-ups) plus the configurable crypto deposit
+// bonus. The bonus applies only to crypto top-ups credited through Plisio
+// (members & resellers) — admin manual balance changes and internal transfers
+// never receive it; that rule is enforced on the backend.
 export default function PaymentsTab({ allSetting, updateSetting }: PaymentsTabProps)
 {
     const { t } = useTranslation();
@@ -20,6 +21,58 @@ export default function PaymentsTab({ allSetting, updateSetting }: PaymentsTabPr
 
     return (
     <>
+      {/* --- ZarinPal payment gateway --- */}
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.payments.zarinpalEnable')}
+        description={t('pages.settings.payments.zarinpalEnableDesc')}
+      >
+        <Switch
+          checked={allSetting.zarinpalEnable}
+          onCheckedChange={(checked) => updateSetting({ zarinpalEnable: checked })}
+        />
+      </SettingListItem>
+
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.payments.zarinpalMerchantId')}
+        description={t('pages.settings.payments.zarinpalMerchantIdDesc')}
+      >
+        <Input
+          className="max-w-[340px]"
+          value={allSetting.zarinpalMerchantId}
+          onChange={(e) => updateSetting({ zarinpalMerchantId: e.target.value })}
+          placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
+        />
+      </SettingListItem>
+
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.payments.zarinpalCurrency')}
+        description={t('pages.settings.payments.zarinpalCurrencyDesc')}
+      >
+        <Select
+          className="w-36"
+          value={allSetting.zarinpalCurrency || 'IRT'}
+          onChange={(value) => updateSetting({ zarinpalCurrency: value })}
+          options={[
+              { value: 'IRT', label: 'IRT (Toman)' },
+              { value: 'IRR', label: 'IRR (Rial)' }
+          ]}
+        />
+      </SettingListItem>
+
+      <SettingListItem
+        paddings="small"
+        title={t('pages.settings.payments.zarinpalSandbox')}
+        description={t('pages.settings.payments.zarinpalSandboxDesc')}
+      >
+        <Switch
+          checked={allSetting.zarinpalSandbox}
+          onCheckedChange={(checked) => updateSetting({ zarinpalSandbox: checked })}
+        />
+      </SettingListItem>
+
       {/* --- Plisio crypto gateway --- */}
       <SettingListItem
         paddings="small"
