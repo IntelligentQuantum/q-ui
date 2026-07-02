@@ -2,7 +2,7 @@ import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useQuery } from '@tanstack/react-query';
 import {
-    Banknote, CircleCheck, CircleDollarSign, Clock, Gift, Receipt, RotateCcw,
+    Banknote, CircleCheck, CircleDollarSign, Clock, CreditCard, Gift, Receipt, RotateCcw,
     ShieldCheck, ShoppingCart, TrendingUp, TriangleAlert, Users, Wallet
 } from 'lucide-react';
 
@@ -11,18 +11,19 @@ import { useCurrency } from '@/hooks/useCurrency';
 import { useMe } from '@/hooks/useMe';
 import { Alert, Card, CardContent, CardHeader, CardTitle, StatCard, Spinner } from '@/components/ui';
 import Sparkline from '@/components/viz/Sparkline';
+import { withTenant, type TenantSelection } from './FinancePage';
 
 interface Dashboard {
   totalRevenue: number; todayRevenue: number; weekRevenue: number; monthRevenue: number; yearRevenue: number;
   grossRevenue: number; netRevenue: number; lifetimeRevenue: number;
   totalDeposits: number; totalWithdrawals: number; totalWalletBalance: number;
-  pendingDeposits: number; approvedDeposits: number; rejectedDeposits: number;
+  pendingDeposits: number; approvedDeposits: number; rejectedDeposits: number; totalDepositCount: number;
   totalBonuses: number; totalReferralCommissions: number; totalRefunds: number;
   totalProductSales: number; productSalesCount: number;
   totalUsers: number; payingUsers: number; activeUsers: number; arpu: number; aov: number;
   totalSpend: number; totalClients: number; newClientsMonth: number;
 }
-interface DayPoint { date: string; revenue: number; deposits: number; orders: number; users: number; }
+interface DayPoint { date: string; revenue: number; deposits: number; productRevenue: number; orders: number; users: number; }
 interface Segments {
   totalUsers: number; registeredNeverDeposited: number; depositedNeverPurchased: number;
   purchasedOnce: number; repeatBuyers: number; highValue: number; inactive90d: number;
@@ -30,6 +31,9 @@ interface Segments {
 }
 interface Consistency {
   sumUserBalances: number; ledgerNet: number; difference: number; balanced: boolean;
+  // absDifference mirrors the backend's |difference| so the banner can render
+  // a tolerance-aware number. Optional so older backends don't break the UI.
+  absDifference?: number;
   negativeBalances: number; duplicateTracking: number; orphanedOrders: number;
 }
 
@@ -46,40 +50,40 @@ function compact(v: number): string
     return String(Math.round(v));
 }
 
-export default function OverviewTab()
+export default function OverviewTab({ tenantSel }: { tenantSel: TenantSelection })
 {
     const { t } = useTranslation();
     const { format: money, formatNumber, unit } = useCurrency();
 
     const dash = useQuery({
-        queryKey: ['finance', 'dashboard'],
+        queryKey: ['finance', 'dashboard', tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get('/panel/api/finance/dashboard', undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant('/panel/api/finance/dashboard', tenantSel), undefined, { silent: true });
             return m?.success ? (m.obj as Dashboard) : null;
         }
     });
     const series = useQuery({
-        queryKey: ['finance', 'timeseries', 30],
+        queryKey: ['finance', 'timeseries', 30, tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get('/panel/api/finance/timeseries?days=30', undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant('/panel/api/finance/timeseries?days=30', tenantSel), undefined, { silent: true });
             return m?.success ? ((m.obj as DayPoint[]) ?? []) : [];
         }
     });
     const segs = useQuery({
-        queryKey: ['finance', 'segments'],
+        queryKey: ['finance', 'segments', tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get('/panel/api/finance/segments', undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant('/panel/api/finance/segments', tenantSel), undefined, { silent: true });
             return m?.success ? (m.obj as Segments) : null;
         }
     });
     const cons = useQuery({
-        queryKey: ['finance', 'consistency'],
+        queryKey: ['finance', 'consistency', tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get('/panel/api/finance/consistency', undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant('/panel/api/finance/consistency', tenantSel), undefined, { silent: true });
             return m?.success ? (m.obj as Consistency) : null;
         }
     });
@@ -134,8 +138,10 @@ export default function OverviewTab()
         { k: 'pending', label: t('pages.finance.pendingDeposits'), v: d?.pendingDeposits, icon: <Clock className="h-5 w-5 text-warning" aria-hidden /> },
         { k: 'approved', label: t('pages.finance.approvedDeposits'), v: d?.approvedDeposits, icon: <CircleCheck className="h-5 w-5 text-success" aria-hidden /> },
         { k: 'rejected', label: t('pages.finance.rejectedDeposits'), v: d?.rejectedDeposits, icon: <TriangleAlert className="h-5 w-5 text-danger" aria-hidden /> },
+        { k: 'totalDeposits', label: t('pages.finance.allDeposits'), v: d?.totalDepositCount, icon: <CreditCard className="h-5 w-5" aria-hidden /> },
         { k: 'clients', label: t('pages.finance.totalClients'), v: d?.totalClients, icon: <Users className="h-5 w-5" aria-hidden /> },
-        { k: 'newClients', label: t('pages.finance.newClients'), v: d?.newClientsMonth, icon: <Users className="h-5 w-5 text-success" aria-hidden /> }
+        { k: 'newClients', label: t('pages.finance.newClients'), v: d?.newClientsMonth, icon: <Users className="h-5 w-5 text-success" aria-hidden /> },
+        { k: 'productSalesCount', label: t('pages.finance.ordersCompleted'), v: d?.productSalesCount, icon: <ShoppingCart className="h-5 w-5" aria-hidden /> }
     ];
 
     const c = cons.data;
@@ -152,7 +158,18 @@ export default function OverviewTab()
               {t('pages.finance.balances')}: <strong>{money(c.sumUserBalances)}</strong>
             </span>
             <span>{t('pages.finance.ledgerNet')}: <strong>{money(c.ledgerNet)}</strong></span>
-            <span>{t('pages.finance.difference')}: <strong>{money(c.difference)}</strong></span>
+            {/* Show |difference| when the banner is "balanced within tolerance"
+                so a tiny -1/-2 drift doesn't read as a confusing negative number;
+                swing to the signed value + warning color when actually out of
+                tolerance so the operator sees the direction. */}
+            <span>
+              {t('pages.finance.difference')}:{' '}
+              <strong className={c.balanced ? '' : (c.difference < 0 ? 'text-danger' : 'text-warning')}>
+                {c.balanced
+                    ? `\u00b1${ money(c.absDifference ?? Math.abs(c.difference)) }`
+                    : `${ c.difference < 0 ? '\u2212' : '+' }${ money(Math.abs(c.difference)) }`}
+              </strong>
+            </span>
             {c.negativeBalances > 0 && <span className="text-danger">{t('pages.finance.negativeBalances')}: {c.negativeBalances}</span>}
             {c.duplicateTracking > 0 && <span className="text-danger">{t('pages.finance.duplicateTracking')}: {c.duplicateTracking}</span>}
             {c.orphanedOrders > 0 && <span className="text-danger">{t('pages.finance.orphanedOrders')}: {c.orphanedOrders}</span>}
@@ -186,10 +203,10 @@ export default function OverviewTab()
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartDeposits')} <span className="text-xs font-normal text-muted-foreground">({unit})</span></CardTitle></CardHeader>
+          <CardHeader className="p-4 pb-0 sm:p-5 sm:pb-0"><CardTitle>{t('pages.finance.chartProductSales')} <span className="text-xs font-normal text-muted-foreground">({unit})</span></CardTitle></CardHeader>
           <CardContent className="p-2 sm:p-3">
-            <Sparkline data={points.map((p) => p.deposits)} labels={labels} height={160} showAxes showTooltip valueMax={null}
-              stroke="#6366f1" yFormatter={moneyAxis} tooltipFormatter={(v) => money(v)} />
+            <Sparkline data={points.map((p) => p.productRevenue)} labels={labels} height={160} showAxes showTooltip valueMax={null}
+              stroke="#f97316" yFormatter={moneyAxis} tooltipFormatter={(v) => money(v)} />
           </CardContent>
         </Card>
         <Card>

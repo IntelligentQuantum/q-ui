@@ -6,34 +6,35 @@ import { HttpUtil } from '@/utils';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Badge, Card, CardContent, CardHeader, CardTitle } from '@/components/ui';
 import UserProfileModal from './UserProfileModal';
+import { withTenant, type TenantSelection } from './FinancePage';
 
 interface TopProduct { productId: number; name: string; sales: number; revenue: number; }
 interface TopUser { userId: number; username: string; role: string; value: number; count: number; }
 interface MethodStat { method: string; count: number; volume: number; bonus: number; pending: number; rejected: number; }
 
-function useList<T>(key: string, url: string)
+function useList<T>(key: string, url: string, tenantSel: TenantSelection)
 {
     return useQuery({
-        queryKey: ['finance', key],
+        queryKey: ['finance', key, tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get(url, undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant(url, tenantSel), undefined, { silent: true });
             return m?.success ? ((m.obj as T[]) ?? []) : [];
         }
     });
 }
 
-export default function AnalyticsTab()
+export default function AnalyticsTab({ tenantSel }: { tenantSel: TenantSelection })
 {
     const { t } = useTranslation();
     const { format: money } = useCurrency();
     const [profileId, setProfileId] = useState<number | null>(null);
 
-    const products = useList<TopProduct>('top-products', '/panel/api/finance/top/products?limit=10');
-    const customers = useList<TopUser>('top-customers', '/panel/api/finance/top/customers?limit=10');
-    const resellers = useList<TopUser>('top-resellers', '/panel/api/finance/top/resellers?limit=10');
-    const depositors = useList<TopUser>('top-depositors', '/panel/api/finance/top/depositors?limit=10');
-    const breakdown = useList<MethodStat>('breakdown', '/panel/api/finance/payment-breakdown');
+    const products = useList<TopProduct>('top-products', '/panel/api/finance/top/products?limit=10', tenantSel);
+    const customers = useList<TopUser>('top-customers', '/panel/api/finance/top/customers?limit=10', tenantSel);
+    const resellers = useList<TopUser>('top-resellers', '/panel/api/finance/top/resellers?limit=10', tenantSel);
+    const depositors = useList<TopUser>('top-depositors', '/panel/api/finance/top/depositors?limit=10', tenantSel);
+    const breakdown = useList<MethodStat>('breakdown', '/panel/api/finance/payment-breakdown', tenantSel);
 
     const userTable = (title: string, rows: TopUser[], valueLabel: string) => (
     <Card>

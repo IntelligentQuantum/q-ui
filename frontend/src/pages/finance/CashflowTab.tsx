@@ -6,6 +6,7 @@ import { Download } from 'lucide-react';
 import { HttpUtil } from '@/utils';
 import { useCurrency } from '@/hooks/useCurrency';
 import { Button, Card, CardContent, CardHeader, CardTitle, StatCard } from '@/components/ui';
+import { withTenant, type TenantSelection } from './FinancePage';
 
 interface Cashflow {
   from: number; to: number; income: number; productSales: number; bonuses: number;
@@ -27,12 +28,13 @@ function startOfDay(daysAgo: number): number
     return d.getTime();
 }
 
-function exportUrl(path: string): string
+function exportUrl(path: string, sel: TenantSelection): string
 {
-    return `${ window.Q_UI_BASE_PATH || '/' }panel/api/finance/export/${ path }`.replace(/\/{2,}/g, '/');
+    const base = `${ window.Q_UI_BASE_PATH || '/' }panel/api/finance/export/${ path }`.replace(/\/{2,}/g, '/');
+    return withTenant(base, sel);
 }
 
-export default function CashflowTab()
+export default function CashflowTab({ tenantSel }: { tenantSel: TenantSelection })
 {
     const { t } = useTranslation();
     const { format: money, formatNumber } = useCurrency();
@@ -45,10 +47,10 @@ export default function CashflowTab()
     }, [preset]);
 
     const query = useQuery({
-        queryKey: ['finance', 'cashflow', from],
+        queryKey: ['finance', 'cashflow', from, tenantSel],
         queryFn: async () =>
         {
-            const m = await HttpUtil.get(`/panel/api/finance/cashflow?from=${ from }`, undefined, { silent: true });
+            const m = await HttpUtil.get(withTenant(`/panel/api/finance/cashflow?from=${ from }`, tenantSel), undefined, { silent: true });
             return m?.success ? (m.obj as Cashflow) : null;
         }
     });
@@ -66,13 +68,13 @@ export default function CashflowTab()
             ))}
           </div>
           <div className="flex flex-wrap gap-2">
-            <a href={exportUrl('transactions')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
+            <a href={exportUrl('transactions', tenantSel)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
               <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportTransactions')}
             </a>
-            <a href={exportUrl('orders')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
+            <a href={exportUrl('orders', tenantSel)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
               <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportOrders')}
             </a>
-            <a href={exportUrl('users')} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
+            <a href={exportUrl('users', tenantSel)} className="inline-flex h-9 items-center gap-2 rounded-md border border-border px-3 text-sm font-medium transition-colors hover:bg-foreground/[0.04]">
               <Download className="h-4 w-4" aria-hidden /> {t('pages.finance.exportUsers')}
             </a>
           </div>

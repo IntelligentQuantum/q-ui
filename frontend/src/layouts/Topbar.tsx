@@ -27,7 +27,7 @@ export default function Topbar({ onMenuClick }: TopbarProps)
 {
     const { t } = useTranslation();
     const { mode, cycleMode } = useTheme();
-    const { me } = useMe();
+    useMe();
     // The persisted cache (or the local one if /me is still loading) is the
     // single source of truth for what the user sees in the brand slot. The
     // cache already picks LTR vs RTL by the document direction.

@@ -205,7 +205,7 @@ export default function ManualDepositPage()
             messageApi.error(t('pages.manualDeposit.toasts.invalidAmount'));
             return;
         }		// The receipt image is mandatory; description is optional.
-		if (!receipt)
+        if (!receipt)
         {
             messageApi.error(t('pages.manualDeposit.toasts.fieldsRequired'));
             return;
